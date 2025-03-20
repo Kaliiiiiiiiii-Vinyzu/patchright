@@ -1,6 +1,7 @@
 {
     "devDependencies": {
-        "ts-morph": "^23.0.0"
+        "ts-morph": "^23.0.0",
+        "yaml": "^2.7.0"
     },
     "type": "module"
 }

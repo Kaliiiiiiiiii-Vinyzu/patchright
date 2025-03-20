@@ -1,4 +1,6 @@
+import fs from "node:fs/promises";
 import { Project, SyntaxKind, IndentationText } from "ts-morph";
+import YAML from "yaml";
 
 const project = new Project({
   manipulationSettings: {
@@ -1843,146 +1845,16 @@ if (workerDispatcherEvaluateExpressionHandleCall && workerDispatcherEvaluateExpr
       workerDispatcherEvaluateExpressionHandleCall.addArgument("params.isolatedContext");
 }
 
-// ----------------------------
-// protocol/validator.ts
-// ----------------------------
-const validatorSourceFile = project.addSourceFileAtPath(
-  "packages/playwright-core/src/protocol/validator.ts",
-);
-const assignments = validatorSourceFile.getDescendantsOfKind(SyntaxKind.BinaryExpression);
-const frameEvaluateParamsAssignment = assignments.find(assignment => {
-  const left = assignment.getLeft();
-    const right = assignment.getRight();
-  if (left.getText() !== "scheme.FrameEvaluateExpressionParams") {
-    return false;
-  }
-  return right.isKind(SyntaxKind.CallExpression) && right.getExpression().getText() === "tObject";
-});
-if (frameEvaluateParamsAssignment) {
-  const callExpression = frameEvaluateParamsAssignment.getRight().asKind(SyntaxKind.CallExpression);
-  if (callExpression) {
-    const objectArg = callExpression.getArguments()[0];
-    if (objectArg && objectArg.isKind(SyntaxKind.ObjectLiteralExpression)) {
-      objectArg.addPropertyAssignment({
-        name: "isolatedContext",
-        initializer: "tBoolean"
-      });
-    }
-  }
-}
-const jsHandleEvaluateExpressionParamsAssignment = assignments.find(assignment => {
-  const left = assignment.getLeft();
-    const right = assignment.getRight();
-  if (left.getText() !== "scheme.JSHandleEvaluateExpressionParams") {
-    return false;
-  }
-  return right.isKind(SyntaxKind.CallExpression) && right.getExpression().getText() === "tObject";
-});
-if (jsHandleEvaluateExpressionParamsAssignment) {
-  const callExpression = jsHandleEvaluateExpressionParamsAssignment.getRight().asKind(SyntaxKind.CallExpression);
-  if (callExpression) {
-    const objectArg = callExpression.getArguments()[0];
-    if (objectArg && objectArg.isKind(SyntaxKind.ObjectLiteralExpression)) {
-      objectArg.addPropertyAssignment({
-        name: "isolatedContext",
-        initializer: "tBoolean"
-      });
-    }
-  }
-}
-const workerEvaluateExpressionParamsAssignment = assignments.find(assignment => {
-  const left = assignment.getLeft();
-    const right = assignment.getRight();
-  if (left.getText() !== "scheme.WorkerEvaluateExpressionParams") {
-    return false;
-  }
-  return right.isKind(SyntaxKind.CallExpression) && right.getExpression().getText() === "tObject";
-});
-if (workerEvaluateExpressionParamsAssignment) {
-  const callExpression = workerEvaluateExpressionParamsAssignment.getRight().asKind(SyntaxKind.CallExpression);
-  if (callExpression) {
-    const objectArg = callExpression.getArguments()[0];
-    if (objectArg && objectArg.isKind(SyntaxKind.ObjectLiteralExpression)) {
-      objectArg.addPropertyAssignment({
-        name: "isolatedContext",
-        initializer: "tBoolean"
-      });
-    }
-  }
-}
-
-// ----------------------------
-// protocol/channels.d.ts
-// ----------------------------
-const channelsTypeFile = project.addSourceFileAtPath(
-  "packages/protocol/src/channels.d.ts",
-);
-const jsHandleEvaluateTypeAlias = channelsTypeFile.getTypeAlias("JSHandleEvaluateExpressionParams");
-if (jsHandleEvaluateTypeAlias) {
-    const typeLiteral = jsHandleEvaluateTypeAlias.getFirstChildByKind(SyntaxKind.TypeLiteral);
-    if (typeLiteral) {
-        typeLiteral.addProperty({
-            name: "isolatedContext",
-            type: "boolean",
-            hasQuestionToken: true,
-        });
-    }
-}
-const jsHandleEvaluateHandleTypeAlias = channelsTypeFile.getTypeAlias("JSHandleEvaluateHandleExpressionParams");
-if (jsHandleEvaluateHandleTypeAlias) {
-    const typeLiteral = jsHandleEvaluateHandleTypeAlias.getFirstChildByKind(SyntaxKind.TypeLiteral);
-    if (typeLiteral) {
-        typeLiteral.addProperty({
-            name: "isolatedContext",
-            type: "boolean",
-            hasQuestionToken: true,
-        });
-    }
-}
-const frameEvaluateTypeAlias = channelsTypeFile.getTypeAlias("FrameEvaluateExpressionParams");
-if (frameEvaluateTypeAlias) {
-    const typeLiteral = frameEvaluateTypeAlias.getFirstChildByKind(SyntaxKind.TypeLiteral);
-    if (typeLiteral) {
-        typeLiteral.addProperty({
-            name: "isolatedContext",
-            type: "boolean",
-            hasQuestionToken: true,
-        });
-    }
-}
-const frameEvaluateHandleTypeAlias = channelsTypeFile.getTypeAlias("FrameEvaluateExpressionHandleParams");
-if (frameEvaluateHandleTypeAlias) {
-    const typeLiteral = frameEvaluateHandleTypeAlias.getFirstChildByKind(SyntaxKind.TypeLiteral);
-    if (typeLiteral) {
-        typeLiteral.addProperty({
-            name: "isolatedContext",
-            type: "boolean",
-            hasQuestionToken: true,
-        });
-    }
-}
-const workerEvaluateTypeAlias = channelsTypeFile.getTypeAlias("WorkerEvaluateExpressionParams");
-if (workerEvaluateTypeAlias) {
-    const typeLiteral = workerEvaluateTypeAlias.getFirstChildByKind(SyntaxKind.TypeLiteral);
-    if (typeLiteral) {
-        typeLiteral.addProperty({
-            name: "isolatedContext",
-            type: "boolean",
-            hasQuestionToken: true,
-        });
-    }
-}
-const workerEvaluateHandleTypeAlias = channelsTypeFile.getTypeAlias("WorkerEvaluateExpressionHandleParams");
-if (workerEvaluateHandleTypeAlias) {
-    const typeLiteral = workerEvaluateHandleTypeAlias.getFirstChildByKind(SyntaxKind.TypeLiteral);
-    if (typeLiteral) {
-        typeLiteral.addProperty({
-            name: "isolatedContext",
-            type: "boolean",
-            hasQuestionToken: true,
-        });
-    }
-}
-
 // Save the changes without reformatting
 project.saveSync();
+
+// ----------------------------
+// protocol/protocol.yml
+// ----------------------------
+const protocol = YAML.parse(await fs.readFile("packages/protocol/src/protocol.yml", "utf8"));
+for (const type of ["Frame", "JSHandle", "Worker"]) {
+    const commands = protocol[type].commands;
+    commands.evaluateExpression.parameters.isolatedContext = "boolean?";
+    commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
+}
+await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
