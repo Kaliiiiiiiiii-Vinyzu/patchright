@@ -1937,25 +1937,6 @@ this.source = createPageBindingScript(name, needsHandle);
 this.needsHandle = needsHandle;`,
 );
 
-// ------- InitScript Class -------
-const initScriptClass = pageSourceFile.getClass("InitScript");
-// -- InitScript Constructor --
-const initScriptConstructor = initScriptClass.getConstructors()[0];
-const initScriptConstructorAssignment = initScriptConstructor
-  .getBody()
-  ?.getStatements()
-  .find(
-    (statement) =>
-      statement.getKind() === SyntaxKind.ExpressionStatement &&
-      statement.getText().includes("this.source = `(() => {"),
-  );
-// Remove unnecessary, detectable code from the constructor
-if (initScriptConstructorAssignment) {
-  initScriptConstructorAssignment.replaceWithText(
-    `this.source = \`(() => { \${source} })();\`;`,
-  );
-}
-
 // ------- Worker Class -------
 const workerClass = pageSourceFile.getClass("Worker");
 // -- evaluateExpression Method --
