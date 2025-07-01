@@ -135,7 +135,7 @@ const crBrowserSourceFile = project.addSourceFileAtPath(
 // ------- CRDevTools Class -------
 const crBrowserContextClass = crBrowserSourceFile.getClass("CRBrowserContext");
 // -- doRemoveNonInternalInitScripts Method --
-crBrowserContextClass.getMethod("doRemoveNonInternalInitScripts").remove();
+// crBrowserContextClass.getMethod("doRemoveNonInternalInitScripts").remove();
 // -- doRemoveInitScripts Method --
 // crBrowserContextClass.addMethod({
 //   name: "doRemoveInitScripts",
@@ -160,10 +160,10 @@ crBrowserContextClass.getMethod("doRemoveNonInternalInitScripts").remove();
 //});
 
 // -- doRemoveInitScripts Method --
-crBrowserContextClass.addMethod({
-  name: "doRemoveInitScripts",
-  isAsync: true,
-});
+// crBrowserContextClass.addMethod({
+  // name: "doRemoveInitScripts",
+  // isAsync: true,
+// });
 const doRemoveInitScriptsMethod = crBrowserContextClass.getMethod(
   "doRemoveInitScripts",
 );
