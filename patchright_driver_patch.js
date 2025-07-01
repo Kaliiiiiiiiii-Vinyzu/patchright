@@ -53,7 +53,7 @@ exposeBindingMethod.getStatements().forEach((statement) => {
 
 // -- _removeExposedBindings Method --
 const removeExposedBindingsMethod = browserContextClass.getMethod(
-  "_removeExposedBindings",
+  "removeExposedBindings",
 );
 removeExposedBindingsMethod.setBodyText(`for (const key of this._pageBindings.keys()) {
   if (!key.startsWith('__pw'))
@@ -63,7 +63,7 @@ await this.doRemoveExposedBindings();`);
 
 // -- _removeInitScripts Method --
 const removeInitScriptsMethod =
-  browserContextClass.getMethod("_removeInitScripts");
+  browserContextClass.getMethod("removeInitScripts");
 removeInitScriptsMethod.setBodyText(`this.initScripts.splice(0, this.initScripts.length);
 await this.doRemoveInitScripts();`);
 
