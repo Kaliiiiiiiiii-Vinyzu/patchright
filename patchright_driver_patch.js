@@ -97,7 +97,9 @@ const chromiumSwitchesSourceFile = project.addSourceFileAtPath(
 // -- chromiumSwitches Array Variable --
 const chromiumSwitchesArray = chromiumSwitchesSourceFile
   .getVariableDeclarationOrThrow("chromiumSwitches")
-  .getInitializerIfKindOrThrow(SyntaxKind.ArrayLiteralExpression);
+  .getInitializerIfKindOrThrow(ts.SyntaxKind.ArrowFunction)
+  .getBody()
+  .getDescendantsOfKind(ts.SyntaxKind.ArrayLiteralExpression)[0];
 
 const switchesToDisable = [
     "'--enable-automation'",
