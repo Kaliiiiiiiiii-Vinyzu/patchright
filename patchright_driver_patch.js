@@ -1462,9 +1462,9 @@ crRemoveExposedBindingsMethod.setBodyText(
 );
 
 // -- removeNonInternalInitScripts Method --
-crPageClass
-  .getMethod("removeNonInternalInitScripts")
-  .rename("removeInitScripts");
+// crPageClass
+//   .getMethod("removeNonInternalInitScripts")
+//   .rename("removeInitScripts");
 
 // -- addInitScript Method --
 const addInitScriptMethod = crPageClass.getMethod("addInitScript");
