@@ -2249,28 +2249,29 @@ if (workerDispatcherEvaluateExpressionHandleCall && workerDispatcherEvaluateExpr
 // ----------------------------
 // injected/src/xpathSelectorEngine.ts
 // ----------------------------
-const isomorphicBuiltinsSourceFile = project.addSourceFileAtPath(
-  "packages/playwright-core/src/utils/isomorphic/builtins.ts"
-);
-// -- evaluateExpression Method --
-const isomorphicBuiltinsMethod = isomorphicBuiltinsSourceFile.getFunction("builtins");
-isomorphicBuiltinsMethod.setBodyText(`global = global ?? globalThis;
-  return {
-    setTimeout: global.setTimeout?.bind(global),
-    clearTimeout: global.clearTimeout?.bind(global),
-    setInterval: global.setInterval?.bind(global),
-    clearInterval: global.clearInterval?.bind(global),
-    requestAnimationFrame: global.requestAnimationFrame?.bind(global),
-    cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
-    requestIdleCallback: global.requestIdleCallback?.bind(global),
-    cancelIdleCallback: global.cancelIdleCallback?.bind(global),
-    performance: global.performance,
-    eval: global.eval?.bind(global),
-    Intl: global.Intl,
-    Date: global.Date,
-    Map: global.Map,
-    Set: global.Set
-  };`);
+// todo: this was refactored in https://github.com/microsoft/playwright/commit/3b0135411e03e1289f07c0054a4555ec1e360877, there may be patch regressions
+// const isomorphicBuiltinsSourceFile = project.addSourceFileAtPath(
+//   "packages/playwright-core/src/utils/isomorphic/builtins.ts"
+// );
+// // -- evaluateExpression Method --
+// const isomorphicBuiltinsMethod = isomorphicBuiltinsSourceFile.getFunction("builtins");
+// isomorphicBuiltinsMethod.setBodyText(`global = global ?? globalThis;
+//   return {
+//     setTimeout: global.setTimeout?.bind(global),
+//     clearTimeout: global.clearTimeout?.bind(global),
+//     setInterval: global.setInterval?.bind(global),
+//     clearInterval: global.clearInterval?.bind(global),
+//     requestAnimationFrame: global.requestAnimationFrame?.bind(global),
+//     cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
+//     requestIdleCallback: global.requestIdleCallback?.bind(global),
+//     cancelIdleCallback: global.cancelIdleCallback?.bind(global),
+//     performance: global.performance,
+//     eval: global.eval?.bind(global),
+//     Intl: global.Intl,
+//     Date: global.Date,
+//     Map: global.Map,
+//     Set: global.Set
+//   };`);
 
 // ----------------------------
 // injected/src/xpathSelectorEngine.ts
