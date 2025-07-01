@@ -1893,7 +1893,7 @@ pageExposeBindingMethod.getBodyOrThrow().forEachDescendant((node) => {
 
 // -- _removeExposedBindings Method --
 const pageRemoveExposedBindingsMethod = pageClass.getMethod(
-  "_removeExposedBindings",
+  "removeExposedBindings",
 );
 pageRemoveExposedBindingsMethod.setBodyText(`for (const key of this._pageBindings.keys()) {
   if (!key.startsWith('__pw'))
@@ -1902,7 +1902,7 @@ pageRemoveExposedBindingsMethod.setBodyText(`for (const key of this._pageBinding
 await this._delegate.removeExposedBindings();`);
 
 // -- _removeInitScripts Method --
-const pageRemoveInitScriptsMethod = pageClass.getMethod("_removeInitScripts");
+const pageRemoveInitScriptsMethod = pageClass.getMethod("removeInitScripts");
 pageRemoveInitScriptsMethod.setBodyText(`this.initScripts.splice(0, this.initScripts.length);
 await this._delegate.removeInitScripts();`);
 
