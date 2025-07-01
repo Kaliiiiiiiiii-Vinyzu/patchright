@@ -2057,10 +2057,10 @@ workerEvaluateExpressionHandleMethodBody.insertStatements(
 //   }
 // }
 
-// ------- createPageBindingScript Function -------
-const createPageBindingScriptFunction = pageBindingSourceFile.getFunction("createPageBindingScript");
-createPageBindingScriptFunction.getParameter("playwrightBinding")?.remove();
-createPageBindingScriptFunction.setBodyText('return `(${addPageBinding.toString()})(${JSON.stringify(name)}, ${needsHandle}, (${source}), (${builtins})())`;')
+// // ------- createPageBindingScript Function -------
+// const createPageBindingScriptFunction = pageBindingSourceFile.getFunction("createPageBindingScript");
+// createPageBindingScriptFunction.getParameter("playwrightBinding")?.remove();
+// createPageBindingScriptFunction.setBodyText('return `(${addPageBinding.toString()})(${JSON.stringify(name)}, ${needsHandle}, (${source}), (${builtins})())`;')
 
 // ----------------------------
 // server/clock.ts
