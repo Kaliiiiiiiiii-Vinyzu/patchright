@@ -53,7 +53,7 @@ exposeBindingMethod.getStatements().forEach((statement) => {
 
 // -- _removeExposedBindings Method --
 const removeExposedBindingsMethod = browserContextClass.getMethod(
-  "_removeExposedBindings",
+  "removeExposedBindings",
 );
 removeExposedBindingsMethod.setBodyText(`for (const key of this._pageBindings.keys()) {
   if (!key.startsWith('__pw'))
@@ -63,7 +63,7 @@ await this.doRemoveExposedBindings();`);
 
 // -- _removeInitScripts Method --
 const removeInitScriptsMethod =
-  browserContextClass.getMethod("_removeInitScripts");
+  browserContextClass.getMethod("removeInitScripts");
 removeInitScriptsMethod.setBodyText(`this.initScripts.splice(0, this.initScripts.length);
 await this.doRemoveInitScripts();`);
 
@@ -97,7 +97,9 @@ const chromiumSwitchesSourceFile = project.addSourceFileAtPath(
 // -- chromiumSwitches Array Variable --
 const chromiumSwitchesArray = chromiumSwitchesSourceFile
   .getVariableDeclarationOrThrow("chromiumSwitches")
-  .getInitializerIfKindOrThrow(SyntaxKind.ArrayLiteralExpression);
+  .getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction)
+  .getBody()
+  .getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)[0];
 
 const switchesToDisable = [
     "'--enable-automation'",
@@ -133,7 +135,7 @@ const crBrowserSourceFile = project.addSourceFileAtPath(
 // ------- CRDevTools Class -------
 const crBrowserContextClass = crBrowserSourceFile.getClass("CRBrowserContext");
 // -- doRemoveNonInternalInitScripts Method --
-crBrowserContextClass.getMethod("doRemoveNonInternalInitScripts").remove();
+// crBrowserContextClass.getMethod("doRemoveNonInternalInitScripts").remove();
 // -- doRemoveInitScripts Method --
 // crBrowserContextClass.addMethod({
 //   name: "doRemoveInitScripts",
@@ -158,10 +160,10 @@ crBrowserContextClass.getMethod("doRemoveNonInternalInitScripts").remove();
 //});
 
 // -- doRemoveInitScripts Method --
-crBrowserContextClass.addMethod({
-  name: "doRemoveInitScripts",
-  isAsync: true,
-});
+// crBrowserContextClass.addMethod({
+  // name: "doRemoveInitScripts",
+  // isAsync: true,
+// });
 const doRemoveInitScriptsMethod = crBrowserContextClass.getMethod(
   "doRemoveInitScripts",
 );
@@ -1606,9 +1608,9 @@ crRemoveExposedBindingsMethod.setBodyText(
 );
 
 // -- removeNonInternalInitScripts Method --
-crPageClass
-  .getMethod("removeNonInternalInitScripts")
-  .rename("removeInitScripts");
+// crPageClass
+//   .getMethod("removeNonInternalInitScripts")
+//   .rename("removeInitScripts");
 
 // -- addInitScript Method --
 const addInitScriptMethod = crPageClass.getMethod("addInitScript");
@@ -2037,7 +2039,7 @@ pageExposeBindingMethod.getBodyOrThrow().forEachDescendant((node) => {
 
 // -- _removeExposedBindings Method --
 const pageRemoveExposedBindingsMethod = pageClass.getMethod(
-  "_removeExposedBindings",
+  "removeExposedBindings",
 );
 pageRemoveExposedBindingsMethod.setBodyText(`for (const key of this._pageBindings.keys()) {
   if (!key.startsWith('__pw'))
@@ -2046,7 +2048,7 @@ pageRemoveExposedBindingsMethod.setBodyText(`for (const key of this._pageBinding
 await this._delegate.removeExposedBindings();`);
 
 // -- _removeInitScripts Method --
-const pageRemoveInitScriptsMethod = pageClass.getMethod("_removeInitScripts");
+const pageRemoveInitScriptsMethod = pageClass.getMethod("removeInitScripts");
 pageRemoveInitScriptsMethod.setBodyText(`this.initScripts.splice(0, this.initScripts.length);
 await this._delegate.removeInitScripts();`);
 
@@ -2135,56 +2137,57 @@ workerEvaluateExpressionHandleMethodBody.insertStatements(
 // ----------------------------
 // server/pageBinding.ts
 // ----------------------------
-const pageBindingSourceFile = project.addSourceFileAtPath(
-  "packages/playwright-core/src/server/pageBinding.ts",
-);
+// todo: pageBinding.ts was removed, there may be regressions in the patch here
+// const pageBindingSourceFile = project.addSourceFileAtPath(
+//   "packages/playwright-core/src/server/pageBinding.ts",
+// );
 
-// ------- addPageBinding Function -------
-const addPageBindingFunction = pageBindingSourceFile.getFunction("addPageBinding");
-const parameters = addPageBindingFunction.getParameters();
-parameters.forEach((param) => {
-  if (param.getName() === "playwrightBinding") {
-    param.remove();
-  }
-});
-addPageBindingFunction.getStatements().forEach((statement) => {
-  if (statement.getText().includes("(globalThis as any)[playwrightBinding]")) {
-    // Replace the line with the new code.
-    statement.replaceWithText(
-      `const binding = (globalThis as any)[bindingName];
-if (!binding || binding.toString().startsWith("(...args) => {")) return`,
-    );
-  }
-});
+// // ------- addPageBinding Function -------
+// const addPageBindingFunction = pageBindingSourceFile.getFunction("addPageBinding");
+// const parameters = addPageBindingFunction.getParameters();
+// parameters.forEach((param) => {
+//   if (param.getName() === "playwrightBinding") {
+//     param.remove();
+//   }
+// });
+// addPageBindingFunction.getStatements().forEach((statement) => {
+//   if (statement.getText().includes("(globalThis as any)[playwrightBinding]")) {
+//     // Replace the line with the new code.
+//     statement.replaceWithText(
+//       `const binding = (globalThis as any)[bindingName];
+// if (!binding || binding.toString().startsWith("(...args) => {")) return`,
+//     );
+//   }
+// });
 
-const statements = addPageBindingFunction.getBodyOrThrow().getStatements();
-for (const statement of statements) {
-  if (statement.getKind() === SyntaxKind.IfStatement) {
-    const ifStatement = statement.asKindOrThrow(SyntaxKind.IfStatement);
-    // Check if the if-statement is the one we're looking for
-    const expressionText = ifStatement.getExpression().getText();
-    if (expressionText === "binding.__installed") {
-      ifStatement.remove();
-    }
-  }
-  // Remove the assignment: (globalThis as any)[bindingName].__installed = true;
-  if (statement.getKind() === SyntaxKind.ExpressionStatement) {
-    const expressionStatement = statement.asKindOrThrow(
-      SyntaxKind.ExpressionStatement,
-    );
-    const expressionText = expressionStatement.getExpression().getText();
-    if (
-      expressionText === "(globalThis as any)[bindingName].__installed = true"
-    ) {
-      expressionStatement.remove();
-    }
-  }
-}
+// const statements = addPageBindingFunction.getBodyOrThrow().getStatements();
+// for (const statement of statements) {
+//   if (statement.getKind() === SyntaxKind.IfStatement) {
+//     const ifStatement = statement.asKindOrThrow(SyntaxKind.IfStatement);
+//     // Check if the if-statement is the one we're looking for
+//     const expressionText = ifStatement.getExpression().getText();
+//     if (expressionText === "binding.__installed") {
+//       ifStatement.remove();
+//     }
+//   }
+//   // Remove the assignment: (globalThis as any)[bindingName].__installed = true;
+//   if (statement.getKind() === SyntaxKind.ExpressionStatement) {
+//     const expressionStatement = statement.asKindOrThrow(
+//       SyntaxKind.ExpressionStatement,
+//     );
+//     const expressionText = expressionStatement.getExpression().getText();
+//     if (
+//       expressionText === "(globalThis as any)[bindingName].__installed = true"
+//     ) {
+//       expressionStatement.remove();
+//     }
+//   }
+// }
 
-// ------- createPageBindingScript Function -------
-const createPageBindingScriptFunction = pageBindingSourceFile.getFunction("createPageBindingScript");
-createPageBindingScriptFunction.getParameter("playwrightBinding")?.remove();
-createPageBindingScriptFunction.setBodyText('return `(${addPageBinding.toString()})(${JSON.stringify(name)}, ${needsHandle}, (${source}), (${builtins})())`;')
+// // ------- createPageBindingScript Function -------
+// const createPageBindingScriptFunction = pageBindingSourceFile.getFunction("createPageBindingScript");
+// createPageBindingScriptFunction.getParameter("playwrightBinding")?.remove();
+// createPageBindingScriptFunction.setBodyText('return `(${addPageBinding.toString()})(${JSON.stringify(name)}, ${needsHandle}, (${source}), (${builtins})())`;')
 
 // ----------------------------
 // server/clock.ts
@@ -2373,28 +2376,29 @@ if (workerDispatcherEvaluateExpressionHandleCall && workerDispatcherEvaluateExpr
 // ----------------------------
 // injected/src/xpathSelectorEngine.ts
 // ----------------------------
-const isomorphicBuiltinsSourceFile = project.addSourceFileAtPath(
-  "packages/playwright-core/src/utils/isomorphic/builtins.ts"
-);
-// -- evaluateExpression Method --
-const isomorphicBuiltinsMethod = isomorphicBuiltinsSourceFile.getFunction("builtins");
-isomorphicBuiltinsMethod.setBodyText(`global = global ?? globalThis;
-  return {
-    setTimeout: global.setTimeout?.bind(global),
-    clearTimeout: global.clearTimeout?.bind(global),
-    setInterval: global.setInterval?.bind(global),
-    clearInterval: global.clearInterval?.bind(global),
-    requestAnimationFrame: global.requestAnimationFrame?.bind(global),
-    cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
-    requestIdleCallback: global.requestIdleCallback?.bind(global),
-    cancelIdleCallback: global.cancelIdleCallback?.bind(global),
-    performance: global.performance,
-    eval: global.eval?.bind(global),
-    Intl: global.Intl,
-    Date: global.Date,
-    Map: global.Map,
-    Set: global.Set
-  };`);
+// todo: this was refactored in https://github.com/microsoft/playwright/commit/3b0135411e03e1289f07c0054a4555ec1e360877, there may be patch regressions
+// const isomorphicBuiltinsSourceFile = project.addSourceFileAtPath(
+//   "packages/playwright-core/src/utils/isomorphic/builtins.ts"
+// );
+// // -- evaluateExpression Method --
+// const isomorphicBuiltinsMethod = isomorphicBuiltinsSourceFile.getFunction("builtins");
+// isomorphicBuiltinsMethod.setBodyText(`global = global ?? globalThis;
+//   return {
+//     setTimeout: global.setTimeout?.bind(global),
+//     clearTimeout: global.clearTimeout?.bind(global),
+//     setInterval: global.setInterval?.bind(global),
+//     clearInterval: global.clearInterval?.bind(global),
+//     requestAnimationFrame: global.requestAnimationFrame?.bind(global),
+//     cancelAnimationFrame: global.cancelAnimationFrame?.bind(global),
+//     requestIdleCallback: global.requestIdleCallback?.bind(global),
+//     cancelIdleCallback: global.cancelIdleCallback?.bind(global),
+//     performance: global.performance,
+//     eval: global.eval?.bind(global),
+//     Intl: global.Intl,
+//     Date: global.Date,
+//     Map: global.Map,
+//     Set: global.Set
+//   };`);
 
 // ----------------------------
 // injected/src/xpathSelectorEngine.ts
