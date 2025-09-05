@@ -17,7 +17,7 @@
         <img src="https://img.shields.io/badge/Driver-Patched-blue">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/releases/latest">
-        <img alt="Patchright Version" src="https://img.shields.io/github/v/release/microsoft/playwright?display_name=release&label=Version">
+        <img alt="Patchright Version" src="https://img.shields.io/github/v/release/Kaliiiiiiiiii-Vinyzu/patchright?display_name=release&label=Version">
     </a>
 <br/>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python">
@@ -141,7 +141,7 @@ Patchright InitScripts can be detected by Timing Attacks. However, no antibot cu
 
 ### TODO
 - [x] Implement Option to choose Execution Context (Main/Isolated).
-- [ ] Fix Fixable Bugs.
+- [x] Fix Fixable Bugs.
 - [x] Implement .patch Updater to easily show Patchright's patches.
 - [x] Setup Automated Testing on new Release.
 - [ ] Implement Patchright on .NET and Java.
