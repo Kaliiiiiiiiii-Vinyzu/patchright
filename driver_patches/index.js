@@ -3,7 +3,7 @@ export * from "./chromiumPatch.js";
 export * from "./chromiumSwitchesPatch.js";
 export * from "./clockPatch.js";
 export * from "./crBrowserPatch.js";
-export * from "./crDevtoolsPatch.js";
+export * from "./crDevToolsPatch.js";
 export * from "./crNetworkManagerPatch.js";
 export * from "./crPagePatch.js";
 export * from "./crServiceWorkerPatch.js";
