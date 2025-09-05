@@ -896,7 +896,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frameSelectors.ts p
 +                      depth: -1
 +                    });
 +                    elementToCheck.backendNodeId = resolvedElement.node.backendNodeId;
-+                    elementToCheck.nodePosition = this._findElementPositionInDomTree(elementToCheck, describedScope.node, describedScope.node, "");
++                    elementToCheck.nodePosition = this._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
 +                    elements.push(elementToCheck);
 +                  }
 +                }
@@ -945,7 +945,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frameSelectors.ts p
 +            // Basically same for CSRs, but we dont have to append its index because patchright treats CSRs like they dont exist
 +            for (const shadowRoot of queryingElement.shadowRoots) {
 +              if (shadowRoot.shadowRootType === "closed" && shadowRoot.backendNodeId) {
-+                const shadowRootHandle = new dom.ElementHandle(documentScope, shadowRoot.backendNodeId);
++                const shadowRootHandle = new ElementHandle(documentScope, shadowRoot.backendNodeId);
 +                const childIndex = this._findElementPositionInDomTree(element, shadowRootHandle, documentScope, currentIndex);
 +                if (childIndex !== null) return childIndex;
 +              }
@@ -3531,7 +3531,7 @@ diff -ruN playwright/packages/playwright-core/src/server/frameSelectors.ts patch
 +                      depth: -1
 +                    });
 +                    elementToCheck.backendNodeId = resolvedElement.node.backendNodeId;
-+                    elementToCheck.nodePosition = this._findElementPositionInDomTree(elementToCheck, describedScope.node, describedScope.node, "");
++                    elementToCheck.nodePosition = this._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
 +                    elements.push(elementToCheck);
 +                  }
 +                }
@@ -3580,7 +3580,7 @@ diff -ruN playwright/packages/playwright-core/src/server/frameSelectors.ts patch
 +            // Basically same for CSRs, but we dont have to append its index because patchright treats CSRs like they dont exist
 +            for (const shadowRoot of queryingElement.shadowRoots) {
 +              if (shadowRoot.shadowRootType === "closed" && shadowRoot.backendNodeId) {
-+                const shadowRootHandle = new dom.ElementHandle(documentScope, shadowRoot.backendNodeId);
++                const shadowRootHandle = new ElementHandle(documentScope, shadowRoot.backendNodeId);
 +                const childIndex = this._findElementPositionInDomTree(element, shadowRootHandle, documentScope, currentIndex);
 +                if (childIndex !== null) return childIndex;
 +              }
