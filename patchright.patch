@@ -7,7 +7,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/browserContext.ts p
      }
      if (this._options.serviceWorkers === 'block')
 -      await this.addInitScript(undefined, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
-+      await this.addInitScript(`navigator.serviceWorker.register = async () => { };`, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
++      await this.addInitScript(undefined, `navigator.serviceWorker.register = async () => { };`);
  
      if (this._options.permissions)
        await this.grantPermissions(this._options.permissions);
@@ -2642,7 +2642,7 @@ diff -ruN playwright/packages/playwright-core/src/server/browserContext.ts patch
      }
      if (this._options.serviceWorkers === 'block')
 -      await this.addInitScript(undefined, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
-+      await this.addInitScript(`navigator.serviceWorker.register = async () => { };`, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
++      await this.addInitScript(undefined, `navigator.serviceWorker.register = async () => { };`);
  
      if (this._options.permissions)
        await this.grantPermissions(this._options.permissions);
