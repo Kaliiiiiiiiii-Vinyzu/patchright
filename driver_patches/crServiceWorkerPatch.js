@@ -28,4 +28,17 @@ export function patchCRServiceWorker(project) {
           .includes("session.send('Runtime.enable', {}).catch(e => { });")
       );
     if (statementToRemove) statementToRemove.remove();
+
+    crServiceWorkerConstructorBody.addStatement(`
+      session._sendMayFail("Runtime.evaluate", {
+        expression: "globalThis",
+        serializationOptions: { serialization: "idOnly" }
+      }).then(globalThis => {
+        if (globalThis && globalThis.result) {
+          var globalThisObjId = globalThis.result.objectId;
+          var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
+          this.createExecutionContext(new import_crExecutionContext.CRExecutionContext(session, { id: executionContextId }));
+        }
+      });
+    `);
 }
