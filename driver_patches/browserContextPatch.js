@@ -29,7 +29,7 @@ export function patchBrowserContext(project) {
       });
     // Replace the service worker registration call with a custom one, which is less obvious
     initializeMethodCall
-      .getArguments()[0]
+      .getArguments()[1]
       .replaceWithText("`navigator.serviceWorker.register = async () => { };`");
 
     // -- exposeBinding Method --
