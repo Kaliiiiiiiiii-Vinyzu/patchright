@@ -29,7 +29,7 @@ export function patchCRServiceWorker(project) {
       );
     if (statementToRemove) statementToRemove.remove();
 
-    crServiceWorkerConstructorBody.addStatement(`
+    crServiceWorkerConstructorBody.addStatements(`
       session._sendMayFail("Runtime.evaluate", {
         expression: "globalThis",
         serializationOptions: { serialization: "idOnly" }
