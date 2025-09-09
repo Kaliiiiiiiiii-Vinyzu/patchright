@@ -145,11 +145,25 @@ export function patchCRNetworkManager(project) {
           response.isBase64 = false;
           response.body = Buffer.from(response.body, "base64").toString("utf-8");
         }
-        // Inject injectionHTML into the response body after (any type of) the doctype declaration, if it exists and only once at the start
-        if (/^<!DOCTYPE[\s\S]*?>/i.test(response.body)) {
-          response.body = response.body.replace(/^<!DOCTYPE[\s\S]*?>/i, match => \`\${match}\${injectionHTML}\`);
+        // Inject injectionHTML after all <meta> and <link> tags in the <head>, but before any <script> tags, to make sure the init scripts are executed first.
+        const headMatch = response.body.match(/<head[^>]*>[\s\S]*?<\/head>/i);
+        if (headMatch) {
+          response.body = response.body.replace(/(<head[^>]*>)([\s\S]*?)(<\/head>)/i, (match, headOpen, headContent, headClose) => {
+            const scriptMatch = headContent.match(/([\s\S]*?)(<script\b[\s\S]*?$)/i);
+            if (scriptMatch) {
+              const [beforeScript, fromScript] = [scriptMatch[1], scriptMatch[2]];
+              return \`\${headOpen}\${beforeScript}\${injectionHTML}\${fromScript}\${headClose}\`;
+            }
+            return \`\${headOpen}\${headContent}\${injectionHTML}\${headClose}\`;
+          });
+        } else if (/^<!DOCTYPE[\s\S]*?>/i.test(body)) {
+          // No head, but has doctype: inject right after it
+           response.body = response.body.replace(/^<!DOCTYPE[\s\S]*?>/i, match => \`\${match}\${injectionHTML}\`);
+        } else if (/<html[^>]*>/i.test(body)) {
+          // No head, inject right after <html>
+          response.body = response.body.replace(/<html[^>]*>/i, \`\$&<head>\${injectionHTML}</head>\`);
         } else {
-          // If no doctype is present, inject at the start of the body
+          // Absolute fallback: prepend
           response.body = injectionHTML + response.body;
         }
       }
