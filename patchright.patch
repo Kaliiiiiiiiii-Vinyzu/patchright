@@ -678,7 +678,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
 diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crServiceWorker.ts patchright/node_modules/playwright-core/src/server/chromium/crServiceWorker.ts
 ---
 +++
-@@ -44,8 +44,6 @@
+@@ -44,13 +44,23 @@
        this.updateOffline();
        this._networkManager.addSession(session, undefined, true /* isMain */).catch(() => {});
      }
@@ -687,6 +687,23 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crServiceW
      session.send('Runtime.runIfWaitingForDebugger').catch(e => { });
      session.on('Inspector.targetReloadedAfterCrash', () => {
        // Resume service worker after restart.
+       session._sendMayFail('Runtime.runIfWaitingForDebugger', {});
+     });
++
++          session._sendMayFail("Runtime.evaluate", {
++            expression: "globalThis",
++            serializationOptions: { serialization: "idOnly" }
++          }).then(globalThis => {
++            if (globalThis && globalThis.result) {
++              var globalThisObjId = globalThis.result.objectId;
++              var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
++              this.createExecutionContext(new import_crExecutionContext.CRExecutionContext(session, { id: executionContextId }));
++            }
++          });
++        
+   }
+ 
+   override didClose() {
 diff -ruN playwright/node_modules/playwright-core/src/server/clock.ts patchright/node_modules/playwright-core/src/server/clock.ts
 ---
 +++
@@ -3313,7 +3330,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
 diff -ruN playwright/packages/playwright-core/src/server/chromium/crServiceWorker.ts patchright/packages/playwright-core/src/server/chromium/crServiceWorker.ts
 ---
 +++
-@@ -44,8 +44,6 @@
+@@ -44,13 +44,23 @@
        this.updateOffline();
        this._networkManager.addSession(session, undefined, true /* isMain */).catch(() => {});
      }
@@ -3322,6 +3339,23 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crServiceWorke
      session.send('Runtime.runIfWaitingForDebugger').catch(e => { });
      session.on('Inspector.targetReloadedAfterCrash', () => {
        // Resume service worker after restart.
+       session._sendMayFail('Runtime.runIfWaitingForDebugger', {});
+     });
++
++          session._sendMayFail("Runtime.evaluate", {
++            expression: "globalThis",
++            serializationOptions: { serialization: "idOnly" }
++          }).then(globalThis => {
++            if (globalThis && globalThis.result) {
++              var globalThisObjId = globalThis.result.objectId;
++              var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
++              this.createExecutionContext(new import_crExecutionContext.CRExecutionContext(session, { id: executionContextId }));
++            }
++          });
++        
+   }
+ 
+   override didClose() {
 diff -ruN playwright/packages/playwright-core/src/server/clock.ts patchright/packages/playwright-core/src/server/clock.ts
 ---
 +++
