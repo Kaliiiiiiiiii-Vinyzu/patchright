@@ -37,7 +37,7 @@ export function patchCRServiceWorker(project) {
         if (globalThis && globalThis.result) {
           var globalThisObjId = globalThis.result.objectId;
           var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
-          this.createExecutionContext(new import_crExecutionContext.CRExecutionContext(session, { id: executionContextId }));
+          this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
         }
       });
     `);
