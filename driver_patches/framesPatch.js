@@ -640,7 +640,8 @@ export function patchFrames(project) {
           if (currentScopingElements.length == 0) return [];
           // Check if the partNth is within the bounds of currentScopingElements
           if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1)) {
-                throw new Error("Can't query n-th element");
+            if (parsed.capture !== undefined) throw new Error("Can't query n-th element in a request with the capture.");
+            return [];
           } else {
             currentScopingElements = [currentScopingElements.at(partNth)];
             continue;
