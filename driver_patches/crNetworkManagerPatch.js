@@ -156,10 +156,10 @@ export function patchCRNetworkManager(project) {
             }
             return \`\${headOpen}\${headContent}\${injectionHTML}\${headClose}\`;
           });
-        } else if (/^<!DOCTYPE[\\s\\S]*?>/i.test(body)) {
+        } else if (/^<!DOCTYPE[\\s\\S]*?>/i.test(response.body)) {
           // No head, but has doctype: inject right after it
            response.body = response.body.replace(/^<!DOCTYPE[\\s\\S]*?>/i, match => \`\${match}\${injectionHTML}\`);
-        } else if (/<html[^>]*>/i.test(body)) {
+        } else if (/<html[^>]*>/i.test(response.body)) {
           // No head, inject right after <html>
           response.body = response.body.replace(/<html[^>]*>/i, \`\$&<head>\${injectionHTML}</head>\`);
         } else {
