@@ -146,9 +146,9 @@ export function patchCRNetworkManager(project) {
           response.body = Buffer.from(response.body, "base64").toString("utf-8");
         }
         // Inject injectionHTML after all <meta> and <link> tags in the <head>, but before any <script> tags, to make sure the init scripts are executed first.
-        const headMatch = response.body.match(/<head[^>]*>[\s\S]*?<\/head>/i);
+        const headMatch = response.body.match(/<head[^>]*>[\s\S]*?<\\/head>/i);
         if (headMatch) {
-          response.body = response.body.replace(/(<head[^>]*>)([\s\S]*?)(<\/head>)/i, (match, headOpen, headContent, headClose) => {
+          response.body = response.body.replace(/(<head[^>]*>)([\s\S]*?)(<\\/head>)/i, (match, headOpen, headContent, headClose) => {
             const scriptMatch = headContent.match(/([\s\S]*?)(<script\b[\s\S]*?$)/i);
             if (scriptMatch) {
               const [beforeScript, fromScript] = [scriptMatch[1], scriptMatch[2]];
