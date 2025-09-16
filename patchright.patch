@@ -317,10 +317,10 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 +                }
 +                return `${headOpen}${headContent}${injectionHTML}${headClose}`;
 +              });
-+            } else if (/^<!DOCTYPE[\s\S]*?>/i.test(body)) {
++            } else if (/^<!DOCTYPE[\s\S]*?>/i.test(response.body)) {
 +              // No head, but has doctype: inject right after it
 +               response.body = response.body.replace(/^<!DOCTYPE[\s\S]*?>/i, match => `${match}${injectionHTML}`);
-+            } else if (/<html[^>]*>/i.test(body)) {
++            } else if (/<html[^>]*>/i.test(response.body)) {
 +              // No head, inject right after <html>
 +              response.body = response.body.replace(/<html[^>]*>/i, `$&<head>${injectionHTML}</head>`);
 +            } else {
@@ -2987,10 +2987,10 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 +                }
 +                return `${headOpen}${headContent}${injectionHTML}${headClose}`;
 +              });
-+            } else if (/^<!DOCTYPE[\s\S]*?>/i.test(body)) {
++            } else if (/^<!DOCTYPE[\s\S]*?>/i.test(response.body)) {
 +              // No head, but has doctype: inject right after it
 +               response.body = response.body.replace(/^<!DOCTYPE[\s\S]*?>/i, match => `${match}${injectionHTML}`);
-+            } else if (/<html[^>]*>/i.test(body)) {
++            } else if (/<html[^>]*>/i.test(response.body)) {
 +              // No head, inject right after <html>
 +              response.body = response.body.replace(/<html[^>]*>/i, `$&<head>${injectionHTML}</head>`);
 +            } else {
