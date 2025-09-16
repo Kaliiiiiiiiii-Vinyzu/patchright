@@ -1679,7 +1679,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frames.ts patchrigh
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1649,6 +1798,253 @@
+@@ -1649,6 +1798,254 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -1808,7 +1808,8 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frames.ts patchrigh
 +              if (currentScopingElements.length == 0) return [];
 +              // Check if the partNth is within the bounds of currentScopingElements
 +              if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1)) {
-+                    throw new Error("Can't query n-th element");
++                if (parsed.capture !== undefined) throw new Error("Can't query n-th element in a request with the capture.");
++                return [];
 +              } else {
 +                currentScopingElements = [currentScopingElements.at(partNth)];
 +                continue;
@@ -4345,7 +4346,7 @@ diff -ruN playwright/packages/playwright-core/src/server/frames.ts patchright/pa
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1649,6 +1798,253 @@
+@@ -1649,6 +1798,254 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -4474,7 +4475,8 @@ diff -ruN playwright/packages/playwright-core/src/server/frames.ts patchright/pa
 +              if (currentScopingElements.length == 0) return [];
 +              // Check if the partNth is within the bounds of currentScopingElements
 +              if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1)) {
-+                    throw new Error("Can't query n-th element");
++                if (parsed.capture !== undefined) throw new Error("Can't query n-th element in a request with the capture.");
++                return [];
 +              } else {
 +                currentScopingElements = [currentScopingElements.at(partNth)];
 +                continue;
