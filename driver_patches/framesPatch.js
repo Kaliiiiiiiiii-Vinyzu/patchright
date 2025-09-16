@@ -736,29 +736,32 @@ export function patchFrames(project) {
                 });
                 // Note: Possible Bug, Maybe well actually have to check the Documents Node Position instead of using the backendNodeId
                 elementToCheck.backendNodeId = resolvedElement.node.backendNodeId;
+                elementToCheck.nodePosition = this.selectors._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
                 elements.push(elementToCheck);
               }
             }
           }
         }
-        // Setting currentScopingElements to the elements we just queried
-        currentScopingElements = [];
-        for (var element of elements) {
-          var elemIndex = element.backendNodeId;
-          // prevent duplicate elements
-          if (elementsIndexes.includes(elemIndex)) continue
-          // Sorting the Elements by their occourance in the DOM
-          var elemPos = elementsIndexes.findIndex(index => index > elemIndex);
 
-          // Sort the elements by their backendNodeId
-          if (elemPos === -1) {
-            currentScopingElements.push(element);
-            elementsIndexes.push(elemIndex);
-          } else {
-            currentScopingElements.splice(elemPos, 0, element);
-            elementsIndexes.splice(elemPos, 0, elemIndex);
+        // Sorting elements by their nodePosition, which is a index to the Element in the DOM tree
+        const getParts = (pos) => (pos || '').split('').map(Number);
+        elements.sort((a, b) => {
+          const partA = getParts(a.nodePosition);
+          const partB = getParts(b.nodePosition);
+          const maxLength = Math.max(partA.length, partB.length);
+
+          for (let i = 0; i < maxLength; i++) {
+            const aVal = partA[i] ?? -1;
+            const bVal = partB[i] ?? -1;
+            if (aVal !== bVal) return aVal - bVal;
           }
-        }
+          return 0;
+        });
+
+        // Remove duplicates by backendNodeId, keeping the first occurrence
+        currentScopingElements = Array.from(
+          new Map(elements.map((e) => [e.backendNodeId, e])).values()
+        );
       }
       return currentScopingElements;
     `);
