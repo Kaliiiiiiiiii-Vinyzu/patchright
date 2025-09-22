@@ -62,6 +62,25 @@ Key Features:
 
 👉 Learn more at [**hyperbrowser.ai**](https://hyperbrowser.ai/)
 
+---
+<a href="https://www.scrapeless.com/en/product/scraping-browser?utm_medium=github&utm_campaign=vinyzu-patchright"><img alt="Scrapeless Banner Ad" src="https://github.com/user-attachments/assets/d720ade6-6e4e-43d9-a42a-501aacc7ed54" width="80%"/></a>
+ </br>
+
+If you are looking for a tool focused on **browser automation and anti-detection mechanisms**, I can recommend [**Scrapeless Scraping Browser**](https://www.scrapeless.com/en/product/scraping-browser?utm_medium=github&utm_campaign=vinyzu-patchright). It’s not only ideal for web scraping, but also perfectly suited for **automated testing, data collection, and large-scale browsing tasks**.  
+As a **cloud-based browser platform**, Scrapeless Scraping Browser lets you instantly scale up to **50–10,000+ concurrent browser instances**—without the hassle of managing servers or proxies. With **stealth mode, real user behavior simulation, and automatic CAPTCHA handling**, it ensures automation is more stable and undetectable. Whether it’s automated testing or complex workflow orchestration, Scrapeless Scraping Browser makes it seamless.
+Beyond the Scraping Browser, Scrapeless also offers [**Scraping API**](https://www.scrapeless.com/en/product/scraping-api?utm_medium=github&utm_campaign=vinyzu-patchright)**, [Deep SerpAPI](https://www.scrapeless.com/en/product/deep-serp-api?utm_medium=github&utm_campaign=vinyzu-patchright), and [Proxy services](https://www.scrapeless.com/en/product/proxies?utm_medium=github&utm_campaign=vinyzu-patchright).**
+
+Key Features:
+* **Massive concurrency**: Launch 50–10,000+ browsers with one click to run large-scale automation tasks  
+* **Smart anti-detection**: Automatically bypass reCAPTCHA, Cloudflare, DataDome, WAF, and more  
+* **Human-like environment**: Dynamic fingerprint spoofing \+ simulated clicks/scrolls to avoid bot detection  
+* **70M+ residential IP proxies**: Worldwide coverage, auto-rotating, with geo-targeting support  
+* **Low-cost operation**: Proxy costs as low as $1.26–$1.80/GB, below industry averages  
+* **Plug-and-play integration**: Works seamlessly with Puppeteer / Playwright / Python / Node.js / Selenium  
+* **Flexible automation modes**: Automate form submissions, login tests, browsing tasks, and data extraction
+
+👉 Learn more: [Scrapeless Scraping Browser Playground](https://app.scrapeless.com/passport/login?utm_medium=github&utm_campaign=vinyzu-patchright) | [Scrapeless Scraping Browser Docs](https://docs.scrapeless.com/en/scraping-browser/quickstart/introduction/?utm_medium=github&utm_campaign=vinyzu-patchright)
+
 </details>
 
 ---
