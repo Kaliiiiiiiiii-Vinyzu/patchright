@@ -197,8 +197,12 @@ export function patchCRNetworkManager(project) {
   }
   
   // Add script-src if it doesn't exist (for our injected scripts)
-  if (!hasScriptSrc && scriptNonce) {
-    fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}'\`);
+  if (!hasScriptSrc) {
+    if (scriptNonce) {
+      fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}'\`);
+    } else {
+      fixedDirectives.push(\`script-src 'self' 'unsafe-eval'\`);
+    }
   }
   
   return fixedDirectives.join('; ');
@@ -280,18 +284,13 @@ export function patchCRNetworkManager(project) {
           );
         }
         
-        // Generate nonce if none found
-        if (!useNonce) {
-          scriptNonce = crypto.randomBytes(16).toString('base64');
-          useNonce = true;
-        }
-
-        // Build injection HTML with nonce
+        // Build injection HTML - only use nonce if one was found in existing CSP
         let injectionHTML = "";
         allInjections.forEach((script) => {
           let scriptId = crypto.randomBytes(22).toString("hex");
           let scriptSource = script.source || script;
-          injectionHTML += \`<script class="\${this._page.delegate.initScriptTag}" nonce="\${scriptNonce}" id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
+          const nonceAttr = useNonce ? \`nonce="\${scriptNonce}"\` : '';
+          injectionHTML += \`<script class="\${this._page.delegate.initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
         });
 
         // Inject at END of <head>
@@ -300,10 +299,28 @@ export function patchCRNetworkManager(project) {
         if (headStartIndex !== -1) {
           const headEndTagIndex = lower.indexOf("</head>", headStartIndex);
           if (headEndTagIndex !== -1) {
-            response.body =
-              response.body.slice(0, headEndTagIndex) +
-              injectionHTML +
-              response.body.slice(headEndTagIndex);
+            // Find the head opening tag end
+            const headOpenEnd = response.body.indexOf(">", headStartIndex) + 1;
+            const headContent = response.body.slice(headOpenEnd, headEndTagIndex);
+            const headContentLower = headContent.toLowerCase();
+            
+            // Look for the first <script> tag in the head content
+            const firstScriptIndex = headContentLower.indexOf("<script");
+            
+            if (firstScriptIndex !== -1) {
+              // Inject before the first script tag
+              const insertPosition = headOpenEnd + firstScriptIndex;
+              response.body =
+                response.body.slice(0, insertPosition) +
+                injectionHTML +
+                response.body.slice(insertPosition);
+            } else {
+              // No script tags found, inject at the end of head content (before </head>)
+              response.body =
+                response.body.slice(0, headEndTagIndex) +
+                injectionHTML +
+                response.body.slice(headEndTagIndex);
+            }
           } else {
             const headStartTagEnd = response.body.indexOf(">", headStartIndex) + 1;
             response.body =
