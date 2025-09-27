@@ -95,6 +95,8 @@ export function patchCRNetworkManager(project) {
     body.addStatements("this._networkId = networkId;");
     body.addStatements("this._sessionManager = sessionManager;");
     body.addStatements("eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));");
+
+    // -- _fixCSP Method --
     routeImplClass.addMethod({
       name: "_fixCSP",
       isAsync: false,
@@ -105,109 +107,110 @@ export function patchCRNetworkManager(project) {
     });
     const fixCSPMethod = routeImplClass.getMethod("_fixCSP");
     fixCSPMethod.setBodyText(`
-        if (!csp || typeof csp !== 'string') return csp;
+      if (!csp || typeof csp !== 'string') return csp;
   
-  // Split by semicolons and clean up
-  const directives = csp.split(';')
-    .map(d => d.trim())
-    .filter(d => d && d.length > 0);
-  
-  const fixedDirectives = [];
-  let hasScriptSrc = false;
-  
-  for (let directive of directives) {
-    // Skip empty directives
-    if (!directive.trim()) continue;
-    
-    // Split directive name from values
-    const parts = directive.trim().split(/\s+/);
-    if (parts.length === 0) continue;
-    
-    const directiveName = parts[0].toLowerCase();
-    const directiveValues = parts.slice(1);
-    
-    switch (directiveName) {
-      case 'script-src':
-        hasScriptSrc = true;
-        let values = [...directiveValues];
-        
-        // Add nonce if we have one and it's not already present
-        if (scriptNonce && !values.some(v => v.includes(\`nonce-\${scriptNonce}\`))) {
-          values.push(\`'nonce-\${scriptNonce}'\`);
+      // Split by semicolons and clean up
+      const directives = csp.split(';')
+        .map(d => d.trim())
+        .filter(d => d && d.length > 0);
+
+      const fixedDirectives = [];
+      let hasScriptSrc = false;
+
+      for (let directive of directives) {
+        // Skip empty directives
+        if (!directive.trim()) continue;
+
+        // Split directive name from values
+        const parts = directive.trim().split(/\s+/);
+        if (parts.length === 0) continue;
+
+        const directiveName = parts[0].toLowerCase();
+        const directiveValues = parts.slice(1);
+
+        switch (directiveName) {
+          case 'script-src':
+            hasScriptSrc = true;
+            let values = [...directiveValues];
+
+            // Add nonce if we have one and it's not already present
+            if (scriptNonce && !values.some(v => v.includes(\`nonce-\${scriptNonce}\`))) {
+              values.push(\`'nonce-\${scriptNonce}'\`);
+            }
+
+            // Add 'unsafe-eval' if not present
+            if (!values.includes("'unsafe-eval'")) {
+              values.push("'unsafe-eval'");
+            }
+
+            fixedDirectives.push(\`script-src \${values.join(' ')}\`);
+            break;
+
+          case 'style-src':
+            let styleValues = [...directiveValues];
+            // Add 'unsafe-inline' for styles if not present
+            if (!styleValues.includes("'unsafe-inline'")) {
+              styleValues.push("'unsafe-inline'");
+            }
+            fixedDirectives.push(\`style-src \${styleValues.join(' ')}\`);
+            break;
+
+          case 'img-src':
+            let imgValues = [...directiveValues];
+            // Allow data: URLs for images if not already allowed
+            if (!imgValues.includes("data:") && !imgValues.includes("*")) {
+              imgValues.push("data:");
+            }
+            fixedDirectives.push(\`img-src \${imgValues.join(' ')}\`);
+            break;
+
+          case 'font-src':
+            let fontValues = [...directiveValues];
+            // Allow data: URLs for fonts if not already allowed
+            if (!fontValues.includes("data:") && !fontValues.includes("*")) {
+              fontValues.push("data:");
+            }
+            fixedDirectives.push(\`font-src \${fontValues.join(' ')}\`);
+            break;
+
+          case 'connect-src':
+            let connectValues = [...directiveValues];
+            // Allow WebSocket connections if not already allowed
+            const hasWs = connectValues.some(v => v.includes("ws:") || v.includes("wss:") || v === "*");
+            if (!hasWs) {
+              connectValues.push("ws:", "wss:");
+            }
+            fixedDirectives.push(\`connect-src \${connectValues.join(' ')}\`);
+            break;
+
+          case 'frame-ancestors':
+            let frameAncestorValues = [...directiveValues];
+            // If completely blocked with 'none', allow 'self' at least
+            if (frameAncestorValues.includes("'none'")) {
+              frameAncestorValues = ["'self'"];
+            }
+            fixedDirectives.push(\`frame-ancestors \${frameAncestorValues.join(' ')}\`);
+            break;
+
+          default:
+            // Keep other directives as-is
+            fixedDirectives.push(directive);
+            break;
         }
-        
-        // Add 'unsafe-eval' if not present
-        if (!values.includes("'unsafe-eval'")) {
-          values.push("'unsafe-eval'");
+      }
+
+      // Add script-src if it doesn't exist (for our injected scripts)
+      if (!hasScriptSrc) {
+        if (scriptNonce) {
+          fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}'\`);
+        } else {
+          fixedDirectives.push(\`script-src 'self' 'unsafe-eval'\`);
         }
-        
-        fixedDirectives.push(\`script-src \${values.join(' ')}\`);
-        break;
-        
-      case 'style-src':
-        let styleValues = [...directiveValues];
-        // Add 'unsafe-inline' for styles if not present
-        if (!styleValues.includes("'unsafe-inline'")) {
-          styleValues.push("'unsafe-inline'");
-        }
-        fixedDirectives.push(\`style-src \${styleValues.join(' ')}\`);
-        break;
-        
-      case 'img-src':
-        let imgValues = [...directiveValues];
-        // Allow data: URLs for images if not already allowed
-        if (!imgValues.includes("data:") && !imgValues.includes("*")) {
-          imgValues.push("data:");
-        }
-        fixedDirectives.push(\`img-src \${imgValues.join(' ')}\`);
-        break;
-        
-      case 'font-src':
-        let fontValues = [...directiveValues];
-        // Allow data: URLs for fonts if not already allowed
-        if (!fontValues.includes("data:") && !fontValues.includes("*")) {
-          fontValues.push("data:");
-        }
-        fixedDirectives.push(\`font-src \${fontValues.join(' ')}\`);
-        break;
-        
-      case 'connect-src':
-        let connectValues = [...directiveValues];
-        // Allow WebSocket connections if not already allowed
-        const hasWs = connectValues.some(v => v.includes("ws:") || v.includes("wss:") || v === "*");
-        if (!hasWs) {
-          connectValues.push("ws:", "wss:");
-        }
-        fixedDirectives.push(\`connect-src \${connectValues.join(' ')}\`);
-        break;
-        
-      case 'frame-ancestors':
-        let frameAncestorValues = [...directiveValues];
-        // If completely blocked with 'none', allow 'self' at least
-        if (frameAncestorValues.includes("'none'")) {
-          frameAncestorValues = ["'self'"];
-        }
-        fixedDirectives.push(\`frame-ancestors \${frameAncestorValues.join(' ')}\`);
-        break;
-        
-      default:
-        // Keep other directives as-is
-        fixedDirectives.push(directive);
-        break;
-    }
-  }
-  
-  // Add script-src if it doesn't exist (for our injected scripts)
-  if (!hasScriptSrc) {
-    if (scriptNonce) {
-      fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}'\`);
-    } else {
-      fixedDirectives.push(\`script-src 'self' 'unsafe-eval'\`);
-    }
-  }
-  
-  return fixedDirectives.join('; ');
+      }
+
+      return fixedDirectives.join('; ');
     `);
+
     // -- fulfill Method --
     const fulfillMethod = routeImplClass.getMethodOrThrow("fulfill");
     // Replace the body of the fulfill method with custom code
@@ -256,15 +259,15 @@ export function patchCRNetworkManager(project) {
                 let originalCsp = contentMatch[1];
                 
                 // Decode HTML entities
-                          originalCsp = originalCsp.replace(/&amp;/g, '&')  // Must be first!
-                              .replace(/&lt;/g, '<')
-                              .replace(/&gt;/g, '>')
-                              .replace(/&quot;/g, '"')
-                              .replace(/&#x27;/g, "'")
-                              .replace(/&#x22;/g, '"')
-                              .replace(/&nbsp;/g, ' ')
-                              .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
-                              .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+                originalCsp = originalCsp.replace(/&amp;/g, '&')  // Must be first!
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#x27;/g, "'")
+                    .replace(/&#x22;/g, '"')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+                    .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
                 
                 // Extract nonce if not already found
                 if (!useNonce) {
@@ -358,9 +361,9 @@ export function patchCRNetworkManager(project) {
           body
         });
       });
-`);
+    `);
 
-    // -- continue --
+    // -- continue Method --
     const continueMethod = routeImplClass.getMethodOrThrow("continue");
     continueMethod.setBodyText(`
       this._alreadyContinuedParams = {

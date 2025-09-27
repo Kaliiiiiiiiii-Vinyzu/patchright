@@ -15,7 +15,7 @@ export function patchChromiumSwitches(project) {
       .getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)[0];
     // Patchright defined switches to disable
     const switchesToDisable = [
-        "'--enable-automation'",
+        "assistantMode ? '' : '--enable-automation'",
         "'--disable-popup-blocking'",
         "'--disable-component-update'",
         "'--disable-default-apps'",

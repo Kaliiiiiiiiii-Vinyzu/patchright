@@ -71,12 +71,12 @@ As a **cloud-based browser platform**, Scrapeless Scraping Browser lets you inst
 Beyond the Scraping Browser, Scrapeless also offers [**Scraping API**](https://www.scrapeless.com/en/product/scraping-api?utm_medium=github&utm_campaign=vinyzu-patchright)**, [Deep SerpAPI](https://www.scrapeless.com/en/product/deep-serp-api?utm_medium=github&utm_campaign=vinyzu-patchright), and [Proxy services](https://www.scrapeless.com/en/product/proxies?utm_medium=github&utm_campaign=vinyzu-patchright).**
 
 Key Features:
-* **Massive concurrency**: Launch 50–10,000+ browsers with one click to run large-scale automation tasks  
-* **Smart anti-detection**: Automatically bypass reCAPTCHA, Cloudflare, DataDome, WAF, and more  
-* **Human-like environment**: Dynamic fingerprint spoofing \+ simulated clicks/scrolls to avoid bot detection  
-* **70M+ residential IP proxies**: Worldwide coverage, auto-rotating, with geo-targeting support  
-* **Low-cost operation**: Proxy costs as low as $1.26–$1.80/GB, below industry averages  
-* **Plug-and-play integration**: Works seamlessly with Puppeteer / Playwright / Python / Node.js / Selenium  
+* **Massive concurrency**: Launch 50–10,000+ browsers with one click to run large-scale automation tasks
+* **Smart anti-detection**: Automatically bypass reCAPTCHA, Cloudflare, DataDome, WAF, and more
+* **Human-like environment**: Dynamic fingerprint spoofing \+ simulated clicks/scrolls to avoid bot detection
+* **70M+ residential IP proxies**: Worldwide coverage, auto-rotating, with geo-targeting support
+* **Low-cost operation**: Proxy costs as low as $1.26–$1.80/GB, below industry averages
+* **Plug-and-play integration**: Works seamlessly with Puppeteer / Playwright / Python / Node.js / Selenium
 * **Flexible automation modes**: Automate form submissions, login tests, browsing tasks, and data extraction
 
 👉 Learn more: [Scrapeless Scraping Browser Playground](https://app.scrapeless.com/passport/login?utm_medium=github&utm_campaign=vinyzu-patchright) | [Scrapeless Scraping Browser Docs](https://docs.scrapeless.com/en/scraping-browser/quickstart/introduction/?utm_medium=github&utm_campaign=vinyzu-patchright)
