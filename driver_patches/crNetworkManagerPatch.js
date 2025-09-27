@@ -99,7 +99,8 @@ export function patchCRNetworkManager(project) {
       name: "_fixCSP",
       isAsync: false,
       parameters: [
-        { name: "csp", name:"scriptNonce" },
+        { name: "csp" }, 
+        { name: "scriptNonce" },
       ]
     });
     const fixCSPMethod = routeImplClass.getMethod("_fixCSP");
