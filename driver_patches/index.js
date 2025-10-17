@@ -17,3 +17,4 @@ export * from "./pageDispatcherPatch.js";
 export * from "./pagePatch.js";
 export * from "./utilityScriptSerializersPatch.js";
 export * from "./XPathSelectorEnginePatch.js";
+export * from "./serverRegistryIndex.js";

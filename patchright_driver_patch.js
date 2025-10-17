@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import path from 'path';
+import path from "path";
 import { Project, SyntaxKind, IndentationText, ObjectLiteralExpression } from "ts-morph";
 import YAML from "yaml";
 
@@ -74,7 +74,7 @@ patches.patchUtilityScriptSerializers(project);
 // ----------------------------
 // server/pageBinding.ts
 // ----------------------------
-patches.patchPageBinding(project)
+patches.patchPageBinding(project);
 // ----------------------------
 // server/clock.ts
 // ----------------------------
@@ -105,6 +105,11 @@ patches.patchPageDispatcher(project);
 // ----------------------------
 patches.patchXPathSelectorEngine(project);
 
+// ----------------------------
+// server/registry/index.ts
+// ----------------------------
+patches.patchServerRegistryIndex(project);
+
 // Save the changes without reformatting
 project.saveSync();
 
@@ -113,9 +118,9 @@ project.saveSync();
 // ----------------------------
 const protocol = YAML.parse(await fs.readFile("packages/protocol/src/protocol.yml", "utf8"));
 for (const type of ["Frame", "JSHandle", "Worker"]) {
-    const commands = protocol[type].commands;
-    commands.evaluateExpression.parameters.isolatedContext = "boolean?";
-    commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
+  const commands = protocol[type].commands;
+  commands.evaluateExpression.parameters.isolatedContext = "boolean?";
+  commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
 }
 protocol["Frame"].commands.evalOnSelectorAll.parameters.isolatedContext = "boolean?";
 await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
