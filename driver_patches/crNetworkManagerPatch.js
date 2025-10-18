@@ -108,7 +108,7 @@ export function patchCRNetworkManager(project) {
     const fixCSPMethod = routeImplClass.getMethod("_fixCSP");
     fixCSPMethod.setBodyText(`
       if (!csp || typeof csp !== 'string') return csp;
-  
+
       // Split by semicolons and clean up
       const directives = csp.split(';')
         .map(d => d.trim())
@@ -121,12 +121,15 @@ export function patchCRNetworkManager(project) {
         // Skip empty directives
         if (!directive.trim()) continue;
 
-        // Split directive name from values
-        const parts = directive.trim().split(/\s+/);
-        if (parts.length === 0) continue;
+        // Improved directive parsing to handle more edge cases
+        const directiveMatch = directive.match(/^([a-zA-Z-]+)\\s+(.*)$/);
+        if (!directiveMatch) {
+          fixedDirectives.push(directive);
+          continue;
+        }
 
-        const directiveName = parts[0].toLowerCase();
-        const directiveValues = parts.slice(1);
+        const directiveName = directiveMatch[1].toLowerCase();
+        const directiveValues = directiveMatch[2].split(/\\s+/).filter(v => v.length > 0);
 
         switch (directiveName) {
           case 'script-src':
@@ -141,6 +144,16 @@ export function patchCRNetworkManager(project) {
             // Add 'unsafe-eval' if not present
             if (!values.includes("'unsafe-eval'")) {
               values.push("'unsafe-eval'");
+            }
+
+            // Add unsafe-inline if not present and no nonce is being used
+            if (!values.includes("'unsafe-inline'") && !scriptNonce) {
+              values.push("'unsafe-inline'");
+            }
+
+            // Add wildcard for external scripts if not already present
+            if (!values.includes("*") && !values.includes("'self'") && !values.some(v => v.includes("https:"))) {
+              values.push("*");
             }
 
             fixedDirectives.push(\`script-src \${values.join(' ')}\`);
@@ -202,9 +215,9 @@ export function patchCRNetworkManager(project) {
       // Add script-src if it doesn't exist (for our injected scripts)
       if (!hasScriptSrc) {
         if (scriptNonce) {
-          fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}'\`);
+          fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}' *\`);
         } else {
-          fixedDirectives.push(\`script-src 'self' 'unsafe-eval'\`);
+          fixedDirectives.push(\`script-src 'self' 'unsafe-eval' 'unsafe-inline' *\`);
         }
       }
 
