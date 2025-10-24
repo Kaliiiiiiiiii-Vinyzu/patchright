@@ -411,7 +411,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +813,142 @@
+@@ -656,6 +813,155 @@
        });
      });
    }
@@ -419,7 +419,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 +  _fixCSP(csp, scriptNonce) {
 +
 +          if (!csp || typeof csp !== 'string') return csp;
-+      
++
 +          // Split by semicolons and clean up
 +          const directives = csp.split(';')
 +            .map(d => d.trim())
@@ -432,12 +432,15 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 +            // Skip empty directives
 +            if (!directive.trim()) continue;
 +
-+            // Split directive name from values
-+            const parts = directive.trim().split(/s+/);
-+            if (parts.length === 0) continue;
++            // Improved directive parsing to handle more edge cases
++            const directiveMatch = directive.match(/^([a-zA-Z-]+)\s+(.*)$/);
++            if (!directiveMatch) {
++              fixedDirectives.push(directive);
++              continue;
++            }
 +
-+            const directiveName = parts[0].toLowerCase();
-+            const directiveValues = parts.slice(1);
++            const directiveName = directiveMatch[1].toLowerCase();
++            const directiveValues = directiveMatch[2].split(/\s+/).filter(v => v.length > 0);
 +
 +            switch (directiveName) {
 +              case 'script-src':
@@ -452,6 +455,16 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 +                // Add 'unsafe-eval' if not present
 +                if (!values.includes("'unsafe-eval'")) {
 +                  values.push("'unsafe-eval'");
++                }
++
++                // Add unsafe-inline if not present and no nonce is being used
++                if (!values.includes("'unsafe-inline'") && !scriptNonce) {
++                  values.push("'unsafe-inline'");
++                }
++
++                // Add wildcard for external scripts if not already present
++                if (!values.includes("*") && !values.includes("'self'") && !values.some(v => v.includes("https:"))) {
++                  values.push("*");
 +                }
 +
 +                fixedDirectives.push(`script-src ${values.join(' ')}`);
@@ -513,9 +526,9 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 +          // Add script-src if it doesn't exist (for our injected scripts)
 +          if (!hasScriptSrc) {
 +            if (scriptNonce) {
-+              fixedDirectives.push(`script-src 'self' 'unsafe-eval' 'nonce-${scriptNonce}'`);
++              fixedDirectives.push(`script-src 'self' 'unsafe-eval' 'nonce-${scriptNonce}' *`);
 +            } else {
-+              fixedDirectives.push(`script-src 'self' 'unsafe-eval'`);
++              fixedDirectives.push(`script-src 'self' 'unsafe-eval' 'unsafe-inline' *`);
 +            }
 +          }
 +
@@ -3258,7 +3271,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +813,142 @@
+@@ -656,6 +813,155 @@
        });
      });
    }
@@ -3266,7 +3279,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 +  _fixCSP(csp, scriptNonce) {
 +
 +          if (!csp || typeof csp !== 'string') return csp;
-+      
++
 +          // Split by semicolons and clean up
 +          const directives = csp.split(';')
 +            .map(d => d.trim())
@@ -3279,12 +3292,15 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 +            // Skip empty directives
 +            if (!directive.trim()) continue;
 +
-+            // Split directive name from values
-+            const parts = directive.trim().split(/s+/);
-+            if (parts.length === 0) continue;
++            // Improved directive parsing to handle more edge cases
++            const directiveMatch = directive.match(/^([a-zA-Z-]+)\s+(.*)$/);
++            if (!directiveMatch) {
++              fixedDirectives.push(directive);
++              continue;
++            }
 +
-+            const directiveName = parts[0].toLowerCase();
-+            const directiveValues = parts.slice(1);
++            const directiveName = directiveMatch[1].toLowerCase();
++            const directiveValues = directiveMatch[2].split(/\s+/).filter(v => v.length > 0);
 +
 +            switch (directiveName) {
 +              case 'script-src':
@@ -3299,6 +3315,16 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 +                // Add 'unsafe-eval' if not present
 +                if (!values.includes("'unsafe-eval'")) {
 +                  values.push("'unsafe-eval'");
++                }
++
++                // Add unsafe-inline if not present and no nonce is being used
++                if (!values.includes("'unsafe-inline'") && !scriptNonce) {
++                  values.push("'unsafe-inline'");
++                }
++
++                // Add wildcard for external scripts if not already present
++                if (!values.includes("*") && !values.includes("'self'") && !values.some(v => v.includes("https:"))) {
++                  values.push("*");
 +                }
 +
 +                fixedDirectives.push(`script-src ${values.join(' ')}`);
@@ -3360,9 +3386,9 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 +          // Add script-src if it doesn't exist (for our injected scripts)
 +          if (!hasScriptSrc) {
 +            if (scriptNonce) {
-+              fixedDirectives.push(`script-src 'self' 'unsafe-eval' 'nonce-${scriptNonce}'`);
++              fixedDirectives.push(`script-src 'self' 'unsafe-eval' 'nonce-${scriptNonce}' *`);
 +            } else {
-+              fixedDirectives.push(`script-src 'self' 'unsafe-eval'`);
++              fixedDirectives.push(`script-src 'self' 'unsafe-eval' 'unsafe-inline' *`);
 +            }
 +          }
 +
