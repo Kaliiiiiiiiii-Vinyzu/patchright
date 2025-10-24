@@ -2515,6 +2515,18 @@ diff -ruN playwright/node_modules/playwright-core/src/server/pageBinding.ts patc
 +      }
 +    
 \ No newline at end of file
+diff -ruN playwright/node_modules/playwright-core/src/server/registry/index.ts patchright/node_modules/playwright-core/src/server/registry/index.ts
+---
++++
+@@ -1387,7 +1387,7 @@
+       return `pwsh bin/Debug/netX/playwright.ps1 ${parameters}`;
+     default: {
+       const packageManagerCommand = getPackageManagerExecCommand();
+-      return `${packageManagerCommand} playwright ${parameters}`;
++      return `${packageManagerCommand} patchright ${parameters}`;
+     }
+   }
+ }
 diff -ruN playwright/node_modules/playwright-core/src/utils/isomorphic/oldUtilityScriptSerializers.ts patchright/node_modules/playwright-core/src/utils/isomorphic/oldUtilityScriptSerializers.ts
 ---
 +++
@@ -5375,6 +5387,18 @@ diff -ruN playwright/packages/playwright-core/src/server/pageBinding.ts patchrig
 +      }
 +    
 \ No newline at end of file
+diff -ruN playwright/packages/playwright-core/src/server/registry/index.ts patchright/packages/playwright-core/src/server/registry/index.ts
+---
++++
+@@ -1387,7 +1387,7 @@
+       return `pwsh bin/Debug/netX/playwright.ps1 ${parameters}`;
+     default: {
+       const packageManagerCommand = getPackageManagerExecCommand();
+-      return `${packageManagerCommand} playwright ${parameters}`;
++      return `${packageManagerCommand} patchright ${parameters}`;
+     }
+   }
+ }
 diff -ruN playwright/packages/playwright-core/src/utils/isomorphic/oldUtilityScriptSerializers.ts patchright/packages/playwright-core/src/utils/isomorphic/oldUtilityScriptSerializers.ts
 ---
 +++
