@@ -2824,6 +2824,18 @@ diff -ruN playwright/node_modules/playwright-core/src/utils/isomorphic/oldUtilit
 +      }
 +    
 \ No newline at end of file
+diff -ruN playwright/node_modules/recorder/src/recorder.tsx patchright/node_modules/recorder/src/recorder.tsx
+---
++++
+@@ -56,7 +56,7 @@
+   window.playwrightSelectSource = selectedSourceId => setSelectedFileId(selectedSourceId);
+ 
+   React.useEffect(() => {
+-    window.dispatch({ event: 'setAutoExpect', params: { autoExpect } });
++    try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}
+   }, [autoExpect]);
+ 
+   const source = React.useMemo(() => {
 diff -ruN playwright/packages/injected/src/xpathSelectorEngine.ts patchright/packages/injected/src/xpathSelectorEngine.ts
 ---
 +++
@@ -9357,3 +9369,15 @@ diff -ruN playwright/packages/protocol/src/protocol.yml patchright/packages/prot
      closed:
        parameters:
          reason: string?
+diff -ruN playwright/packages/recorder/src/recorder.tsx patchright/packages/recorder/src/recorder.tsx
+---
++++
+@@ -56,7 +56,7 @@
+   window.playwrightSelectSource = selectedSourceId => setSelectedFileId(selectedSourceId);
+ 
+   React.useEffect(() => {
+-    window.dispatch({ event: 'setAutoExpect', params: { autoExpect } });
++    try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}
+   }, [autoExpect]);
+ 
+   const source = React.useMemo(() => {
