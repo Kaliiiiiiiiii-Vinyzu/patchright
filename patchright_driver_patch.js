@@ -110,6 +110,11 @@ patches.patchXPathSelectorEngine(project);
 // ----------------------------
 patches.patchServerRegistryIndex(project);
 
+// ----------------------------
+// recorder/src/recorder.tsx
+// ----------------------------
+patches.patchRecorder(project);
+
 // Save the changes without reformatting
 project.saveSync();
 

@@ -18,3 +18,4 @@ export * from "./pagePatch.js";
 export * from "./utilityScriptSerializersPatch.js";
 export * from "./XPathSelectorEnginePatch.js";
 export * from "./serverRegistryIndex.js";
+export * from "./recorderPatch.js";
