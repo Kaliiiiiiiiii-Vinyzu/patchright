@@ -62,27 +62,6 @@ Key Features:
 
 👉 Learn more at [**hyperbrowser.ai**](https://hyperbrowser.ai/)
 
----
-<a href="https://www.scrapeless.com/en/product/scraping-browser?utm_medium=github&utm_campaign=vinyzu-patchright"><img alt="Scrapeless Banner Ad" src="https://github.com/user-attachments/assets/d720ade6-6e4e-43d9-a42a-501aacc7ed54" width="80%"/></a>
- </br>
-
-If you are looking for a tool focused on **browser automation and anti-detection mechanisms**, I can recommend [**Scrapeless Scraping Browser**](https://www.scrapeless.com/en/product/scraping-browser?utm_medium=github&utm_campaign=vinyzu-patchright). It is a cloud-based, Chromium-powered headless browser cluster that enables developers to run **large-scale concurrent browser instances** and handle complex interactions on protected pages. Perfectly suited for **AI infrastructure, web automation, data scraping, page rendering, and automated testing**.
-
-The [**Scrapeless Browser**](https://www.scrapeless.com/en/product/scraping-browser?utm_medium=github&utm_campaign=vinyzu-botright) provides a secure, isolated browser environment that allows you to interact with web applications while minimizing potential risks to your system.  
-Key Features
-
-* **Out-of-the-Box Ready**: Natively compatible with [Puppeteer](https://docs.scrapeless.com/en/scraping-browser/libraries/puppeteer/) and [Playwright](https://docs.scrapeless.com/en/scraping-browser/libraries/playwright/), supporting CDP connections. Migrate your projects with just one line of code.  
-* **Global IP Resources**: Covers residential IPs, static ISP IPs, and unlimited IPs across 195 countries. Transparent costs **($0.6–$1.8/GB)** with support for custom browser proxies.  
-* **Isolated Environment Creation**: Each profile uses an exclusive browser environment, enabling persistent login and identity isolation.  
-* **Unlimited Concurrent Scaling**: A single task supports second-level launch of 50 to 1000+ browser instances. Auto-scaling is available with no server resource limits.  
-* **Edge Node Service (ENS)** – Multiple nodes worldwide, offering 2–3× faster launch speed and higher stability than other browsers.  
-* **Flexible Fingerprint Customization**: Generate random fingerprints or customize fingerprint parameters as needed.  
-* **Visual Debugging:** Perform interactive debugging and real-time monitoring of proxy traffic through **Live View**, and quickly pinpoint issues and optimize actions by replaying sessions page by page with **Session Recordings**.  
-* **Enterprise Customization**: Undertake customization of enterprise-level automation projects and AI Agent customization.
-
-
-👉 Learn more: [Scrapeless Scraping Browser Playground](https://app.scrapeless.com/passport/login?utm_medium=github&utm_campaign=vinyzu-patchright) | [Scrapeless Scraping Browser Docs](https://docs.scrapeless.com/en/scraping-browser/quickstart/introduction/?utm_medium=github&utm_campaign=vinyzu-patchright)
-
 </details>
 
 ---
