@@ -189,7 +189,7 @@ export function patchCRPage(project) {
     // Allow focus control on pages https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/issues/137#event-20580557051
     const focusControlStatement = initializeFrameSessionMethodBody
         .getDescendantsOfKind(SyntaxKind.IfStatement)
-        .find((statement) => statement.getText().startsWith("if (options.hasTouch)")
+        .find((statement) => statement.getText().startsWith("if (this._isMainFrame()")
                           && statement.getText().includes("Emulation.setFocusEmulationEnabled"));
     if (focusControlStatement) focusControlStatement.remove();
     // Find the initScript Evaluation Loop
