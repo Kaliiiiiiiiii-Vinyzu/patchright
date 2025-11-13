@@ -656,20 +656,42 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -554,14 +569,24 @@
-       promises.push(this._updateGeolocation(true));
-       promises.push(this._updateEmulateMedia());
-       promises.push(this._updateFileChooserInterception(true));
+@@ -527,41 +542,16 @@
+       this._crPage._networkManager.addSession(this._client, undefined, this._isMainFrame()),
+       this._client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }),
+     ];
+-    if (!this._page.isStorageStatePage) {
+-      if (this._crPage._browserContext.needsPlaywrightBinding())
+-        promises.push(this.exposePlaywrightBinding());
+-      if (this._isMainFrame())
+-        promises.push(this._client.send('Emulation.setFocusEmulationEnabled', { enabled: true }));
+-      const options = this._crPage._browserContext._options;
+-      if (options.bypassCSP)
+-        promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
+-      if (options.ignoreHTTPSErrors || options.internalIgnoreHTTPSErrors)
+-        promises.push(this._client.send('Security.setIgnoreCertificateErrors', { ignore: true }));
+-      if (this._isMainFrame())
+-        promises.push(this._updateViewport());
+-      if (options.hasTouch)
+-        promises.push(this._client.send('Emulation.setTouchEmulationEnabled', { enabled: true }));
+-      if (options.javaScriptEnabled === false)
+-        promises.push(this._client.send('Emulation.setScriptExecutionDisabled', { value: true }));
+-      if (options.userAgent || options.locale)
+-        promises.push(this._updateUserAgent());
+-      if (options.locale)
+-        promises.push(emulateLocale(this._client, options.locale));
+-      if (options.timezoneId)
+-        promises.push(emulateTimezone(this._client, options.timezoneId));
+-      if (!this._crPage._browserContext._browser.options.headful)
+-        promises.push(this._setDefaultFontFamilies(this._client));
+-      promises.push(this._updateGeolocation(true));
+-      promises.push(this._updateEmulateMedia());
+-      promises.push(this._updateFileChooserInterception(true));
 -      for (const initScript of this._crPage._page.allInitScripts())
 -        promises.push(this._evaluateOnNewDocument(initScript, 'main', true /* runImmediately */));
-+      
-+                    for (const binding of this._crPage._page.allBindings()) promises.push(this._initBinding(binding));
-+                    for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
-+                    for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
-+                  
-       if (screencastOptions)
-         promises.push(this._startVideoRecording(screencastOptions));
-     }
+-      if (screencastOptions)
+-        promises.push(this._startVideoRecording(screencastOptions));
+-    }
 -    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
 +    
 +            if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
@@ -684,7 +706,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
    }
  
    dispose() {
-@@ -585,13 +610,25 @@
+@@ -585,13 +575,25 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -711,7 +733,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -638,12 +675,24 @@
+@@ -638,12 +640,24 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -737,7 +759,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -680,19 +729,31 @@
+@@ -680,19 +694,31 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -774,7 +796,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -708,7 +769,7 @@
+@@ -708,7 +734,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -783,7 +805,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -750,8 +811,18 @@
+@@ -750,8 +776,18 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -803,7 +825,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -1077,20 +1148,11 @@
+@@ -1077,20 +1113,11 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -826,7 +848,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
    }
  
    async exposePlaywrightBinding() {
-@@ -1201,6 +1263,49 @@
+@@ -1201,6 +1228,49 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
@@ -3540,20 +3562,42 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -554,14 +569,24 @@
-       promises.push(this._updateGeolocation(true));
-       promises.push(this._updateEmulateMedia());
-       promises.push(this._updateFileChooserInterception(true));
+@@ -527,41 +542,16 @@
+       this._crPage._networkManager.addSession(this._client, undefined, this._isMainFrame()),
+       this._client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }),
+     ];
+-    if (!this._page.isStorageStatePage) {
+-      if (this._crPage._browserContext.needsPlaywrightBinding())
+-        promises.push(this.exposePlaywrightBinding());
+-      if (this._isMainFrame())
+-        promises.push(this._client.send('Emulation.setFocusEmulationEnabled', { enabled: true }));
+-      const options = this._crPage._browserContext._options;
+-      if (options.bypassCSP)
+-        promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
+-      if (options.ignoreHTTPSErrors || options.internalIgnoreHTTPSErrors)
+-        promises.push(this._client.send('Security.setIgnoreCertificateErrors', { ignore: true }));
+-      if (this._isMainFrame())
+-        promises.push(this._updateViewport());
+-      if (options.hasTouch)
+-        promises.push(this._client.send('Emulation.setTouchEmulationEnabled', { enabled: true }));
+-      if (options.javaScriptEnabled === false)
+-        promises.push(this._client.send('Emulation.setScriptExecutionDisabled', { value: true }));
+-      if (options.userAgent || options.locale)
+-        promises.push(this._updateUserAgent());
+-      if (options.locale)
+-        promises.push(emulateLocale(this._client, options.locale));
+-      if (options.timezoneId)
+-        promises.push(emulateTimezone(this._client, options.timezoneId));
+-      if (!this._crPage._browserContext._browser.options.headful)
+-        promises.push(this._setDefaultFontFamilies(this._client));
+-      promises.push(this._updateGeolocation(true));
+-      promises.push(this._updateEmulateMedia());
+-      promises.push(this._updateFileChooserInterception(true));
 -      for (const initScript of this._crPage._page.allInitScripts())
 -        promises.push(this._evaluateOnNewDocument(initScript, 'main', true /* runImmediately */));
-+      
-+                    for (const binding of this._crPage._page.allBindings()) promises.push(this._initBinding(binding));
-+                    for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
-+                    for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
-+                  
-       if (screencastOptions)
-         promises.push(this._startVideoRecording(screencastOptions));
-     }
+-      if (screencastOptions)
+-        promises.push(this._startVideoRecording(screencastOptions));
+-    }
 -    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
 +    
 +            if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
@@ -3568,7 +3612,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
    }
  
    dispose() {
-@@ -585,13 +610,25 @@
+@@ -585,13 +575,25 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -3595,7 +3639,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -638,12 +675,24 @@
+@@ -638,12 +640,24 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -3621,7 +3665,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -680,19 +729,31 @@
+@@ -680,19 +694,31 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -3658,7 +3702,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -708,7 +769,7 @@
+@@ -708,7 +734,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -3667,7 +3711,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -750,8 +811,18 @@
+@@ -750,8 +776,18 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -3687,7 +3731,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -1077,20 +1148,11 @@
+@@ -1077,20 +1113,11 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -3710,7 +3754,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
    }
  
    async exposePlaywrightBinding() {
-@@ -1201,6 +1263,49 @@
+@@ -1201,6 +1228,49 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
