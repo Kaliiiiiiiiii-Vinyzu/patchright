@@ -121,6 +121,7 @@ project.saveSync();
 // ----------------------------
 // protocol/protocol.yml
 // ----------------------------
+// isolatedContext parameters
 const protocol = YAML.parse(await fs.readFile("packages/protocol/src/protocol.yml", "utf8"));
 for (const type of ["Frame", "JSHandle", "Worker"]) {
   const commands = protocol[type].commands;
@@ -128,4 +129,7 @@ for (const type of ["Frame", "JSHandle", "Worker"]) {
   commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
 }
 protocol["Frame"].commands.evalOnSelectorAll.parameters.isolatedContext = "boolean?";
+// focusControl parameter
+protocol["ContextOptions"].properties.focusControl = "boolean?";
+
 await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));

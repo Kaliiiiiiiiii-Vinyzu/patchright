@@ -62,4 +62,14 @@ export function patchBrowserContext(project) {
       this.initScripts.splice(0, this.initScripts.length);
       await this.doRemoveInitScripts();
       `);
+
+    // Add focusControl Parameter
+    const defaultContextParams = browserContextSourceFile.getVariableDeclaration("defaultNewContextParamValues");
+    const defaultContextExpression = defaultContextParams.getInitializerIfKind(SyntaxKind.ObjectLiteralExpression);
+    if (defaultContextExpression && !defaultContextExpression.getProperty("focusControl")) {
+      defaultContextExpression.addPropertyAssignment({
+        name: "focusControl",
+        initializer: "false",
+      });
+    }
 }

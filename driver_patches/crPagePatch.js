@@ -191,7 +191,12 @@ export function patchCRPage(project) {
         .getDescendantsOfKind(SyntaxKind.IfStatement)
         .find((statement) => statement.getText().startsWith("if (this._isMainFrame()")
                           && statement.getText().includes("Emulation.setFocusEmulationEnabled"));
-    if (focusControlStatement) focusControlStatement.remove();
+    if (focusControlStatement) {
+        focusControlStatement.replaceWithText(`
+        if (this._isMainFrame() && this._crPage._browserContext._options.focusControl)
+            promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
+        `);
+    }
     // Find the initScript Evaluation Loop
     initializeFrameSessionMethodBody
       .getDescendantsOfKind(SyntaxKind.ForOfStatement)
