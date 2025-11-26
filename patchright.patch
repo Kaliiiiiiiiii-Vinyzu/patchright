@@ -676,7 +676,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
 -      if (this._isMainFrame())
 -        promises.push(this._client.send('Emulation.setFocusEmulationEnabled', { enabled: true }));
 +      
-+              if (this._isMainFrame() && this._crPage._browserContext._options.focusControl)
++              if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
 +                  promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
 +              
        const options = this._crPage._browserContext._options;
@@ -3592,7 +3592,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
 -      if (this._isMainFrame())
 -        promises.push(this._client.send('Emulation.setFocusEmulationEnabled', { enabled: true }));
 +      
-+              if (this._isMainFrame() && this._crPage._browserContext._options.focusControl)
++              if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
 +                  promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
 +              
        const options = this._crPage._browserContext._options;
