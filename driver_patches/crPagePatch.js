@@ -193,7 +193,7 @@ export function patchCRPage(project) {
                           && statement.getText().includes("Emulation.setFocusEmulationEnabled"));
     if (focusControlStatement) {
         focusControlStatement.replaceWithText(`
-        if (this._isMainFrame() && this._crPage._browserContext._options.focusControl)
+        if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
             promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
         `);
     }
