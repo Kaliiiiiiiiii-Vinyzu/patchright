@@ -4,50 +4,50 @@ import { Project, SyntaxKind } from "ts-morph";
 // server/frameSelectors.ts
 // ----------------------------
 export function patchFrameSelectors(project) {
-    // Add source file to the project
-    const frameSelectorsSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/frameSelectors.ts");
-    // Add the custom import and comment at the start of the file
-    frameSelectorsSourceFile.insertStatements(0, [
-      "// patchright - custom imports",
-      "import { ElementHandle } from './dom';",
-      "",
-    ]);
+  // Add source file to the project
+  const frameSelectorsSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/frameSelectors.ts");
+  // Add the custom import and comment at the start of the file
+  frameSelectorsSourceFile.insertStatements(0, [
+    "// patchright - custom imports",
+    "import { ElementHandle } from './dom';",
+    "",
+  ]);
 
-    // ------- FrameSelectors Class -------
-    const frameSelectorsClass = frameSelectorsSourceFile.getClass("FrameSelectors");
+  // ------- FrameSelectors Class -------
+  const frameSelectorsClass = frameSelectorsSourceFile.getClass("FrameSelectors");
 
-    // -- queryArrayInMainWorld Method --
-    const queryArrayInMainWorldMethod = frameSelectorsClass.getMethod("queryArrayInMainWorld");
-    queryArrayInMainWorldMethod.addParameter({
-        name: "isolatedContext",
-        type: "boolean",
-        hasQuestionToken: true,
-    });
-    const queryArrayInMainWorldMethodCalls = queryArrayInMainWorldMethod.getDescendantsOfKind(SyntaxKind.CallExpression);
-    for (const callExpr of queryArrayInMainWorldMethodCalls) {
-      const exprText = callExpr.getExpression().getText();
-      if (exprText === "this.resolveInjectedForSelector") {
-        const args = callExpr.getArguments();
-        if (args.length > 1 && args[1].getKind() === SyntaxKind.ObjectLiteralExpression) {
-          const objLiteral = args[1];
+  // -- queryArrayInMainWorld Method --
+  const queryArrayInMainWorldMethod = frameSelectorsClass.getMethod("queryArrayInMainWorld");
+  queryArrayInMainWorldMethod.addParameter({
+    name: "isolatedContext",
+    type: "boolean",
+    hasQuestionToken: true,
+  });
+  const queryArrayInMainWorldMethodCalls = queryArrayInMainWorldMethod.getDescendantsOfKind(SyntaxKind.CallExpression);
+  for (const callExpr of queryArrayInMainWorldMethodCalls) {
+    const exprText = callExpr.getExpression().getText();
+    if (exprText === "this.resolveInjectedForSelector") {
+      const args = callExpr.getArguments();
+      if (args.length > 1 && args[1].getKind() === SyntaxKind.ObjectLiteralExpression) {
+        const objLiteral = args[1];
 
-          const mainWorldProp = objLiteral.getProperty("mainWorld");
-          if (mainWorldProp && mainWorldProp.getText() === "mainWorld: true") {
-            mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
-            break;
-          }
+        const mainWorldProp = objLiteral.getProperty("mainWorld");
+        if (mainWorldProp && mainWorldProp.getText() === "mainWorld: true") {
+          mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
+          break;
         }
       }
     }
+  }
 
-    // -- resolveFrameForSelector Method --
-    const resolveFrameForSelectorMethod = frameSelectorsClass.getMethod("resolveFrameForSelector");
-    const constElementDeclaration = resolveFrameForSelectorMethod.getDescendantsOfKind(SyntaxKind.VariableStatement)
-      .find(declaration => declaration.getText().includes("const element = handle.asElement()"));
-    constElementDeclaration.setDeclarationKind("let");
+  // -- resolveFrameForSelector Method --
+  const resolveFrameForSelectorMethod = frameSelectorsClass.getMethod("resolveFrameForSelector");
+  const constElementDeclaration = resolveFrameForSelectorMethod.getDescendantsOfKind(SyntaxKind.VariableStatement)
+    .find(declaration => declaration.getText().includes("const element = handle.asElement()"));
+  constElementDeclaration.setDeclarationKind("let");
 
-    const resolveFrameForSelectorIfStatement = resolveFrameForSelectorMethod.getDescendantsOfKind(SyntaxKind.IfStatement).find(statement => statement.getExpression().getText() === "!element" && statement.getThenStatement().getText() === "return null;");
-    resolveFrameForSelectorIfStatement.replaceWithText(`
+  const resolveFrameForSelectorIfStatement = resolveFrameForSelectorMethod.getDescendantsOfKind(SyntaxKind.IfStatement).find(statement => statement.getExpression().getText() === "!element" && statement.getThenStatement().getText() === "return null;");
+  resolveFrameForSelectorIfStatement.replaceWithText(`
       if (!element) {
         try {
           var client = frame._page.delegate._sessionForFrame(frame)._client;
@@ -72,20 +72,20 @@ export function patchFrameSelectors(project) {
       }
     `);
 
-    // -- _customFindFramesByParsed Method --
-    frameSelectorsClass.addMethod({
-      name: "_customFindFramesByParsed",
-      isAsync: true,
-      parameters: [
-        { name: "injected" },
-        { name: "client" },
-        { name: "context" },
-        { name: "documentScope" },
-        { name: "parsed" },
-      ],
-    });
-    const customFindFramesByParsedSelectorsMethod = frameSelectorsClass.getMethod("_customFindFramesByParsed");
-    customFindFramesByParsedSelectorsMethod.setBodyText(`
+  // -- _customFindFramesByParsed Method --
+  frameSelectorsClass.addMethod({
+    name: "_customFindFramesByParsed",
+    isAsync: true,
+    parameters: [
+      { name: "injected" },
+      { name: "client" },
+      { name: "context" },
+      { name: "documentScope" },
+      { name: "parsed" },
+    ],
+  });
+  const customFindFramesByParsedSelectorsMethod = frameSelectorsClass.getMethod("_customFindFramesByParsed");
+  customFindFramesByParsedSelectorsMethod.setBodyText(`
       var parsedEdits = { ...parsed };
       var currentScopingElements = [documentScope];
       while (parsed.parts.length > 0) {
@@ -188,7 +188,7 @@ export function patchFrameSelectors(project) {
           }
         }
         // Sorting elements by their nodePosition, which is a index to the Element in the DOM tree
-        const getParts = (pos) => (pos?.match(/../g) || []).map(Number);
+        const getParts = (pos) => (pos ? pos.split('.').filter(p => p !== "").map(Number) : []);
         elements.sort((a, b) => {
           const partA = getParts(a.nodePosition);
           const partB = getParts(b.nodePosition);
@@ -210,19 +210,19 @@ export function patchFrameSelectors(project) {
       return currentScopingElements;
     `);
 
-    // -- _findElementPositionInDomTree Method --
-    frameSelectorsClass.addMethod({
-      name: "_findElementPositionInDomTree",
-      isAsync: false,
-      parameters: [
-        { name: "element" },
-        { name: "queryingElement" },
-        { name: "documentScope" },
-        { name: "currentIndex" },
-      ],
-    });
-    const findElementPositionInDomTreeMethod = frameSelectorsClass.getMethod("_findElementPositionInDomTree");
-    findElementPositionInDomTreeMethod.setBodyText(`
+  // -- _findElementPositionInDomTree Method --
+  frameSelectorsClass.addMethod({
+    name: "_findElementPositionInDomTree",
+    isAsync: false,
+    parameters: [
+      { name: "element" },
+      { name: "queryingElement" },
+      { name: "documentScope" },
+      { name: "currentIndex" },
+    ],
+  });
+  const findElementPositionInDomTreeMethod = frameSelectorsClass.getMethod("_findElementPositionInDomTree");
+  findElementPositionInDomTreeMethod.setBodyText(`
       // Get Element Position in DOM Tree by Indexing it via their children indexes, like a search tree index
       // Check if backendNodeId matches, if so, return currentIndex
       if (element.backendNodeId === queryingElement.backendNodeId) {
@@ -233,7 +233,7 @@ export function patchFrameSelectors(project) {
         // Getting index of child in queryingElement's children
         const childrenNodeIndex = queryingElement.children.indexOf(child);
         // Further querying the child recursively and appending the children index to the currentIndex
-        const childIndex = this._findElementPositionInDomTree(element, child, documentScope, currentIndex + childrenNodeIndex.toString());
+        const childIndex = this._findElementPositionInDomTree(element, child, documentScope, currentIndex + "." + childrenNodeIndex.toString());
         if (childIndex !== null) return childIndex;
       }
       if (queryingElement.shadowRoots && Array.isArray(queryingElement.shadowRoots)) {
