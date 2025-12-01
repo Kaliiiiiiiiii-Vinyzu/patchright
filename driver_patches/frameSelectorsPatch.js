@@ -233,7 +233,7 @@ export function patchFrameSelectors(project) {
         // Getting index of child in queryingElement's children
         const childrenNodeIndex = queryingElement.children.indexOf(child);
         // Further querying the child recursively and appending the children index to the currentIndex
-        const childIndex = this._findElementPositionInDomTree(element, child, documentScope, currentIndex + childrenNodeIndex.toString());
+        const childIndex = this._findElementPositionInDomTree(element, child, documentScope, currentIndex + "." + childrenNodeIndex.toString());
         if (childIndex !== null) return childIndex;
       }
       if (queryingElement.shadowRoots && Array.isArray(queryingElement.shadowRoots)) {
