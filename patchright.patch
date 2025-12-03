@@ -1451,7 +1451,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frames.ts patchrigh
 -    handle.dispose();
 -    return result;
 +            if (!handle)
-+              throw new Error('Failed to find element matching selector ' + selector);
++              throw new Error('Failed to find element matching selector "' + selector + '"');
 +            const result = await handle.evaluateExpression(expression, { isFunction }, arg, true);
 +            handle.dispose();
 +            return result;
@@ -4367,7 +4367,7 @@ diff -ruN playwright/packages/playwright-core/src/server/frames.ts patchright/pa
 -    handle.dispose();
 -    return result;
 +            if (!handle)
-+              throw new Error('Failed to find element matching selector ' + selector);
++              throw new Error('Failed to find element matching selector "' + selector + '"');
 +            const result = await handle.evaluateExpression(expression, { isFunction }, arg, true);
 +            handle.dispose();
 +            return result;
