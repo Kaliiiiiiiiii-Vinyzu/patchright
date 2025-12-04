@@ -744,7 +744,7 @@ export function patchFrames(project) {
         }
 
         // Sorting elements by their nodePosition, which is a index to the Element in the DOM tree
-        const getParts = (pos) => (pos || "").split(".").filter(Boolean).map(Number);
+        const getParts = (pos) => (pos || '').split('.').filter(Boolean).map(Number);
         elements.sort((a, b) => {
           const partA = getParts(a.nodePosition);
           const partB = getParts(b.nodePosition);
