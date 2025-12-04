@@ -1224,9 +1224,9 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frames.ts patchrigh
        // No pending - just commit a new document.
        frame._currentDocument = { documentId, request: undefined };
      }
-+    this._iframeWorld = undefined;
-+    this._mainWorld = undefined;
-+    this._isolatedWorld = undefined;
++    frame._iframeWorld = undefined;
++    frame._mainWorld = undefined;
++    frame._isolatedWorld = undefined;
  
      frame._onClearLifecycle();
      const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
@@ -4144,9 +4144,9 @@ diff -ruN playwright/packages/playwright-core/src/server/frames.ts patchright/pa
        // No pending - just commit a new document.
        frame._currentDocument = { documentId, request: undefined };
      }
-+    this._iframeWorld = undefined;
-+    this._mainWorld = undefined;
-+    this._isolatedWorld = undefined;
++    frame._iframeWorld = undefined;
++    frame._mainWorld = undefined;
++    frame._isolatedWorld = undefined;
  
      frame._onClearLifecycle();
      const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
