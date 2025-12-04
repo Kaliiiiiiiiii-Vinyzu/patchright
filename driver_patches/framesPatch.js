@@ -23,9 +23,9 @@ export function patchFrames(project) {
         .getDescendantsOfKind(SyntaxKind.ExpressionStatement)
         .findIndex(stmt => stmt.getText().trim() === "frame._onClearLifecycle();");
     frameCommittedNewDocumentNavigationMethod.insertStatements(clearLifecycleStatementIndex - 2, [
-      "this._iframeWorld = undefined;",
-      "this._mainWorld = undefined;",
-      "this._isolatedWorld = undefined;"
+      "frame._iframeWorld = undefined;",
+      "frame._mainWorld = undefined;",
+      "frame._isolatedWorld = undefined;"
     ]);
 
     // ------- Frame Class -------
