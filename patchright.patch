@@ -1042,7 +1042,11 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frameSelectors.ts p
        const maybeFrame = await frame._page.delegate.getContentFrame(element);
        element.dispose();
        if (!maybeFrame)
-@@ -176,6 +200,162 @@
+@@ -173,9 +197,166 @@
+     if (!resolved)
+       return;
+     const context = await resolved.frame._context(options?.mainWorld ? 'main' : resolved.info.world);
++    if (!context) throw new Error("Frame was detached");
      const injected = await context.injectedScript();
      return { injected, info: resolved.info, frame: resolved.frame, scope: resolved.scope };
    }
@@ -1216,16 +1220,16 @@ diff -ruN playwright/node_modules/playwright-core/src/server/frames.ts patchrigh
  /**
   * Copyright 2017 Google Inc. All rights reserved.
   * Modifications copyright (c) Microsoft Corporation.
-@@ -506,6 +510,9 @@
-   }
- 
-   _onClearLifecycle() {
-+    this._isolatedWorld = undefined;
-+    this._mainWorld = undefined;
+@@ -239,6 +243,9 @@
+       // No pending - just commit a new document.
+       frame._currentDocument = { documentId, request: undefined };
+     }
 +    this._iframeWorld = undefined;
-     for (const event of this._firedLifecycleEvents)
-       this.emit(Frame.Events.RemoveLifecycle, event);
-     this._firedLifecycleEvents.clear();
++    this._mainWorld = undefined;
++    this._isolatedWorld = undefined;
+ 
+     frame._onClearLifecycle();
+     const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
 @@ -714,12 +721,69 @@
      return this._page.delegate.getFrameElement(this);
    }
@@ -3958,7 +3962,11 @@ diff -ruN playwright/packages/playwright-core/src/server/frameSelectors.ts patch
        const maybeFrame = await frame._page.delegate.getContentFrame(element);
        element.dispose();
        if (!maybeFrame)
-@@ -176,6 +200,162 @@
+@@ -173,9 +197,166 @@
+     if (!resolved)
+       return;
+     const context = await resolved.frame._context(options?.mainWorld ? 'main' : resolved.info.world);
++    if (!context) throw new Error("Frame was detached");
      const injected = await context.injectedScript();
      return { injected, info: resolved.info, frame: resolved.frame, scope: resolved.scope };
    }
@@ -4132,16 +4140,16 @@ diff -ruN playwright/packages/playwright-core/src/server/frames.ts patchright/pa
  /**
   * Copyright 2017 Google Inc. All rights reserved.
   * Modifications copyright (c) Microsoft Corporation.
-@@ -506,6 +510,9 @@
-   }
- 
-   _onClearLifecycle() {
-+    this._isolatedWorld = undefined;
-+    this._mainWorld = undefined;
+@@ -239,6 +243,9 @@
+       // No pending - just commit a new document.
+       frame._currentDocument = { documentId, request: undefined };
+     }
 +    this._iframeWorld = undefined;
-     for (const event of this._firedLifecycleEvents)
-       this.emit(Frame.Events.RemoveLifecycle, event);
-     this._firedLifecycleEvents.clear();
++    this._mainWorld = undefined;
++    this._isolatedWorld = undefined;
+ 
+     frame._onClearLifecycle();
+     const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
 @@ -714,12 +721,69 @@
      return this._page.delegate.getFrameElement(this);
    }
