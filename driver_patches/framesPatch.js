@@ -15,6 +15,19 @@ export function patchFrames(project) {
       "",
     ]);
 
+    // ------- FrameManager Class -------
+    const frameManagerClass = framesSourceFile.getClass("FrameManager");
+    // -- frameCommittedNewDocumentNavigation Method --
+    const frameCommittedNewDocumentNavigationMethod = frameManagerClass.getMethod("frameCommittedNewDocumentNavigation")
+    const clearLifecycleStatementIndex = frameCommittedNewDocumentNavigationMethod
+        .getDescendantsOfKind(SyntaxKind.ExpressionStatement)
+        .findIndex(stmt => stmt.getText().trim() === "frame._onClearLifecycle();");
+    frameCommittedNewDocumentNavigationMethod.insertStatements(clearLifecycleStatementIndex - 2, [
+      "this._iframeWorld = undefined;",
+      "this._mainWorld = undefined;",
+      "this._isolatedWorld = undefined;"
+    ]);
+
     // ------- Frame Class -------
     const frameClass = framesSourceFile.getClass("Frame");
     // Add Properties to the Frame Class
@@ -87,14 +100,6 @@ export function patchFrames(project) {
         return handles[0];
       });
     `);
-
-    // -- _onClearLifecycle Method --
-    const onClearLifecycleMethod = frameClass.getMethod("_onClearLifecycle");
-    // Modify the constructor's body to include unassignments
-    const onClearLifecycleBody = onClearLifecycleMethod.getBody();
-    onClearLifecycleBody.insertStatements(0, "this._iframeWorld = undefined;");
-    onClearLifecycleBody.insertStatements(0, "this._mainWorld = undefined;");
-    onClearLifecycleBody.insertStatements(0, "this._isolatedWorld = undefined;");
 
     // -- _getFrameMainFrameContextId Method --
     // Define the getFrameMainFrameContextIdCode

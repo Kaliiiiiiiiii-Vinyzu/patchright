@@ -72,6 +72,26 @@ export function patchFrameSelectors(project) {
       }
     `);
 
+    // -- resolveInjectedForSelector Method --
+    const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethod("resolveInjectedForSelector")
+    const contextInjectedStatementIndex = resolveInjectedForSelectorMethod
+      .getStatements()
+      .findIndex(stmt => {
+        const decl = stmt.asKind(SyntaxKind.VariableStatement)?.getDeclarations()[0];
+
+        const callExpr = decl
+          ?.getInitializerIfKind(SyntaxKind.AwaitExpression)
+          ?.getExpressionIfKind(SyntaxKind.CallExpression);
+
+        return decl?.getName() === "injected" && callExpr?.getExpression().getText() === "context.injectedScript"
+      });
+    console.error(contextInjectedStatementIndex)
+    resolveInjectedForSelectorMethod.insertStatements(
+      contextInjectedStatementIndex+1,
+      `if (!context) throw new Error("Frame was detached");`
+    )
+
+
     // -- _customFindFramesByParsed Method --
     frameSelectorsClass.addMethod({
       name: "_customFindFramesByParsed",
