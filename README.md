@@ -32,7 +32,7 @@
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs/releases">
         <img alt="NodeJS Downloads" src="https://img.shields.io/npm/d18m/patchright?color=red&label=NodeJS%20Downloads">
     </a>
-    <a href="[https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs](https://github.com/DevEnterpriseSoftware/patchright-dotnet)">
+    <a href="https://github.com/DevEnterpriseSoftware/patchright-dotnet">
         <img src="https://img.shields.io/badge/Package-.Net-seagreen">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs/releases">
