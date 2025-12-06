@@ -24,20 +24,26 @@
         <img src="https://img.shields.io/badge/Package-Python-seagreen">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python/releases">
-        <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/pepy/dt/patchright?color=red&label=Python%20Downloads">
+        <img alt="Python Downloads" src="https://img.shields.io/pepy/dt/patchright?color=red&label=Python%20Downloads">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs">
         <img src="https://img.shields.io/badge/Package-NodeJS-seagreen">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs/releases">
-        <img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/npm/d18m/patchright?color=red&label=NodeJS%20Downloads">
+        <img alt="NodeJS Downloads" src="https://img.shields.io/npm/d18m/patchright?color=red&label=NodeJS%20Downloads">
+    </a>
+    <a href="[https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs](https://github.com/DevEnterpriseSoftware/patchright-dotnet)">
+        <img src="https://img.shields.io/badge/Package-.Net-seagreen">
+    </a>
+    <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs/releases">
+        <img alt=".Net Downloads" src="https://img.shields.io/nuget/dt/Patchright?label=Downloads">
     </a>
 </p>
 
 #### Patchright is a patched and undetected version of the Playwright Testing and Automation Framework. </br> It can be used as a drop-in replacement for Playwright.
 
 > [!NOTE]  
-> This repository serves the Patchright Driver. To use Patchright, check out the [Python Package](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python) or the [NodeJS Package](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs).
+> This repository serves the Patchright Driver. To use Patchright, check out the [Python Package](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python), the [NodeJS Package](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs) or the _community-driven_ [.Net Package](https://github.com/DevEnterpriseSoftware/patchright-dotnet/)
 
 > [!IMPORTANT]  
 > Patchright only patches CHROMIUM based browsers. Firefox and Webkit are not supported.
@@ -144,7 +150,8 @@ Patchright InitScripts can be detected by Timing Attacks. However, no antibot cu
 - [x] Fix Fixable Bugs.
 - [x] Implement .patch Updater to easily show Patchright's patches.
 - [x] Setup Automated Testing on new Release.
-- [ ] Implement Patchright on .NET and Java.
+- [x] Implement Patchright on .NET.
+- [ ] Implement Patchright on Java.
 
 ---
 
