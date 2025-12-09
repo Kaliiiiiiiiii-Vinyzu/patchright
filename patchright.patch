@@ -2199,8 +2199,8 @@ diff -ruN playwright/node_modules/playwright-core/src/server/javascript.ts patch
 +          if (context.constructor.name === "FrameExecutionContext") {
 +              const frame = context.frame;
 +              if (frame) {
-+                  if (isolatedContext) context = await frame._utilityContext();
-+                  else if (!isolatedContext) context = await frame._mainContext();
++                  if (isolatedContext === true) context = await frame._utilityContext();
++                  else if (isolatedContext === false) context = await frame._mainContext();
 +              }
 +          }
 +        
@@ -2215,8 +2215,8 @@ diff -ruN playwright/node_modules/playwright-core/src/server/javascript.ts patch
 +          if (context.constructor.name === "FrameExecutionContext") {
 +              const frame = this._context.frame;
 +              if (frame) {
-+                  if (isolatedContext) context = await frame._utilityContext();
-+                  else if (!isolatedContext) context = await frame._mainContext();
++                  if (isolatedContext === true) context = await frame._utilityContext();
++                  else if (isolatedContext === false) context = await frame._mainContext();
 +              }
 +          }
 +        
@@ -5132,8 +5132,8 @@ diff -ruN playwright/packages/playwright-core/src/server/javascript.ts patchrigh
 +          if (context.constructor.name === "FrameExecutionContext") {
 +              const frame = context.frame;
 +              if (frame) {
-+                  if (isolatedContext) context = await frame._utilityContext();
-+                  else if (!isolatedContext) context = await frame._mainContext();
++                  if (isolatedContext === true) context = await frame._utilityContext();
++                  else if (isolatedContext === false) context = await frame._mainContext();
 +              }
 +          }
 +        
@@ -5148,8 +5148,8 @@ diff -ruN playwright/packages/playwright-core/src/server/javascript.ts patchrigh
 +          if (context.constructor.name === "FrameExecutionContext") {
 +              const frame = this._context.frame;
 +              if (frame) {
-+                  if (isolatedContext) context = await frame._utilityContext();
-+                  else if (!isolatedContext) context = await frame._mainContext();
++                  if (isolatedContext === true) context = await frame._utilityContext();
++                  else if (isolatedContext === false) context = await frame._mainContext();
 +              }
 +          }
 +        
