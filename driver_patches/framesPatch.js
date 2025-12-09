@@ -570,8 +570,7 @@ export function patchFrames(project) {
         if (scopeParentNode.constructor.name == "ElementHandle") {
           promise = scopeParentNode.evaluateInUtility(([injected, node, { callbackText: callbackText2, scope: handle2, taskData: taskData2 }]) => {
             const callback = injected.eval(callbackText2);
-            const haha = callback(injected, handle2, taskData2);
-            return haha;
+            return callback(injected, handle2, taskData2);
           }, {
             callbackText,
             scope,
@@ -590,10 +589,24 @@ export function patchFrames(project) {
       } else {
         promise = this._retryWithProgressIfNotConnected(progress, selector, options.strict, false, async (handle) => {
           if (handle.parentNode.constructor.name == "ElementHandle") {
+            // Handling dispatch_event's in isolated and Main Contexts
+            const [taskScope] = Object.values(taskData?.eventInit ?? {});
+            if (taskScope) {
+              const taskScopeContext = taskScope._context;
+              const adoptedHandle = await handle._adoptTo(taskScopeContext);
+              return await taskScopeContext.evaluate(([injected, node, { callbackText: callbackText2, adoptedHandle: handle2, taskData: taskData2 }]) => {
+                const callback = injected.eval(callbackText2);
+                return callback(injected, handle2, taskData2);
+              }, [
+                await taskScopeContext.injectedScript(),
+                adoptedHandle,
+                { callbackText, adoptedHandle, taskData },
+              ]);
+            }
+
             return await handle.parentNode.evaluateInUtility(([injected, node, { callbackText: callbackText2, handle: handle2, taskData: taskData2 }]) => {
               const callback = injected.eval(callbackText2);
-              const haha = callback(injected, handle2, taskData2);
-              return haha;
+              return callback(injected, handle2, taskData2);
             }, {
               callbackText,
               handle,
