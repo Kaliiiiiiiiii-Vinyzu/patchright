@@ -27,8 +27,8 @@ export function patchJavascript(project) {
       if (context.constructor.name === "FrameExecutionContext") {
           const frame = context.frame;
           if (frame) {
-              if (isolatedContext) context = await frame._utilityContext();
-              else if (!isolatedContext) context = await frame._mainContext();
+              if (isolatedContext === true) context = await frame._utilityContext();
+              else if (isolatedContext === false) context = await frame._mainContext();
           }
       }
     `);
@@ -50,8 +50,8 @@ export function patchJavascript(project) {
       if (context.constructor.name === "FrameExecutionContext") {
           const frame = this._context.frame;
           if (frame) {
-              if (isolatedContext) context = await frame._utilityContext();
-              else if (!isolatedContext) context = await frame._mainContext();
+              if (isolatedContext === true) context = await frame._utilityContext();
+              else if (isolatedContext === false) context = await frame._mainContext();
           }
       }
     `);
