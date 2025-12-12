@@ -68,6 +68,20 @@ Key Features:
 
 👉 Learn more at [**hyperbrowser.ai**](https://hyperbrowser.ai/)
 
+---
+
+<a href="https://www.thordata.com/?ls=github&lk=Vinyzu" target="_blank">
+  <img alt="Thordata Banner" src="https://github.com/user-attachments/assets/58460bff-b057-4191-88da-80e0bd29b745" width="90%" />
+</a>
+
+[Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) - Your First Plan is on Us! 💰Get 100% of your first residential proxy purchase back as wallet balance, up to $900.
+### **⚡ Why Thordata?**
+🌍 190+ real residential & ISP IP locations\
+🔐 Fully encrypted, ultra-secure connections\
+🚀 Optimized for web scraping, ad verification & automation workflows
+
+🔥Don’t wait — this is your **best time to start** with [Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) and experience the safest, fastest proxy network.
+
 </details>
 
 ---
