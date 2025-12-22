@@ -211,7 +211,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
  }
  
  class InterceptableRequest {
-@@ -612,38 +618,189 @@
+@@ -612,38 +618,216 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -368,7 +368,34 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 +                const headContentLower = headContent.toLowerCase();
 +                
 +                // Look for the first <script> tag in the head content
-+                const firstScriptIndex = headContentLower.indexOf("<script");
++                // but ignore comments
++                let firstScriptIndex = -1;
++                let searchPos = 0;
++                const endSearchPos = headContentLower.length;
++
++                while (searchPos < endSearchPos) {
++                    const commentStart = headContentLower.indexOf("<!--", searchPos);
++                    const scriptStart = headContentLower.indexOf("<script", searchPos);
++                    // No more script tags, inject at the end of head content
++                    if (scriptStart === -1 || scriptStart >= endSearchPos) {
++                        break;
++                    }
++
++                    if (commentStart !== -1 && commentStart < scriptStart) {
++                        const commentEnd = headContentLower.indexOf("-->", commentStart);
++                        if (commentEnd !== -1) {
++                            // continue search after the comment
++                            searchPos = commentEnd + 3;
++                            continue;
++                        } else {
++                            break;
++                        }
++                    }
++
++                    // Found a script tag
++                    firstScriptIndex = scriptStart;
++                    break;
++                }
 +                
 +                if (firstScriptIndex !== -1) {
 +                  // Inject before the first script tag
@@ -424,7 +451,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +813,155 @@
+@@ -656,6 +840,155 @@
        });
      });
    }
@@ -3144,7 +3171,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
  }
  
  class InterceptableRequest {
-@@ -612,38 +618,189 @@
+@@ -612,38 +618,216 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -3301,7 +3328,34 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 +                const headContentLower = headContent.toLowerCase();
 +                
 +                // Look for the first <script> tag in the head content
-+                const firstScriptIndex = headContentLower.indexOf("<script");
++                // but ignore comments
++                let firstScriptIndex = -1;
++                let searchPos = 0;
++                const endSearchPos = headContentLower.length;
++
++                while (searchPos < endSearchPos) {
++                    const commentStart = headContentLower.indexOf("<!--", searchPos);
++                    const scriptStart = headContentLower.indexOf("<script", searchPos);
++                    // No more script tags, inject at the end of head content
++                    if (scriptStart === -1 || scriptStart >= endSearchPos) {
++                        break;
++                    }
++
++                    if (commentStart !== -1 && commentStart < scriptStart) {
++                        const commentEnd = headContentLower.indexOf("-->", commentStart);
++                        if (commentEnd !== -1) {
++                            // continue search after the comment
++                            searchPos = commentEnd + 3;
++                            continue;
++                        } else {
++                            break;
++                        }
++                    }
++
++                    // Found a script tag
++                    firstScriptIndex = scriptStart;
++                    break;
++                }
 +                
 +                if (firstScriptIndex !== -1) {
 +                  // Inject before the first script tag
@@ -3357,7 +3411,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +813,155 @@
+@@ -656,6 +840,155 @@
        });
      });
    }
