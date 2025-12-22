@@ -341,6 +341,8 @@ export function patchCRNetworkManager(project) {
                         // continue search after the comment
                         searchPos = commentEnd + 3;
                         continue;
+                    } else {
+                        break;
                     }
                 }
 
