@@ -322,7 +322,32 @@ export function patchCRNetworkManager(project) {
             const headContentLower = headContent.toLowerCase();
             
             // Look for the first <script> tag in the head content
-            const firstScriptIndex = headContentLower.indexOf("<script");
+            // but ignore comments
+            let firstScriptIndex = -1;
+            let searchPos = 0;
+            const endSearchPos = headContentLower.length;
+
+            while (searchPos < endSearchPos) {
+                const commentStart = headContentLower.indexOf("<!--", searchPos);
+                const scriptStart = headContentLower.indexOf("<script", searchPos);
+                // No more script tags, inject at the end of head content
+                if (scriptStart === -1 || scriptStart >= endSearchPos) {
+                    break;
+                }
+
+                if (commentStart !== -1 && commentStart < scriptStart) {
+                    const commentEnd = headContentLower.indexOf("-->", commentStart);
+                    if (commentEnd !== -1) {
+                        // continue search after the comment
+                        searchPos = commentEnd + 3;
+                        continue;
+                    }
+                }
+
+                // Found a script tag
+                firstScriptIndex = scriptStart;
+                break;
+            }
             
             if (firstScriptIndex !== -1) {
               // Inject before the first script tag
