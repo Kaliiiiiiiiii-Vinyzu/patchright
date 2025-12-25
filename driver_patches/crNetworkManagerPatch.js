@@ -230,9 +230,6 @@ export function patchCRNetworkManager(project) {
     fulfillMethod.setBodyText(`
       const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
       var allInjections = [...this._page.delegate._mainFrameSession._evaluateOnNewDocumentScripts];
-      for (const binding of this._page.delegate._browserContext._pageBindings.values()) {
-        if (!allInjections.includes(binding)) allInjections.push(binding);
-      }
       if (isTextHtml && allInjections.length) {
         let useNonce = false;
         let scriptNonce = null;
