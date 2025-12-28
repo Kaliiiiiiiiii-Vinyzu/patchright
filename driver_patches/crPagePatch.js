@@ -281,7 +281,6 @@ export function patchCRPage(project) {
       ]);
       this._exposedBindingNames.push(binding.name);
       this._exposedBindingScripts.push(binding.source);
-      await this._crPage.addInitScript(binding.source);
       //this._client._sendMayFail('Runtime.runIfWaitingForDebugger')`);
       // initBindingMethod.setBodyText(`const [, response] = await Promise.all([
       //   this._client.send('Runtime.addBinding', { name: binding.name }),
