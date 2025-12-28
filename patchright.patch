@@ -211,7 +211,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
  }
  
  class InterceptableRequest {
-@@ -612,38 +618,216 @@
+@@ -612,38 +618,213 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -276,9 +276,6 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
 -    });
 +          const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
 +          var allInjections = [...this._page.delegate._mainFrameSession._evaluateOnNewDocumentScripts];
-+          for (const binding of this._page.delegate._browserContext._pageBindings.values()) {
-+            if (!allInjections.includes(binding)) allInjections.push(binding);
-+          }
 +          if (isTextHtml && allInjections.length) {
 +            let useNonce = false;
 +            let scriptNonce = null;
@@ -451,7 +448,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crNetworkM
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +840,155 @@
+@@ -656,6 +837,155 @@
        });
      });
    }
@@ -883,7 +880,7 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
    }
  
    async exposePlaywrightBinding() {
-@@ -1200,6 +1264,49 @@
+@@ -1200,6 +1264,48 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
@@ -917,7 +914,6 @@ diff -ruN playwright/node_modules/playwright-core/src/server/chromium/crPage.ts 
 +          ]);
 +          this._exposedBindingNames.push(binding.name);
 +          this._exposedBindingScripts.push(binding.source);
-+          await this._crPage.addInitScript(binding.source);
 +          //this._client._sendMayFail('Runtime.runIfWaitingForDebugger')
 +  }
 +
@@ -3171,7 +3167,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
  }
  
  class InterceptableRequest {
-@@ -612,38 +618,216 @@
+@@ -612,38 +618,213 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -3236,9 +3232,6 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
 -    });
 +          const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
 +          var allInjections = [...this._page.delegate._mainFrameSession._evaluateOnNewDocumentScripts];
-+          for (const binding of this._page.delegate._browserContext._pageBindings.values()) {
-+            if (!allInjections.includes(binding)) allInjections.push(binding);
-+          }
 +          if (isTextHtml && allInjections.length) {
 +            let useNonce = false;
 +            let scriptNonce = null;
@@ -3411,7 +3404,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crNetworkManag
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +840,155 @@
+@@ -656,6 +837,155 @@
        });
      });
    }
@@ -3843,7 +3836,7 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
    }
  
    async exposePlaywrightBinding() {
-@@ -1200,6 +1264,49 @@
+@@ -1200,6 +1264,48 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
@@ -3877,7 +3870,6 @@ diff -ruN playwright/packages/playwright-core/src/server/chromium/crPage.ts patc
 +          ]);
 +          this._exposedBindingNames.push(binding.name);
 +          this._exposedBindingScripts.push(binding.source);
-+          await this._crPage.addInitScript(binding.source);
 +          //this._client._sendMayFail('Runtime.runIfWaitingForDebugger')
 +  }
 +
