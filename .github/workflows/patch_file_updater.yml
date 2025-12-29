@@ -52,6 +52,7 @@ jobs:
           cp -r playwright playwright_not_patched
           cd playwright
           node "../patchright_driver_patch.js"
+          cd ..
           mv playwright patchright
           mv playwright_not_patched playwright
 
