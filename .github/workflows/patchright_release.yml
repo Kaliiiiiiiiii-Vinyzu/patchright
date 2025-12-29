@@ -1,4 +1,4 @@
-name: PatchRight Workflow
+name: Patchright Release Build and Publish
 
 on:
   # enabling manual trigger
