@@ -1,0 +1,106 @@
+name: Build Test Package on PR
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency: # Make sure only one approval check runs at a time for the same PR, so the pull_request workflow doesnt fail after a review is submitted
+  group: approval-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-package:
+    name: "​" # NOTE: Were using a zero-width space to save some visual clutter in the GitHub Pull Request UI
+    if: github.event.pull_request.draft == false # Only run if the PR is not a draft
+
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Configure Fast APT Mirror
+        uses: vegardit/fast-apt-mirror.sh@v1
+
+      - name: Setup Node v24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Install Playwright Driver
+        run: |
+          git clone https://github.com/microsoft/playwright --branch ${{ env.playwright_version }}
+          cd playwright
+          npm ci
+
+      - name: Patch Playwright Driver
+        run: |
+          cd playwright
+          node "../patchright_driver_patch.js"
+
+      - name: Generate Playwright Channels
+        # Ignore the error exit code, as the script exits 1 when a file is modified.
+        continue-on-error: true
+        run: |
+          cd playwright
+          node utils/generate_channels.js
+
+      - name: Build Patchright Driver
+        run: |
+          cd playwright
+          npm run build
+          npx playwright install-deps
+          chmod +x utils/build/build-playwright-driver.sh
+          utils/build/build-playwright-driver.sh
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v6
+        id: upload_build_artifacts
+        with:
+          name: build-artifacts
+          path: playwright/utils/build/output/playwright-*.zip
+
+      - name: Find old Build Artifacts Comment
+        id: find_comment_present
+        uses: peter-evans/find-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: "You can download the built Patchright Driver artifacts"
+
+      - name: Delete old Build Artifacts Comment
+        if: steps.find_comment_present.outputs.comment-id != ''
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.deleteComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: parseInt("${{ steps.find_comment_present.outputs.comment-id }}", 10)
+            });
+
+      - name: Post new Built Artifacts Comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            **Patchright Driver Build**
+            __Do not download or use these artifacts in production! They are only for testing purposes on this Pull Request.__
+
+            **Download**
+            - Open this workflow run and download the artifact named `build-artifacts`:
+              ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            **Debug info**
+            - Artifact ID: `${{ steps.upload_build_artifacts.outputs.artifact-id }}`

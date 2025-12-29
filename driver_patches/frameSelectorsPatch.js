@@ -85,7 +85,6 @@ export function patchFrameSelectors(project) {
 
         return decl?.getName() === "injected" && callExpr?.getExpression().getText() === "context.injectedScript"
       });
-    console.error(contextInjectedStatementIndex)
     resolveInjectedForSelectorMethod.insertStatements(
       contextInjectedStatementIndex+1,
       `if (!context) throw new Error("Frame was detached");`

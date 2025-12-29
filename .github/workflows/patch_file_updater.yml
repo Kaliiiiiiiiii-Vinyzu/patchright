@@ -1,55 +1,38 @@
-name: Trigger on Commit and Manual Request
+name: Patchright Driver .Patch File Updater
 
 on:
   push:
     branches:
       - "main"
 
-permissions:
-  actions: none
-  attestations: none
-  checks: none
-  contents: write
-  deployments: none
-  id-token: none
-  issues: none
-  discussions: none
-  packages: none
-  pages: none
-  pull-requests: none
-  repository-projects: none
-  security-events: none
-  statuses: none
-
 jobs:
-  run_action:
+  patch-file-updater:
+    name: "Patchright Driver .Patch File Updater: Create and Commit Patch File Comparing"
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v6
 
       - name: Configure Fast APT Mirror
         uses: vegardit/fast-apt-mirror.sh@v1
 
-      - name: Setup Node v18
-        uses: actions/setup-node@v4
+      - name: Setup Node v24
+        uses: actions/setup-node@v6
         with:
-          node-version: 18
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install TS-Morph
+      - name: Install NPM Dependencies
         run: npm install
 
-      - name: Get Commit Author
-        id: get_author
+      - name: Get Commit Author and Message
+        id: get_commit_info
         run: |
           AUTHOR=$(git log -1 --pretty=format:'%an')
-          echo "Commit author: $AUTHOR"
-          echo "AUTHOR=$AUTHOR" >> $GITHUB_ENV
-
-      - name: Get Original Commit Message
-        id: get_commit_message
-        run: |
           COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
+          echo "AUTHOR=$AUTHOR" >> $GITHUB_ENV
           echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
 
       - name: Skip if Commit is from GitHub Actions
@@ -64,24 +47,18 @@ jobs:
           cd playwright
           npm ci
 
-      - name: Copy Driver Directory to prepare for Patch-Comparison
+      - name: Create Patched Copy of Playwright Driver
         run: |
           cp -r playwright playwright_not_patched
-
-      - name: Patch Playwright Driver
-        run: |
           cd playwright
           node "../patchright_driver_patch.js"
-
-      - name: Rename Patched Directory
-        run: |
           mv playwright patchright
           mv playwright_not_patched playwright
 
       - name: Compare Directories and Create Patch File
         run: |
           echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patchright_workflow.yml)" > patchright.patch
-          diff -ruN playwright patchright | sed -E 's/^(---|\+\+\+) .*/\1/' >> patchright.patch || true
+          diff -ruN -x protocol.yml --minimal playwright patchright | sed -E 's/^(---|\+\+\+) .*/\1/' >> patchright.patch || true
 
       - name: Commit and Push Patch File
         uses: stefanzweifel/git-auto-commit-action@v5

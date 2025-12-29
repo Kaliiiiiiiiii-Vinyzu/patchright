@@ -9,24 +9,7 @@ on:
         default: ''
   # running every hour
   schedule:
-    - cron: '48 * * * *'
-
-
-permissions:
-  actions: none
-  attestations: none
-  checks: none
-  contents: write
-  deployments: none
-  id-token: none
-  issues: none
-  discussions: none
-  packages: none
-  pages: none
-  pull-requests: none
-  repository-projects: none
-  security-events: none
-  statuses: none
+    - cron: '0 * * * *'
 
 
 env:
@@ -35,21 +18,24 @@ env:
 
 jobs:
   patchright-workflow:
-    name: "Patchright Workflow: Install, Patch, Build and Publish Patchright Driver"
-    runs-on: ubuntu-24.04
+    name: "Patchright Release: Install, Patch, Build and Publish Patchright Driver"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v6
 
       - name: Configure Fast APT Mirror
         uses: vegardit/fast-apt-mirror.sh@v1
 
-      - name: Setup Node v18
-        uses: actions/setup-node@v4
+      - name: Setup Node v24
+        uses: actions/setup-node@v6
         with:
-          node-version: 18
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install TS-Morph
+      - name: Install NPM Dependencies
         run: npm install
 
       - name: Check Release Version

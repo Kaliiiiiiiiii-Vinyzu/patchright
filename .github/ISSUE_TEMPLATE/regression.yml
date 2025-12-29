@@ -1,0 +1,105 @@
+name: Regression Report
+description: Functionality that used to work and does not any more
+title: "[REGRESSION]: "
+labels: ["bug", "unconfirmed"]
+assignees:
+  - vinyzu
+type: bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a regression!
+        Please keep this report focused on something that **used to work** and **stopped working** after an upgrade.
+
+  - type: checkboxes
+    attributes:
+      label: Checklist before reporting
+      description: Please make sure you've completed the following steps before submitting a regression report.
+      options:
+        - label: I have searched for [similar issues](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/issues?q=sort%3Arelevance%20is%3Aissue) and didn't find a duplicate.
+          required: true
+        - label: I have updated to the latest version of Patchright to verify the regression still exists.
+          required: true
+        - label: I have verified that this regression does not occur when using [Playwright](https://github.com/microsoft/playwright/) directly.
+          required: true
+
+  - type: input
+    id: good_patchright_version
+    attributes:
+      label: GOOD Patchright Version
+      description: What Patchright version worked nicely?
+      placeholder: e.g. 1.56.0
+    validations:
+      required: true
+
+  - type: input
+    id: bad_patchright_version
+    attributes:
+      label: BAD Patchright Version
+      description: What Patchright version introduced the regression?
+      placeholder: e.g. 1.57.0
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating System
+      description: Which operating system is this occurring on? [All, Windows 11, Ubuntu 20, macOS 13.2, etc.]
+      placeholder: All, macOS 14.2 (Apple Silicon)
+    validations:
+      required: false
+
+  - type: textarea
+    id: test_file
+    attributes:
+      label: Reproduction (self-contained)
+      description: |
+        A minimal, self-contained code example that demonstrates the regression.
+        Please provide the code necessary to reproduce the bug, including any relevant setup or configuration.
+        Please use code blocks with the correct language for better readability.
+      placeholder: |
+        ```py
+        from patchright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            # ...
+            browser.close()
+        ```
+        
+        OR
+        
+        ```js
+        const { chromium } = require('patchright');
+
+        (async () => {
+          const browser = await chromium.launch();
+          const page = await browser.newPage();
+          // ...
+          await browser.close();
+        })();
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: What did happen in the GOOD version?
+      placeholder: In 1.56.0, navigation succeeded and returned status 200...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior
+      description: What happens in the BAD version? Include full error messages and stack traces if applicable.
+      placeholder: In 1.57.0, navigation fails with... (stack trace)
+    validations:
+      required: true
+

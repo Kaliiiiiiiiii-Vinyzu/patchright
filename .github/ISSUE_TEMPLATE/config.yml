@@ -1,4 +1,11 @@
+blank_issues_enabled: true
 contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/discussions
+    about: Please ask and answer questions here.
   - name: Join our Discord Server
-    url: https://aka.ms/playwright/discord
+    url: https://discord.gg/reWzznnBfJ
     about: Ask questions and discuss with other community members
+  - name: Support us on Ko-fi
+    url: https://ko-fi.com/vinyzu
+    about: If you like Patchright, consider supporting its development!
