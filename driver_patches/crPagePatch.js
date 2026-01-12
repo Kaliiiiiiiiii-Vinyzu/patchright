@@ -224,27 +224,6 @@ export function patchCRPage(project) {
           }
         }
     });
-    // Find the statement `promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))`
-    const promisePushStatements = initializeFrameSessionMethodBody
-      .getStatements()
-      .filter((statement) =>
-        statement
-          .getText()
-          .includes("promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))")
-      );
-    // Ensure the right statements were found
-    if (promisePushStatements.length === 1) {
-      const [firstStatement] = promisePushStatements;
-      // Replace the first `promises.push` statement with the new conditional code
-      firstStatement.replaceWithText(`
-        if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
-          promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-      `);
-      initializeFrameSessionMethodBody.addStatements(`
-        if (this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size)
-          await this._client.send('Runtime.runIfWaitingForDebugger');
-      `);
-    }
 
     // -- _initBinding Method --
     frameSessionClass.addMethod({
