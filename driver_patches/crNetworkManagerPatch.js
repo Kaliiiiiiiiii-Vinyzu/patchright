@@ -440,6 +440,14 @@ export function patchCRNetworkManager(project) {
       }
       if (this._networkId != event.networkId || !this._sessionManager._alreadyTrackedNetworkIds.has(event.networkId)) return;
       try {
+        // Skip fulfill for browser's privilege pages, such as Edge's new tab page.
+        // These pages have special security contexts and Fetch.fulfillRequest may cause crashes
+        const url = event.request?.url || '';
+        const isPrivilegePage = url.startsWith("https://ntp.msn");
+        if (isPrivilegePage) {
+          await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
+          return;
+        }
         if (event.responseStatusCode >= 301 && event.responseStatusCode <= 308  || (event.redirectedRequestId && !event.responseStatusCode)) {
           await this._session.send('Fetch.continueRequest', { requestId: event.requestId, interceptResponse: true });
         } else {
