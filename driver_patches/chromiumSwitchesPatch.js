@@ -8,11 +8,14 @@ export function patchChromiumSwitches(project) {
     const chromiumSwitchesSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/chromium/chromiumSwitches.ts");
 
     // -- chromiumSwitches Array Variable --
-    const chromiumSwitchesArray = chromiumSwitchesSourceFile
+    const chromiumSwitchesArrow = chromiumSwitchesSourceFile
       .getVariableDeclarationOrThrow("chromiumSwitches")
-      .getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction)
+      .getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction);
+
+    const chromiumSwitchesArray = chromiumSwitchesArrow
       .getBody()
-      .getDescendantsOfKind(SyntaxKind.ArrayLiteralExpression)[0];
+      .getFirstDescendantByKindOrThrow(SyntaxKind.ArrayLiteralExpression);
+
     // Patchright defined switches to disable
     const switchesToDisable = [
         "assistantMode ? '' : '--enable-automation'",
