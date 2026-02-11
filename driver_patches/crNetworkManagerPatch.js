@@ -454,7 +454,11 @@ export function patchCRNetworkManager(project) {
           })
         }
       } catch (error) {
-        await this._session._sendMayFail('Fetch.continueRequest', { requestId: event.requestId });
+        if (error.message.includes("Can only get response body on HeadersReceived pattern matched requests.")) {
+          await this._session.send("Fetch.continueRequest", { requestId: event.requestId, interceptResponse: true });
+        } else {
+          await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
+        }
       }
     `);
 }
