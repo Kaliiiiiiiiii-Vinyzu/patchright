@@ -37,6 +37,12 @@ jobs:
       - name: Install NPM Dependencies
         run: npm install
 
+      - name: Check Release Version
+        id: version_check
+        run: |
+          chmod +x utils/release_version_check.sh
+          utils/release_version_check.sh
+
       - name: Install Playwright Driver
         run: |
           git clone https://github.com/microsoft/playwright --branch ${{ env.playwright_version }}
