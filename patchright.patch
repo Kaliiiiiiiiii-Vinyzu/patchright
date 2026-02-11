@@ -2,16 +2,16 @@
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/browserContext.ts patchright/node_modules/playwright-core/src/server/browserContext.ts
 ---
 +++
-@@ -146,7 +146,7 @@
-       `);
-     }
+@@ -164,7 +164,7 @@
+       await this.exposeConsoleApi();
+ 
      if (this._options.serviceWorkers === 'block')
 -      await this.addInitScript(undefined, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
 +      await this.addInitScript(undefined, `navigator.serviceWorker.register = async () => { };`);
  
      if (this._options.permissions)
        await this.grantPermissions(this._options.permissions);
-@@ -326,27 +326,19 @@
+@@ -354,27 +354,19 @@
        if (page.getBinding(name))
          throw new Error(`Function "${name}" has been already registered in one of the pages`);
      }
@@ -46,7 +46,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async grantPermissions(permissions: string[], origin?: string) {
-@@ -463,9 +455,10 @@
+@@ -491,9 +483,10 @@
    }
  
    async removeInitScripts(initScripts: InitScript[]) {
@@ -60,7 +60,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async addRequestInterceptor(progress: Progress, handler: network.RouteHandler): Promise<void> {
-@@ -815,4 +808,5 @@
+@@ -843,4 +836,5 @@
    strictSelectors: false,
    serviceWorkers: 'allow',
    locale: 'en-US',
@@ -119,7 +119,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crBrowser.ts patchright/node_modules/playwright-core/src/server/chromium/crBrowser.ts
 ---
 +++
-@@ -501,8 +501,9 @@
+@@ -519,8 +519,9 @@
    }
  
    async doRemoveInitScripts(initScripts: InitScript[]) {
@@ -131,7 +131,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async doUpdateRequestInterception(): Promise<void> {
-@@ -595,4 +596,16 @@
+@@ -613,4 +614,16 @@
      const rootSession = await this._browser._clientRootSession();
      return rootSession.attachToTarget(targetId);
    }
@@ -151,7 +151,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crDevTools.ts patchright/node_modules/playwright-core/src/server/chromium/crDevTools.ts
 ---
 +++
-@@ -67,7 +67,6 @@
+@@ -64,7 +64,6 @@
        }).catch(e => null);
      });
      Promise.all([
@@ -193,8 +193,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (requestWillBeSentEvent.request.url.startsWith('data:'))
        return;
      let redirectedFrom: InterceptableRequest | null = null;
-@@ -342,7 +346,7 @@
-         headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
+@@ -346,7 +350,7 @@
+         }
          requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent.requestId, headers: headersOverride });
        } else {
 -        route = new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId);
@@ -202,7 +202,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
      }
      const isNavigationRequest = requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && requestWillBeSentEvent.type === 'Document';
-@@ -553,6 +557,8 @@
+@@ -557,6 +561,8 @@
      if (request.session !== sessionInfo.session && !sessionInfo.isMain && (request._documentId === request._requestId || sessionInfo.workerFrame))
        request.session = sessionInfo.session;
    }
@@ -211,7 +211,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class InterceptableRequest {
-@@ -612,38 +618,213 @@
+@@ -615,38 +621,213 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -448,7 +448,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +837,155 @@
+@@ -659,6 +840,155 @@
        });
      });
    }
@@ -613,7 +613,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  /**
   * Copyright 2017 Google Inc. All rights reserved.
   * Modifications copyright (c) Microsoft Corporation.
-@@ -99,7 +101,8 @@
+@@ -94,7 +96,8 @@
      this.updateOffline();
      this.updateExtraHTTPHeaders();
      this.updateHttpCredentials();
@@ -623,7 +623,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._mainFrameSession = new FrameSession(this, client, targetId, null);
      this._sessions.set(targetId, this._mainFrameSession);
      if (opener && !browserContext._options.noDefaultViewport) {
-@@ -228,6 +231,7 @@
+@@ -223,6 +226,7 @@
    }
  
    async addInitScript(initScript: InitScript, world: types.World = 'main'): Promise<void> {
@@ -631,7 +631,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      await this._forAllFrameSessions(frame => frame._evaluateOnNewDocument(initScript, world));
    }
  
-@@ -361,6 +365,19 @@
+@@ -356,6 +360,19 @@
    shouldToggleStyleSheetToSyncAnimations(): boolean {
      return false;
    }
@@ -651,7 +651,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class FrameSession {
-@@ -488,17 +505,6 @@
+@@ -465,17 +482,6 @@
          this._bufferedAttachedToTargetEvents = undefined;
          for (const event of attachedToTargetEvents)
            this._onAttachedToTarget(event);
@@ -669,7 +669,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          const isInitialEmptyPage = this._isMainFrame() && this._page.mainFrame().url() === ':';
          if (isInitialEmptyPage) {
            // Ignore lifecycle events, worlds and bindings for the initial empty page. It is never the final page
-@@ -508,13 +514,22 @@
+@@ -485,13 +491,22 @@
              this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.lifecycleEvent', event => this._onLifecycleEvent(event)));
            });
          } else {
@@ -693,7 +693,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -525,8 +540,10 @@
+@@ -502,8 +517,10 @@
      if (!this._page.isStorageStatePage) {
        if (this._crPage._browserContext.needsPlaywrightBinding())
          promises.push(this.exposePlaywrightBinding());
@@ -706,7 +706,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const options = this._crPage._browserContext._options;
        if (options.bypassCSP)
          promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
-@@ -549,14 +566,24 @@
+@@ -526,14 +543,24 @@
        promises.push(this._updateGeolocation(true));
        promises.push(this._updateEmulateMedia());
        promises.push(this._updateFileChooserInterception(true));
@@ -717,8 +717,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +                    for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +                    for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +                  
-       if (screencastOptions)
-         promises.push(this._startVideoRecording(screencastOptions));
+       if (videoOptions)
+         promises.push(this._crPage._page.screencast.startVideoRecording(videoOptions));
      }
 -    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
 +    
@@ -734,7 +734,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    dispose() {
-@@ -580,13 +607,25 @@
+@@ -557,13 +584,25 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -761,7 +761,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -633,12 +672,24 @@
+@@ -610,12 +649,24 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -787,7 +787,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -675,19 +726,31 @@
+@@ -652,19 +703,31 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -824,7 +824,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -703,7 +766,7 @@
+@@ -680,7 +743,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -833,7 +833,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -745,12 +808,22 @@
+@@ -722,12 +785,22 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -857,7 +857,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -1076,20 +1149,11 @@
+@@ -1002,20 +1075,11 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -880,7 +880,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async exposePlaywrightBinding() {
-@@ -1200,6 +1264,48 @@
+@@ -1126,6 +1190,48 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
@@ -1030,7 +1030,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // Be careful, |this.frame| can be different from |resolved.frame|.
      if (!resolved)
        throw new Error(`Failed to find frame for selector "${selector}"`);
-@@ -150,9 +152,31 @@
+@@ -156,9 +158,31 @@
            throw injected.createStacklessError(`Selector "${selectorString}" resolved to ${injected.previewNode(element)}, <iframe> was expected`);
          return element;
        }, { info, scope: i === 0 ? scope : undefined, selectorString: stringifySelector(info.parsed) });
@@ -1065,7 +1065,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const maybeFrame = await frame._page.delegate.getContentFrame(element);
        element.dispose();
        if (!maybeFrame)
-@@ -173,9 +197,166 @@
+@@ -179,9 +203,166 @@
      if (!resolved)
        return;
      const context = await resolved.frame._context(options?.mainWorld ? 'main' : resolved.info.world);
@@ -1253,7 +1253,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
      frame._onClearLifecycle();
      const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
-@@ -714,12 +721,69 @@
+@@ -722,12 +729,69 @@
      return this._page.delegate.getFrameElement(this);
    }
  
@@ -1329,7 +1329,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _mainContext(): Promise<dom.FrameExecutionContext> {
-@@ -741,78 +805,73 @@
+@@ -749,79 +813,73 @@
    }
  
    async evaluateExpressionHandle(expression: string, options: { isFunction?: boolean, world?: types.World } = {}, arg?: any): Promise<js.JSHandle<any>> {
@@ -1391,6 +1391,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -        } else if (element) {
 -          log = `  locator resolved to ${visible ? 'visible' : 'hidden'} ${injected.previewNode(element)}`;
 -        }
+-        injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 -        return { log, element, visible, attached: !!element };
 -      }, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
 -      const { log, visible, attached } = await progress.race(result.evaluate(r => ({ log: r.log, visible: r.visible, attached: r.attached })));
@@ -1468,7 +1469,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async dispatchEvent(progress: Progress, selector: string, type: string, eventInit: Object = {}, options: types.QueryOnSelectorOptions, scope?: dom.ElementHandle): Promise<void> {
-@@ -823,18 +882,27 @@
+@@ -832,18 +890,27 @@
  
    async evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
      const handle = await this.selectors.query(selector, { strict }, scope);
@@ -1506,7 +1507,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async maskSelectors(selectors: ParsedSelector[], color: string): Promise<void> {
-@@ -846,17 +914,35 @@
+@@ -855,17 +922,35 @@
    }
  
    async querySelectorAll(selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -1550,7 +1551,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async content(): Promise<string> {
-@@ -878,29 +964,23 @@
+@@ -887,29 +972,23 @@
    }
  
    async setContent(progress: Progress, html: string, options: types.NavigateOptions): Promise<void> {
@@ -1565,7 +1566,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -        this._onClearLifecycle();
 -        tagPromise.resolve();
 -      });
--      const lifecyclePromise = progress.race(tagPromise).then(() => this._waitForLoadState(progress, waitUntil));
+-      const lifecyclePromise = progress.race(tagPromise).then(() => this.waitForLoadState(progress, waitUntil));
 -      const contentPromise = progress.race(context.evaluate(({ html, tag }) => {
 -        document.open();
 -        console.debug(tag);  // eslint-disable-line no-console
@@ -1597,20 +1598,25 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    name(): string {
-@@ -1093,50 +1173,13 @@
+@@ -1101,60 +1180,13 @@
+     progress: Progress,
      selector: string,
-     strict: boolean | undefined,
-     performActionPreChecks: boolean,
+     options: { strict?: boolean, noAutoWaiting?: boolean, force?: boolean, performActionPreChecks?: boolean },
 -    action: (handle: dom.ElementHandle<Element>) => Promise<R | 'error:notconnected'>): Promise<R> {
 -    progress.log(`waiting for ${this._asLocator(selector)}`);
+-    const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
+-    const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
 -    return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
 -      if (performActionPreChecks)
 -        await this._page.performActionPreChecks(progress);
 +    action: (handle: dom.ElementHandle<Element>) => Promise<R | 'error:notconnected'>, returnAction: boolean | undefined): Promise<R> {
  
--      const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict }));
--      if (!resolved)
+-      const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
+-      if (!resolved) {
+-        if (noAutoWaiting)
+-          throw new dom.NonRecoverableDOMError('Element(s) not found');
 -        return continuePolling;
+-      }
 -      const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
 -        const elements = injected.querySelectorAll(info.parsed, document);
 -        if (callId)
@@ -1624,12 +1630,15 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -        } else if (element) {
 -          log = `  locator resolved to ${injected.previewNode(element)}`;
 -        }
+-        injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 -        return { log, success: !!element, element };
 -      }, { info: resolved.info, callId: progress.metadata.id }));
 -      const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
 -      if (log)
 -        progress.log(log);
 -      if (!success) {
+-        if (noAutoWaiting)
+-          throw new dom.NonRecoverableDOMError('Element(s) not found');
 -        result.dispose();
 -        return continuePolling;
 -      }
@@ -1638,6 +1647,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      try {
 -        const result = await action(element);
 -        if (result === 'error:notconnected') {
+-          if (noAutoWaiting)
+-            throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
 -          progress.log('element was detached from the DOM, retrying');
 -          return continuePolling;
 -        }
@@ -1654,7 +1665,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1289,20 +1332,61 @@
+@@ -1307,20 +1339,61 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -1730,7 +1741,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1423,45 +1507,76 @@
+@@ -1443,47 +1516,76 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: any, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -1783,6 +1794,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -        throw injected.strictModeViolationError(info!.parsed, elements);
 -      else if (elements.length)
 -        log = `  locator resolved to ${injected.previewNode(elements[0])}`;
+-      if (info)
+-        injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 -      return { log, ...await injected.expect(elements[0], options, elements) };
 -    }, { info, options, callId: progress.metadata.id }));
 +              const handle = result[0];
@@ -1843,7 +1856,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1577,29 +1692,71 @@
+@@ -1599,29 +1701,71 @@
    }
  
    private async _callOnElementOnceMatches<T, R>(progress: Progress, selector: string, body: ElementCallback<T, R>, taskData: T, options: types.StrictOptions & { mainWorld?: boolean }, scope?: dom.ElementHandle): Promise<R> {
@@ -1938,7 +1951,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1666,6 +1823,257 @@
+@@ -1688,6 +1832,257 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -2256,7 +2269,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  /**
   * Copyright 2017 Google Inc. All rights reserved.
   * Modifications copyright (c) Microsoft Corporation.
-@@ -303,30 +305,25 @@
+@@ -324,30 +326,25 @@
    }
  
    async exposeBinding(progress: Progress, name: string, needsHandle: boolean, playwrightBinding: frames.FunctionWithSource): Promise<PageBinding> {
@@ -2303,7 +2316,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async setExtraHTTPHeaders(progress: Progress, headers: types.HeadersArray) {
-@@ -612,9 +609,10 @@
+@@ -633,9 +630,10 @@
    }
  
    async removeInitScripts(initScripts: InitScript[]) {
@@ -2317,7 +2330,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    needsRequestInterception(): boolean {
-@@ -816,13 +814,6 @@
+@@ -837,13 +835,6 @@
        this.browserContext.addVisitedOrigin(origin);
    }
  
@@ -2331,7 +2344,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    getBinding(name: string) {
      return this._pageBindings.get(name) || this.browserContext._pageBindings.get(name);
    }
-@@ -860,6 +851,12 @@
+@@ -867,6 +858,12 @@
      const snapshot = await snapshotFrameForAI(progress, this.mainFrame(), options);
      return { full: snapshot.full.join('\n'), incremental: snapshot.incremental?.join('\n') };
    }
@@ -2343,8 +2356,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +  }
  }
  
- export class Worker extends SdkObject {
-@@ -898,77 +895,82 @@
+ export const WorkerEvent = {
+@@ -911,77 +908,82 @@
      this.openScope.close(new Error('Worker closed'));
    }
  
@@ -2585,7 +2598,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/registry/index.ts patchright/node_modules/playwright-core/src/server/registry/index.ts
 ---
 +++
-@@ -1457,7 +1457,7 @@
+@@ -1484,7 +1484,7 @@
        return `pwsh bin/Debug/netX/playwright.ps1 ${parameters}`;
      default: {
        const packageManagerCommand = getPackageManagerExecCommand();
@@ -2894,15 +2907,15 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/recorder/src/recorder.tsx patchright/node_modules/recorder/src/recorder.tsx
 ---
 +++
-@@ -56,7 +56,7 @@
-   window.playwrightSelectSource = selectedSourceId => setSelectedFileId(selectedSourceId);
+@@ -101,7 +101,7 @@
+   }, [backend, mode, selectedTab, setSelectedTab, source]);
  
    React.useEffect(() => {
--    window.dispatch({ event: 'setAutoExpect', params: { autoExpect } });
+-    backend.setAutoExpect({ autoExpect });
 +    try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}
-   }, [autoExpect]);
+   }, [autoExpect, backend]);
  
-   const source = React.useMemo(() => {
+   React.useLayoutEffect(() => {
 diff -ruN -x protocol.yml --minimal playwright/packages/injected/src/xpathSelectorEngine.ts patchright/packages/injected/src/xpathSelectorEngine.ts
 ---
 +++
@@ -2953,16 +2966,16 @@ diff -ruN -x protocol.yml --minimal playwright/packages/injected/src/xpathSelect
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/browserContext.ts patchright/packages/playwright-core/src/server/browserContext.ts
 ---
 +++
-@@ -146,7 +146,7 @@
-       `);
-     }
+@@ -164,7 +164,7 @@
+       await this.exposeConsoleApi();
+ 
      if (this._options.serviceWorkers === 'block')
 -      await this.addInitScript(undefined, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
 +      await this.addInitScript(undefined, `navigator.serviceWorker.register = async () => { };`);
  
      if (this._options.permissions)
        await this.grantPermissions(this._options.permissions);
-@@ -326,27 +326,19 @@
+@@ -354,27 +354,19 @@
        if (page.getBinding(name))
          throw new Error(`Function "${name}" has been already registered in one of the pages`);
      }
@@ -2997,7 +3010,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async grantPermissions(permissions: string[], origin?: string) {
-@@ -463,9 +455,10 @@
+@@ -491,9 +483,10 @@
    }
  
    async removeInitScripts(initScripts: InitScript[]) {
@@ -3011,7 +3024,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async addRequestInterceptor(progress: Progress, handler: network.RouteHandler): Promise<void> {
-@@ -815,4 +808,5 @@
+@@ -843,4 +836,5 @@
    strictSelectors: false,
    serviceWorkers: 'allow',
    locale: 'en-US',
@@ -3070,7 +3083,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crBrowser.ts patchright/packages/playwright-core/src/server/chromium/crBrowser.ts
 ---
 +++
-@@ -501,8 +501,9 @@
+@@ -519,8 +519,9 @@
    }
  
    async doRemoveInitScripts(initScripts: InitScript[]) {
@@ -3082,7 +3095,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async doUpdateRequestInterception(): Promise<void> {
-@@ -595,4 +596,16 @@
+@@ -613,4 +614,16 @@
      const rootSession = await this._browser._clientRootSession();
      return rootSession.attachToTarget(targetId);
    }
@@ -3102,7 +3115,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crDevTools.ts patchright/packages/playwright-core/src/server/chromium/crDevTools.ts
 ---
 +++
-@@ -67,7 +67,6 @@
+@@ -64,7 +64,6 @@
        }).catch(e => null);
      });
      Promise.all([
@@ -3144,8 +3157,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (requestWillBeSentEvent.request.url.startsWith('data:'))
        return;
      let redirectedFrom: InterceptableRequest | null = null;
-@@ -342,7 +346,7 @@
-         headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
+@@ -346,7 +350,7 @@
+         }
          requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent.requestId, headers: headersOverride });
        } else {
 -        route = new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId);
@@ -3153,7 +3166,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        }
      }
      const isNavigationRequest = requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && requestWillBeSentEvent.type === 'Document';
-@@ -553,6 +557,8 @@
+@@ -557,6 +561,8 @@
      if (request.session !== sessionInfo.session && !sessionInfo.isMain && (request._documentId === request._requestId || sessionInfo.workerFrame))
        request.session = sessionInfo.session;
    }
@@ -3162,7 +3175,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class InterceptableRequest {
-@@ -612,38 +618,213 @@
+@@ -615,38 +621,213 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -3399,7 +3412,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -656,6 +837,155 @@
+@@ -659,6 +840,155 @@
        });
      });
    }
@@ -3564,7 +3577,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  /**
   * Copyright 2017 Google Inc. All rights reserved.
   * Modifications copyright (c) Microsoft Corporation.
-@@ -99,7 +101,8 @@
+@@ -94,7 +96,8 @@
      this.updateOffline();
      this.updateExtraHTTPHeaders();
      this.updateHttpCredentials();
@@ -3574,7 +3587,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._mainFrameSession = new FrameSession(this, client, targetId, null);
      this._sessions.set(targetId, this._mainFrameSession);
      if (opener && !browserContext._options.noDefaultViewport) {
-@@ -228,6 +231,7 @@
+@@ -223,6 +226,7 @@
    }
  
    async addInitScript(initScript: InitScript, world: types.World = 'main'): Promise<void> {
@@ -3582,7 +3595,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      await this._forAllFrameSessions(frame => frame._evaluateOnNewDocument(initScript, world));
    }
  
-@@ -361,6 +365,19 @@
+@@ -356,6 +360,19 @@
    shouldToggleStyleSheetToSyncAnimations(): boolean {
      return false;
    }
@@ -3602,7 +3615,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class FrameSession {
-@@ -488,17 +505,6 @@
+@@ -465,17 +482,6 @@
          this._bufferedAttachedToTargetEvents = undefined;
          for (const event of attachedToTargetEvents)
            this._onAttachedToTarget(event);
@@ -3620,7 +3633,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          const isInitialEmptyPage = this._isMainFrame() && this._page.mainFrame().url() === ':';
          if (isInitialEmptyPage) {
            // Ignore lifecycle events, worlds and bindings for the initial empty page. It is never the final page
-@@ -508,13 +514,22 @@
+@@ -485,13 +491,22 @@
              this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.lifecycleEvent', event => this._onLifecycleEvent(event)));
            });
          } else {
@@ -3644,7 +3657,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -525,8 +540,10 @@
+@@ -502,8 +517,10 @@
      if (!this._page.isStorageStatePage) {
        if (this._crPage._browserContext.needsPlaywrightBinding())
          promises.push(this.exposePlaywrightBinding());
@@ -3657,7 +3670,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const options = this._crPage._browserContext._options;
        if (options.bypassCSP)
          promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
-@@ -549,14 +566,24 @@
+@@ -526,14 +543,24 @@
        promises.push(this._updateGeolocation(true));
        promises.push(this._updateEmulateMedia());
        promises.push(this._updateFileChooserInterception(true));
@@ -3668,8 +3681,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +                    for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +                    for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +                  
-       if (screencastOptions)
-         promises.push(this._startVideoRecording(screencastOptions));
+       if (videoOptions)
+         promises.push(this._crPage._page.screencast.startVideoRecording(videoOptions));
      }
 -    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
 +    
@@ -3685,7 +3698,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    dispose() {
-@@ -580,13 +607,25 @@
+@@ -557,13 +584,25 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -3712,7 +3725,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -633,12 +672,24 @@
+@@ -610,12 +649,24 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -3738,7 +3751,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -675,19 +726,31 @@
+@@ -652,19 +703,31 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -3775,7 +3788,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -703,7 +766,7 @@
+@@ -680,7 +743,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -3784,7 +3797,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -745,12 +808,22 @@
+@@ -722,12 +785,22 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -3808,7 +3821,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -1076,20 +1149,11 @@
+@@ -1002,20 +1075,11 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -3831,7 +3844,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async exposePlaywrightBinding() {
-@@ -1200,6 +1264,48 @@
+@@ -1126,6 +1190,48 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
@@ -3981,7 +3994,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // Be careful, |this.frame| can be different from |resolved.frame|.
      if (!resolved)
        throw new Error(`Failed to find frame for selector "${selector}"`);
-@@ -150,9 +152,31 @@
+@@ -156,9 +158,31 @@
            throw injected.createStacklessError(`Selector "${selectorString}" resolved to ${injected.previewNode(element)}, <iframe> was expected`);
          return element;
        }, { info, scope: i === 0 ? scope : undefined, selectorString: stringifySelector(info.parsed) });
@@ -4016,7 +4029,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const maybeFrame = await frame._page.delegate.getContentFrame(element);
        element.dispose();
        if (!maybeFrame)
-@@ -173,9 +197,166 @@
+@@ -179,9 +203,166 @@
      if (!resolved)
        return;
      const context = await resolved.frame._context(options?.mainWorld ? 'main' : resolved.info.world);
@@ -4204,7 +4217,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
      frame._onClearLifecycle();
      const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
-@@ -714,12 +721,69 @@
+@@ -722,12 +729,69 @@
      return this._page.delegate.getFrameElement(this);
    }
  
@@ -4280,7 +4293,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _mainContext(): Promise<dom.FrameExecutionContext> {
-@@ -741,78 +805,73 @@
+@@ -749,79 +813,73 @@
    }
  
    async evaluateExpressionHandle(expression: string, options: { isFunction?: boolean, world?: types.World } = {}, arg?: any): Promise<js.JSHandle<any>> {
@@ -4342,6 +4355,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -        } else if (element) {
 -          log = `  locator resolved to ${visible ? 'visible' : 'hidden'} ${injected.previewNode(element)}`;
 -        }
+-        injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 -        return { log, element, visible, attached: !!element };
 -      }, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
 -      const { log, visible, attached } = await progress.race(result.evaluate(r => ({ log: r.log, visible: r.visible, attached: r.attached })));
@@ -4419,7 +4433,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async dispatchEvent(progress: Progress, selector: string, type: string, eventInit: Object = {}, options: types.QueryOnSelectorOptions, scope?: dom.ElementHandle): Promise<void> {
-@@ -823,18 +882,27 @@
+@@ -832,18 +890,27 @@
  
    async evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
      const handle = await this.selectors.query(selector, { strict }, scope);
@@ -4457,7 +4471,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async maskSelectors(selectors: ParsedSelector[], color: string): Promise<void> {
-@@ -846,17 +914,35 @@
+@@ -855,17 +922,35 @@
    }
  
    async querySelectorAll(selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -4501,7 +4515,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async content(): Promise<string> {
-@@ -878,29 +964,23 @@
+@@ -887,29 +972,23 @@
    }
  
    async setContent(progress: Progress, html: string, options: types.NavigateOptions): Promise<void> {
@@ -4516,7 +4530,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -        this._onClearLifecycle();
 -        tagPromise.resolve();
 -      });
--      const lifecyclePromise = progress.race(tagPromise).then(() => this._waitForLoadState(progress, waitUntil));
+-      const lifecyclePromise = progress.race(tagPromise).then(() => this.waitForLoadState(progress, waitUntil));
 -      const contentPromise = progress.race(context.evaluate(({ html, tag }) => {
 -        document.open();
 -        console.debug(tag);  // eslint-disable-line no-console
@@ -4548,20 +4562,25 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    name(): string {
-@@ -1093,50 +1173,13 @@
+@@ -1101,60 +1180,13 @@
+     progress: Progress,
      selector: string,
-     strict: boolean | undefined,
-     performActionPreChecks: boolean,
+     options: { strict?: boolean, noAutoWaiting?: boolean, force?: boolean, performActionPreChecks?: boolean },
 -    action: (handle: dom.ElementHandle<Element>) => Promise<R | 'error:notconnected'>): Promise<R> {
 -    progress.log(`waiting for ${this._asLocator(selector)}`);
+-    const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
+-    const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
 -    return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
 -      if (performActionPreChecks)
 -        await this._page.performActionPreChecks(progress);
 +    action: (handle: dom.ElementHandle<Element>) => Promise<R | 'error:notconnected'>, returnAction: boolean | undefined): Promise<R> {
  
--      const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict }));
--      if (!resolved)
+-      const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
+-      if (!resolved) {
+-        if (noAutoWaiting)
+-          throw new dom.NonRecoverableDOMError('Element(s) not found');
 -        return continuePolling;
+-      }
 -      const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
 -        const elements = injected.querySelectorAll(info.parsed, document);
 -        if (callId)
@@ -4575,12 +4594,15 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -        } else if (element) {
 -          log = `  locator resolved to ${injected.previewNode(element)}`;
 -        }
+-        injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 -        return { log, success: !!element, element };
 -      }, { info: resolved.info, callId: progress.metadata.id }));
 -      const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
 -      if (log)
 -        progress.log(log);
 -      if (!success) {
+-        if (noAutoWaiting)
+-          throw new dom.NonRecoverableDOMError('Element(s) not found');
 -        result.dispose();
 -        return continuePolling;
 -      }
@@ -4589,6 +4611,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      try {
 -        const result = await action(element);
 -        if (result === 'error:notconnected') {
+-          if (noAutoWaiting)
+-            throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
 -          progress.log('element was detached from the DOM, retrying');
 -          return continuePolling;
 -        }
@@ -4605,7 +4629,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1289,20 +1332,61 @@
+@@ -1307,20 +1339,61 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -4681,7 +4705,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1423,45 +1507,76 @@
+@@ -1443,47 +1516,76 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: any, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -4734,6 +4758,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -        throw injected.strictModeViolationError(info!.parsed, elements);
 -      else if (elements.length)
 -        log = `  locator resolved to ${injected.previewNode(elements[0])}`;
+-      if (info)
+-        injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 -      return { log, ...await injected.expect(elements[0], options, elements) };
 -    }, { info, options, callId: progress.metadata.id }));
 +              const handle = result[0];
@@ -4794,7 +4820,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1577,29 +1692,71 @@
+@@ -1599,29 +1701,71 @@
    }
  
    private async _callOnElementOnceMatches<T, R>(progress: Progress, selector: string, body: ElementCallback<T, R>, taskData: T, options: types.StrictOptions & { mainWorld?: boolean }, scope?: dom.ElementHandle): Promise<R> {
@@ -4889,7 +4915,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1666,6 +1823,257 @@
+@@ -1688,6 +1832,257 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -5207,7 +5233,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  /**
   * Copyright 2017 Google Inc. All rights reserved.
   * Modifications copyright (c) Microsoft Corporation.
-@@ -303,30 +305,25 @@
+@@ -324,30 +326,25 @@
    }
  
    async exposeBinding(progress: Progress, name: string, needsHandle: boolean, playwrightBinding: frames.FunctionWithSource): Promise<PageBinding> {
@@ -5254,7 +5280,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async setExtraHTTPHeaders(progress: Progress, headers: types.HeadersArray) {
-@@ -612,9 +609,10 @@
+@@ -633,9 +630,10 @@
    }
  
    async removeInitScripts(initScripts: InitScript[]) {
@@ -5268,7 +5294,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    needsRequestInterception(): boolean {
-@@ -816,13 +814,6 @@
+@@ -837,13 +835,6 @@
        this.browserContext.addVisitedOrigin(origin);
    }
  
@@ -5282,7 +5308,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    getBinding(name: string) {
      return this._pageBindings.get(name) || this.browserContext._pageBindings.get(name);
    }
-@@ -860,6 +851,12 @@
+@@ -867,6 +858,12 @@
      const snapshot = await snapshotFrameForAI(progress, this.mainFrame(), options);
      return { full: snapshot.full.join('\n'), incremental: snapshot.incremental?.join('\n') };
    }
@@ -5294,8 +5320,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +  }
  }
  
- export class Worker extends SdkObject {
-@@ -898,77 +895,82 @@
+ export const WorkerEvent = {
+@@ -911,77 +908,82 @@
      this.openScope.close(new Error('Worker closed'));
    }
  
@@ -5536,7 +5562,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/registry/index.ts patchright/packages/playwright-core/src/server/registry/index.ts
 ---
 +++
-@@ -1457,7 +1457,7 @@
+@@ -1484,7 +1484,7 @@
        return `pwsh bin/Debug/netX/playwright.ps1 ${parameters}`;
      default: {
        const packageManagerCommand = getPackageManagerExecCommand();
@@ -5845,12 +5871,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/util
 diff -ruN -x protocol.yml --minimal playwright/packages/recorder/src/recorder.tsx patchright/packages/recorder/src/recorder.tsx
 ---
 +++
-@@ -56,7 +56,7 @@
-   window.playwrightSelectSource = selectedSourceId => setSelectedFileId(selectedSourceId);
+@@ -101,7 +101,7 @@
+   }, [backend, mode, selectedTab, setSelectedTab, source]);
  
    React.useEffect(() => {
--    window.dispatch({ event: 'setAutoExpect', params: { autoExpect } });
+-    backend.setAutoExpect({ autoExpect });
 +    try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}
-   }, [autoExpect]);
+   }, [autoExpect, backend]);
  
-   const source = React.useMemo(() => {
+   React.useLayoutEffect(() => {
