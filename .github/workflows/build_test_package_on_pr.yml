@@ -16,8 +16,12 @@ jobs:
     if: github.event.pull_request.draft == false # Only run if the PR is not a draft
 
     runs-on: ubuntu-latest
+
+    # Manual approval gate: configure this environment in repo settings with "Required reviewers".
+    environment:
+      name: pr-artifact-build
+
     permissions:
-      id-token: write
       contents: read
       pull-requests: write
 
