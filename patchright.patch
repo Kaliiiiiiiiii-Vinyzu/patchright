@@ -448,7 +448,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -659,6 +840,155 @@
+@@ -659,6 +840,159 @@
        });
      });
    }
@@ -597,7 +597,11 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +              })
 +            }
 +          } catch (error) {
-+            await this._session._sendMayFail('Fetch.continueRequest', { requestId: event.requestId });
++            if (error.message.includes("Can only get response body on HeadersReceived pattern matched requests.")) {
++              await this._session.send("Fetch.continueRequest", { requestId: event.requestId, interceptResponse: true });
++            } else {
++              await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
++            }
 +          }
 +        
 +  }
@@ -3412,7 +3416,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -659,6 +840,155 @@
+@@ -659,6 +840,159 @@
        });
      });
    }
@@ -3561,7 +3565,11 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +              })
 +            }
 +          } catch (error) {
-+            await this._session._sendMayFail('Fetch.continueRequest', { requestId: event.requestId });
++            if (error.message.includes("Can only get response body on HeadersReceived pattern matched requests.")) {
++              await this._session.send("Fetch.continueRequest", { requestId: event.requestId, interceptResponse: true });
++            } else {
++              await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
++            }
 +          }
 +        
 +  }
