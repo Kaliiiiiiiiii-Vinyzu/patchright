@@ -16,10 +16,13 @@ jobs:
     if: github.event.pull_request.draft == false # Only run if the PR is not a draft
 
     runs-on: ubuntu-latest
+
+    # Manual approval gate: configure this environment in repo settings with "Required reviewers".
+    environment:
+      name: pr-artifact-build
+
     permissions:
-      id-token: write
       contents: read
-      pull-requests: write
 
     steps:
       - name: Checkout Repository
@@ -36,6 +39,12 @@ jobs:
 
       - name: Install NPM Dependencies
         run: npm install
+
+      - name: Check Release Version
+        id: version_check
+        run: |
+          chmod +x utils/release_version_check.sh
+          utils/release_version_check.sh
 
       - name: Install Playwright Driver
         run: |
@@ -69,38 +78,3 @@ jobs:
         with:
           name: build-artifacts
           path: playwright/utils/build/output/playwright-*.zip
-
-      - name: Find old Build Artifacts Comment
-        id: find_comment_present
-        uses: peter-evans/find-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: github-actions[bot]
-          body-includes: "You can download the built Patchright Driver artifacts"
-
-      - name: Delete old Build Artifacts Comment
-        if: steps.find_comment_present.outputs.comment-id != ''
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            await github.rest.issues.deleteComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: parseInt("${{ steps.find_comment_present.outputs.comment-id }}", 10)
-            });
-
-      - name: Post new Built Artifacts Comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            **Patchright Driver Build**
-            __Do not download or use these artifacts in production! They are only for testing purposes on this Pull Request.__
-
-            **Download**
-            - Open this workflow run and download the artifact named `build-artifacts`:
-              ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-            **Debug info**
-            - Artifact ID: `${{ steps.upload_build_artifacts.outputs.artifact-id }}`
