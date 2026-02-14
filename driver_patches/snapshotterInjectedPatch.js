@@ -9,7 +9,7 @@ export function patchSnapshotterInjected(project) {
   const streamerClass = func.getDescendantsOfKind(SyntaxKind.ClassDeclaration)
     .find(c => c.getName() === "Streamer");
 
-  // 2a. Remove CSS monkey-patches from constructor
+  // Remove CSS monkey-patches from constructor
   const ctor = streamerClass.getConstructors()[0];
   const ctorStmtsToRemove = ctor.getStatements().filter(stmt => {
     const text = stmt.getText();
@@ -21,51 +21,53 @@ export function patchSnapshotterInjected(project) {
   for (let i = ctorStmtsToRemove.length - 1; i >= 0; i--)
     ctorStmtsToRemove[i].remove();
 
-  // 2b. Remove _staleStyleSheets and _readingStyleSheet properties
+  // Remove properties and methods related to CSS interception
   streamerClass.getProperty("_staleStyleSheets").remove();
   streamerClass.getProperty("_readingStyleSheet").remove();
-
-  // 2c. Remove helper methods
   streamerClass.getMethod("_interceptNativeMethod").remove();
   streamerClass.getMethod("_interceptNativeAsyncMethod").remove();
   streamerClass.getMethod("_interceptNativeGetter").remove();
   streamerClass.getMethod("_invalidateStyleSheet").remove();
 
-  // 2d. Simplify _updateStyleElementStyleSheetTextIfNeeded — always re-read
-  streamerClass.getMethod("_updateStyleElementStyleSheetTextIfNeeded").setBodyText(
-    "const data = ensureCachedData(sheet);\n" +
-    "try {\n" +
-    "  data.cssText = this._getSheetText(sheet);\n" +
-    "} catch (e) {\n" +
-    "  data.cssText = '';\n" +
-    "}\n" +
-    "return data.cssText;"
-  );
+  // -- _updateStyleElementStyleSheetTextIfNeeded Method -- always re-read
+  streamerClass.getMethod("_updateStyleElementStyleSheetTextIfNeeded").setBodyText(`
+    const data = ensureCachedData(sheet);
+    try {
+      data.cssText = this._getSheetText(sheet);
+    } catch (e) {
+      data.cssText = '';
+    }
+    return data.cssText;
+  `);
 
-  // 2e. Simplify _updateLinkStyleSheetTextIfNeeded — always compare fresh
-  streamerClass.getMethod("_updateLinkStyleSheetTextIfNeeded").setBodyText(
-    "const data = ensureCachedData(sheet);\n" +
-    "try {\n" +
-    "  const currentText = this._getSheetText(sheet);\n" +
-    "  if (currentText === data.cssText)\n" +
-    "    return data.cssRef === undefined ? undefined : snapshotNumber - data.cssRef;\n" +
-    "  data.cssText = currentText;\n" +
-    "  data.cssRef = snapshotNumber;\n" +
-    "  return data.cssText;\n" +
-    "} catch (e) {\n" +
-    "  return undefined;\n" +
-    "}"
-  );
+  // -- _updateLinkStyleSheetTextIfNeeded Method -- always compare fresh
+  streamerClass.getMethod("_updateLinkStyleSheetTextIfNeeded").setBodyText(`
+    const data = ensureCachedData(sheet);
+    try {
+      const currentText = this._getSheetText(sheet);
+      if (data.cssText === undefined) {
+        data.cssText = currentText;
+        return undefined;
+      }
+      if (currentText === data.cssText)
+        return data.cssRef === undefined ? undefined : snapshotNumber - data.cssRef;
+      data.cssText = currentText;
+      data.cssRef = snapshotNumber;
+      return data.cssText;
+    } catch (e) {
+      return undefined;
+    }
+  `);
 
-  // 2f. Simplify _getSheetText — remove _readingStyleSheet guard
-  streamerClass.getMethod("_getSheetText").setBodyText(
-    "const rules: string[] = [];\n" +
-    "for (const rule of sheet.cssRules)\n" +
-    "  rules.push(rule.cssText);\n" +
-    "return rules.join('\\n');"
-  );
+  // -- _getSheetText Method -- direct read without _readingStyleSheet guard
+  streamerClass.getMethod("_getSheetText").setBodyText(`
+    const rules: string[] = [];
+    for (const rule of sheet.cssRules)
+      rules.push(rule.cssText);
+    return rules.join('\\n');
+  `);
 
-  // 2g. captureSnapshot() — iterate document.styleSheets instead of this._staleStyleSheets
+  // -- captureSnapshot Method -- iterate document.styleSheets instead of _staleStyleSheets
   const captureMethod = streamerClass.getMethod("captureSnapshot");
   const forOfStmt = captureMethod.getStatements()
     .find(s => s.getText().includes("this._staleStyleSheets"));
@@ -75,7 +77,7 @@ export function patchSnapshotterInjected(project) {
     );
   }
 
-  // 2h. reset() — remove this._staleStyleSheets.clear()
+  // -- reset Method -- remove _staleStyleSheets.clear()
   const resetMethod = streamerClass.getMethod("reset");
   const clearStmt = resetMethod.getStatements()
     .find(s => s.getText().includes("this._staleStyleSheets.clear()"));
