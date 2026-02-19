@@ -53,22 +53,6 @@
 <details open>
     <summary><h3>Sponsors</h1></summary>
 
- <a href="https://hyperbrowser.ai/"><img alt="Hyperbrowser Banner Ad" src="https://github.com/user-attachments/assets/7132b07b-8543-4381-9b9d-02f706f5db4b" width="80%"/></a>
- </br>
-If you’re looking for a high-performance browser automation platform checkout [**Hyperbrowser**](https://hyperbrowser.ai/). It’s ideal for AI Agents, large-scale web scraping and automated testing. </br>
-[**Hyperbrowser**](https://hyperbrowser.ai/) delivers cloud-based browser infrastructure that scales instantly from a few sessions to thousands, with built-in CAPTCHA solving, stealth fingerprinting, and a global proxy network. It integrates seamlessly with Puppeteer, Playwright, and Selenium, so you can be up and running in minutes, no server or proxy management required.
-
-Key Features:
-- **Instant scaling**: Launch 1,000+ concurrent browsers
-- **Captcha Solving**: Handles reCAPTCHA, Cloudflare, AWS, and more
-- **Stealth mode**: Dynamic, human-like fingerprints for undetectable automation
-- **Global proxy network**: 170+ countries with rotation and geo-targeting
-- **Built-in debugging**: Live view and session replay for real-time monitoring
-- **1-line integration**: Works with Puppeteer, Playwright, Selenium in Node.js or Python
-
-👉 Learn more at [**hyperbrowser.ai**](https://hyperbrowser.ai/)
-
----
 
 <a href="https://www.thordata.com/?ls=github&lk=Vinyzu" target="_blank">
   <img alt="Thordata Banner" src="https://github.com/user-attachments/assets/58460bff-b057-4191-88da-80e0bd29b745" width="90%" />
