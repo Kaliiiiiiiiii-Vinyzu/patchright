@@ -19,3 +19,5 @@ export * from "./utilityScriptSerializersPatch.js";
 export * from "./XPathSelectorEnginePatch.js";
 export * from "./serverRegistryIndex.js";
 export * from "./recorderPatch.js";
+export * from "./snapshotterPatch.js";
+export * from "./snapshotterInjectedPatch.js";
