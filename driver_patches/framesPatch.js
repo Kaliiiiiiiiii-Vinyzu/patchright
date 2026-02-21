@@ -49,7 +49,7 @@ export function patchFrames(project) {
     evalOnSelectorMethod.setBodyText(`const handle = await this.selectors.query(selector, { strict }, scope);
         if (!handle)
           throw new Error('Failed to find element matching selector "' + selector + '"');
-        const result = await handle.evaluateExpression(expression, { isFunction }, arg, true);
+        const result = await handle.evaluateExpression(expression, { isFunction }, arg, false);
         handle.dispose();
         return result;`)
 
@@ -83,7 +83,7 @@ export function patchFrames(project) {
         metadata,
         race: (promise) => Promise.race(Array.isArray(promise) ? promise : [promise])
       }
-      return await this._retryWithoutProgress(progress, selector, null, false, async (result) => {
+      return await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
         if (!result || !result[0]) return [];
         return result[1];
       }, 'returnAll', null);
@@ -147,12 +147,14 @@ export function patchFrames(project) {
           var describedNode = await client._sendMayFail("DOM.describeNode", {
             backendNodeId: globalDocument.backendNodeId,
           });
-          if (describedNode) {
+          if (describedNode && describedNode.node.contentDocument) {
             var resolvedNode = await client._sendMayFail("DOM.resolveNode", {
-              nodeId: describedNode.node.contentDocument.nodeId,
+              backendNodeId: describedNode.node.contentDocument.backendNodeId,
             });
-            var _executionContextId = parseInt(resolvedNode.object.objectId.split(".")[1], 10);
-            return _executionContextId;
+            if (resolvedNode && resolvedNode.object && resolvedNode.object.objectId) {
+              var _executionContextId = parseInt(resolvedNode.object.objectId.split(".")[1], 10);
+              return _executionContextId;
+            }
           }
         }
       } catch (e) {}
@@ -189,7 +191,10 @@ export function patchFrames(project) {
             expression: "globalThis",
             serializationOptions: { serialization: "idOnly" }
           });
-          if (!globalThis) { return }
+          if (!globalThis) {
+            if (this.isDetached()) throw new Error('Frame was detached');
+            return
+          }
           var globalThisObjId = globalThis["result"]['objectId']
           var executionContextId = parseInt(globalThisObjId.split('.')[1], 10);
 
@@ -206,7 +211,7 @@ export function patchFrames(project) {
           frameId: this._id, grantUniveralAccess: true, worldName: world
         });
         if (!result) {
-          // if (this.isDetached()) throw new Error("Frame was detached");
+          if (this.isDetached()) throw new Error("Frame was detached");
           return
         }
         var executionContextId = result.executionContextId
@@ -219,7 +224,7 @@ export function patchFrames(project) {
 
       if (world != "main") {
         return this._isolatedWorld;
-      } else if (this != this._page.mainFrame() && iframeExecutionContextId) {
+      } else if (this != this._page.mainFrame() && this._iframeWorld) {
         return this._iframeWorld;
       } else {
         return this._mainWorld;
@@ -234,7 +239,7 @@ export function patchFrames(project) {
         progress.log(\`setting frame content, waiting until "\${waitUntil}"\`);
         const lifecyclePromise = new Promise((resolve, reject) => {
           this._onClearLifecycle();
-          this._waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
+          this.waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
         });
         const setContentPromise = this._page.delegate._mainFrameSession._client.send("Page.setDocumentContent", {
           frameId: this._id,
@@ -246,6 +251,38 @@ export function patchFrames(project) {
       });
     `);
 
+    /*
+    // -- retryWithProgressAndTimeouts Method --
+    const retryWithProgressAndTimeoutsMethod = frameClass.getMethod("retryWithProgressAndTimeouts");
+    retryWithProgressAndTimeoutsMethod.setBodyText(`
+      const continuePolling = Symbol('continuePolling');
+      timeouts = [0, ...timeouts];
+      let timeoutIndex = 0;
+      while (true) {
+        const timeout = timeouts[Math.min(timeoutIndex++, timeouts.length - 1)];
+        if (timeout) {
+          // Make sure we react immediately upon page close or frame detach.
+          // We need this to show expected/received values in time.
+          const actionPromise = new Promise(f => setTimeout(f, timeout));
+          await progress.race(LongStandingScope.raceMultiple([
+            this._page.openScope,
+            this._detachedScope,
+          ], actionPromise));
+        }
+        try {
+          const result = await action(continuePolling);
+          if (result === continuePolling)
+            continue;
+          return result as R;
+        } catch (e) {
+          if (this.isNonRetriableError(e))
+            throw e;
+          continue;
+        }
+      }
+    `);
+    */
+
     // -- _retryWithProgressIfNotConnected Method --
     const retryWithProgressIfNotConnectedMethod = frameClass.getMethod("_retryWithProgressIfNotConnected");
     retryWithProgressIfNotConnectedMethod.addParameter({
@@ -253,9 +290,10 @@ export function patchFrames(project) {
         type: "boolean | undefined",
     });
     retryWithProgressIfNotConnectedMethod.setBodyText(`
-      progress.log("waiting for " + this._asLocator(selector));
+      if (!(options as any)?.__patchrightSkipRetryLogWaiting)
+        progress.log("waiting for " + this._asLocator(selector));
       return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
-        return this._retryWithoutProgress(progress, selector, strict, performActionPreChecks, action, returnAction, continuePolling);
+        return this._retryWithoutProgress(progress, selector, options, action, returnAction, continuePolling);
       });
     `);
 
@@ -266,17 +304,17 @@ export function patchFrames(project) {
       parameters: [
         { name: "progress" },
         { name: "selector" },
-        { name: "strict" },
-        { name: "performActionPreChecks" },
+        { name: "options" },
         { name: "action" },
         { name: "returnAction" },
         { name: "continuePolling" },
       ],
     });
+    // options.strict, options.performActionPreChecks
     const customRetryWithoutProgressMethod = frameClass.getMethod("_retryWithoutProgress");
     customRetryWithoutProgressMethod.setBodyText(`
-      if (performActionPreChecks) await this._page.performActionPreChecks(progress);
-      const resolved = await this.selectors.resolveInjectedForSelector(selector, { strict });
+      if (options.performActionPreChecks) await this._page.performActionPreChecks(progress);
+      const resolved = await this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }, (options as any).__patchrightInitialScope);
       if (!resolved) {
         if (returnAction === 'returnOnNotResolved' || returnAction === 'returnAll') {
           const result = await action(null);
@@ -300,25 +338,54 @@ export function patchFrames(project) {
         contextId: utilityContext.delegate._contextId,
       });
       if (!documentNode) return continuePolling;
-      const documentScope = new dom.ElementHandle(utilityContext, documentNode.result.objectId);
+      let documentScope = new dom.ElementHandle(utilityContext, documentNode.result.objectId);
+      let initialScope = documentScope;
+      if ((resolved as any).scope) {
+        const scopeBackendNodeId = (resolved as any).scope._objectId ? (await client._sendMayFail('DOM.describeNode', { objectId: (resolved as any).scope._objectId }))?.node?.backendNodeId : null;
+        if (scopeBackendNodeId) {
+          const scopeInUtility = await client._sendMayFail('DOM.resolveNode', { backendNodeId: scopeBackendNodeId, executionContextId: utilityContext.delegate._contextId });
+          if (scopeInUtility?.object?.objectId)
+            initialScope = new dom.ElementHandle(utilityContext, scopeInUtility.object.objectId);
+        }
+      }
+      (progress as any).__patchrightInitialScope = (resolved as any).scope;
 
+      // patchright - Save parsed selector before _customFindElementsByParsed mutates it via parts.shift()
+      const parsedSnapshot = (options as any).__patchrightWaitForSelector ? JSON.parse(JSON.stringify(resolved.info.parsed)) : null;
       let currentScopingElements;
       try {
-        currentScopingElements = await this._customFindElementsByParsed(resolved, client, mainContext, documentScope, progress, resolved.info.parsed);
+        currentScopingElements = await this._customFindElementsByParsed(resolved, client, mainContext, initialScope, progress, resolved.info.parsed);
       } catch (e) {
-        if ("JSHandles can be evaluated only in the context they were created!" === e.message) return continuePolling3;
+        if ("JSHandles can be evaluated only in the context they were created!" === e.message) return continuePolling;
+        if (e instanceof TypeError && e.message.includes("is not a function")) return continuePolling;
         await progress.race(resolved.injected.evaluateHandle((injected, { error }) => { throw error }, { error: e }));
       }
 
       if (currentScopingElements.length == 0) {
-        // TODO: Dispose?
+        if ((options as any).__testHookNoAutoWaiting || (options as any).noAutoWaiting)
+          throw new dom.NonRecoverableDOMError('Element(s) not found');
+        // patchright - CDP-based element search is non-atomic and can temporarily miss
+        // elements during DOM mutations. Verify element absence in-page before reporting
+        // "not found" to the waitForSelector callback.
+        if (parsedSnapshot && (returnAction === 'returnOnNotResolved' || returnAction === 'returnAll')) {
+          const elementCount = await resolved.injected.evaluate((injected, { parsed }) => {
+            return injected.querySelectorAll(parsed, document).length;
+          }, { parsed: parsedSnapshot }).catch(() => 0);
+          if (elementCount > 0)
+            return continuePolling;
+        }
         if (returnAction === 'returnOnNotResolved' || returnAction === 'returnAll') {
-        const result = await action(null);
-        return result === "internal:continuepolling" ? continuePolling2 : result;
-      }
+          const result = await action(null);
+          return result === "internal:continuepolling" ? continuePolling : result;
+        }
         return continuePolling;
       }
       const resultElement = currentScopingElements[0];
+      await resultElement._initializePreview().catch(() => {});
+      let visibilityQualifier = '';
+      if (options && (options as any).__patchrightWaitForSelector) {
+        visibilityQualifier = await resultElement.evaluateInUtility(([injected, node]) => injected.utils.isElementVisible(node) ? 'visible' : 'hidden', {}).catch(() => '');
+      }
       if (currentScopingElements.length > 1) {
         if (resolved.info.strict) {
           await progress.race(resolved.injected.evaluateHandle((injected, {
@@ -333,7 +400,7 @@ export function patchFrames(project) {
         }
         progress.log("  locator resolved to " + currentScopingElements.length + " elements. Proceeding with the first one: " + resultElement.preview());
       } else if (resultElement) {
-        progress.log("  locator resolved to " + resultElement.preview());
+        progress.log("  locator resolved to " + (visibilityQualifier ? visibilityQualifier + " " : "") + resultElement.preview().replace("JSHandle@", ""));
       }
 
       try {
@@ -348,6 +415,18 @@ export function patchFrames(project) {
           return continuePolling;
         } else if (result === 'internal:continuepolling') {
           return continuePolling;
+        }
+        // patchright - CDP-based element search may return stale handles during DOM mutations.
+        // When waitForSelector reports hidden success (result === null with a found element),
+        // the handle may be stale (disconnected). Verify in-page that no matching visible
+        // elements actually exist before accepting the result.
+        if (parsedSnapshot && result === null && ((options as any).state === 'hidden' || (options as any).state === 'detached')) {
+          const visibleCount = await resolved.injected.evaluate((injected, { parsed }) => {
+            const elements = injected.querySelectorAll(parsed, document);
+            return elements.filter(e => injected.utils.isElementVisible(e)).length;
+          }, { parsed: parsedSnapshot }).catch(() => 0);
+          if (visibleCount > 0)
+            return continuePolling;
         }
         return result;
       } finally {}
@@ -366,7 +445,15 @@ export function patchFrames(project) {
       if (performActionPreChecksAndLog)
         progress.log(\`waiting for \${this._asLocator(selector)}\${state === 'attached' ? '' : ' to be ' + state}\`);
 
-      const promise = this._retryWithProgressIfNotConnected(progress, selector, options.strict, true, async handle => {
+      const promise = this._retryWithProgressIfNotConnected(progress, selector, { ...options, performActionPreChecks: true, __patchrightWaitForSelector: true, __patchrightInitialScope: scope }, async handle => {
+        if (scope) {
+          const scopeIsConnected = await scope.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false);
+          if (scopeIsConnected !== true) {
+            if (state === 'hidden' || state === 'detached')
+              return null;
+            throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
+          }
+        }
         const attached = !!handle;
         var visible = false;
         if (attached) {
@@ -400,8 +487,28 @@ export function patchFrames(project) {
         }
       }, "returnOnNotResolved");
 
-      return scope ? scope._context._raceAgainstContextDestroyed(promise) : promise;
+      const resultPromise = scope ? scope._context._raceAgainstContextDestroyed(promise) : promise;
+      return resultPromise.catch(e => {
+        if (this.isDetached() && (e as any)?.message?.includes('Execution context was destroyed'))
+          throw new Error('Frame was detached');
+        throw e;
+      });
     `)
+
+    // -- waitForFunctionExpression Method --
+    // Race the inner evaluate against _detachedScope so frame detachment immediately cancels the operation
+    const waitForFunctionExpressionMethod = frameClass.getMethod("waitForFunctionExpression");
+    const waitForFunctionBody = waitForFunctionExpressionMethod.getBody();
+    const matchingReturnStmts = waitForFunctionBody.getDescendantsOfKind(SyntaxKind.ReturnStatement).filter(stmt =>
+        stmt.getText().includes('progress.race(handle.evaluateHandle(h => h.result))')
+    );
+    // Take the last (innermost) match to avoid replacing the outer
+    // `return this.retryWithProgressAndTimeouts(...)` statement whose
+    // getText() also contains the substring.
+    const targetReturnStmt = matchingReturnStmts[matchingReturnStmts.length - 1];
+    if (targetReturnStmt) {
+        targetReturnStmt.replaceWithText('return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));');
+    }
 
     // -- isVisibleInternal Method --
     const isVisibleInternalMethod = frameClass.getMethod("isVisibleInternal");
@@ -434,7 +541,7 @@ export function patchFrames(project) {
             }, { scope });
           }
         } else {
-          return await this._retryWithoutProgress(progress, selector, options.strict, false, async (handle) => {
+          return await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false}, async (handle) => {
             if (!handle) return false;
             if (handle.parentNode.constructor.name == "ElementHandle") {
               return await handle.parentNode.evaluateInUtility(([injected, node, { handle: handle2 }]) => {
@@ -461,12 +568,55 @@ export function patchFrames(project) {
       }
     `);
 
+    // -- _onDetached Method --
+    // Destroy custom context fields (_mainWorld, _iframeWorld, _isolatedWorld) on frame detach.
+    // Without this, pending evaluations on these contexts never get cancelled, causing timeouts.
+    const onDetachedMethod = frameClass.getMethod("_onDetached");
+    onDetachedMethod.setBodyText(`
+      this._stopNetworkIdleTimer();
+      this._detachedScope.close(new Error('Frame was detached'));
+      for (const data of this._contextData.values()) {
+        if (data.context)
+          data.context.contextDestroyed('Frame was detached');
+        data.contextPromise.resolve({ destroyedReason: 'Frame was detached' });
+      }
+      if (this._mainWorld)
+        this._mainWorld.contextDestroyed('Frame was detached');
+      if (this._iframeWorld)
+        this._iframeWorld.contextDestroyed('Frame was detached');
+      if (this._isolatedWorld)
+        this._isolatedWorld.contextDestroyed('Frame was detached');
+      if (this._parentFrame)
+        this._parentFrame._childFrames.delete(this);
+      this._parentFrame = null;
+    `);
+
+    // -- evaluateExpression Method --
+    const evaluateExpressionMethod = frameClass.getMethod("evaluateExpression");
+    evaluateExpressionMethod.setBodyText(`
+      const context = await this._detachedScope.race(this._context(options.world ?? "main"));
+      const value = await this._detachedScope.race(context.evaluateExpression(expression, options, arg));
+      return value;
+    `);
+
     // -- evaluateExpressionHandle Method --
     const evaluateExpressionHandleMethod = frameClass.getMethod("evaluateExpressionHandle");
     evaluateExpressionHandleMethod.setBodyText(`
-      const context = await this._context(options.world ?? "utility");
-      const value = await context.evaluateExpressionHandle(expression, options, arg);
+      const context = await this._detachedScope.race(this._context(options.world ?? "utility"));
+      const value = await this._detachedScope.race(context.evaluateExpressionHandle(expression, options, arg));
       return value;
+    `);
+
+    // -- nonStallingEvaluateInExistingContext Method --
+    const nonStallingEvalMethod = frameClass.getMethod("nonStallingEvaluateInExistingContext");
+    nonStallingEvalMethod.setBodyText(`
+      return this.raceAgainstEvaluationStallingEvents(async () => {
+        try { await this._context(world); } catch {}
+        const context = this._contextData.get(world)?.context;
+        if (!context)
+          throw new Error('Frame does not yet have the execution context');
+        return context.evaluateExpression(expression, { isFunction: false });
+      });
     `);
 
     // -- queryCount Method --
@@ -478,7 +628,7 @@ export function patchFrames(project) {
         metadata,
         race: (promise) => Promise.race(Array.isArray(promise) ? promise : [promise])
       }
-      return await this._retryWithoutProgress(progress, selector, null, false, async (result) => {
+      return await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false }, async (result) => {
         if (!result) return 0;
         const handle = result[0];
         const handles = result[1];
@@ -494,11 +644,16 @@ export function patchFrames(project) {
       const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
       var log, matches, received, missingReceived;
       if (selector) {
-        const { frame, info } = await race(this.selectors.resolveFrameForSelector(selector, { strict: true }));
+        var frame, info;
+        try {
+          var { frame, info } = await race(this.selectors.resolveFrameForSelector(selector, { strict: true }));
+        } catch (e) { }
         const action = async result => {
           if (!result) {
             if (options.expectedNumber === 0)
               return { matches: true };
+            if (options.isNot && options.expectedNumber)
+              return { matches: false, received: 0 };
             // expect(locator).toBeHidden() passes when there is no element.
             if (!options.isNot && options.expression === 'to.be.hidden')
               return { matches: true };
@@ -514,6 +669,13 @@ export function patchFrames(project) {
             // expect(locator).not.toBeInViewport() passes when there is no element.
             if (options.isNot && options.expression === 'to.be.in.viewport')
               return { matches: false };
+            // expect(locator).toHaveText([]) pass when there is no element.
+            if (options.expression === "to.have.text.array") {
+              if (options.expectedText.length === 0)
+                return { matches: true, received: [] };
+              if (options.isNot && options.expectedText.length !== 0)
+                return { matches: false, received: [] };
+            }
             // When none of the above applies, expect does not match.
             return { matches: options.isNot, missingReceived: true };
           }
@@ -533,9 +695,9 @@ export function patchFrames(project) {
         }
 
         if (noAbort) {
-          var { log, matches, received, missingReceived } = await this._retryWithoutProgress(progress, selector, !isArray, false, action, 'returnAll', null);
+          var { log, matches, received, missingReceived } = await this._retryWithoutProgress(progress, selector, {strict: !isArray, performActionPreChecks: false}, action, 'returnAll', null);
         } else {
-          var { log, matches, received, missingReceived } = await race(this._retryWithProgressIfNotConnected(progress, selector, !isArray, false, action, 'returnAll'));
+          var { log, matches, received, missingReceived } = await race(this._retryWithProgressIfNotConnected(progress, selector, { strict: !isArray, performActionPreChecks: false, __patchrightSkipRetryLogWaiting: true } as any, action, 'returnAll'));
         }
       } else {
         const world = options.expression === 'to.have.property' ? 'main' : 'utility';
@@ -551,10 +713,18 @@ export function patchFrames(project) {
         progress.log(log);
       // Note: missingReceived avoids \`unexpected value "undefined"\` when element was not found.
       if (matches === options.isNot) {
-        lastIntermediateResult.received = missingReceived ? '<element(s) not found>' : received;
+        if (missingReceived) {
+          lastIntermediateResult.errorMessage = 'Error: element(s) not found';
+        } else {
+          lastIntermediateResult.errorMessage = undefined;
+          lastIntermediateResult.received = received;
+        }
         lastIntermediateResult.isSet = true;
-        if (!missingReceived && !Array.isArray(received))
-          progress.log(\`  unexpected value "\${renderUnexpectedValue(options.expression, received)}"\`);
+        if (!missingReceived) {
+          const rendered = renderUnexpectedValue(options.expression, received);
+          if (rendered !== undefined)
+            progress.log('  unexpected value "' + rendered + '"');
+        }
       }
       return { matches, received };
     `);
@@ -568,14 +738,33 @@ export function patchFrames(project) {
       if (selector === ":scope") {
         const scopeParentNode = scope.parentNode || scope;
         if (scopeParentNode.constructor.name == "ElementHandle") {
-          promise = scopeParentNode.evaluateInUtility(([injected, node, { callbackText: callbackText2, scope: handle2, taskData: taskData2 }]) => {
-            const callback = injected.eval(callbackText2);
-            return callback(injected, handle2, taskData2);
-          }, {
-            callbackText,
-            scope,
-            taskData
-          });
+          if (options?.mainWorld) {
+            promise = (async () => {
+              const mainContext = await this._mainContext();
+              const adoptedScope = await this._page.delegate.adoptElementHandle(scope, mainContext);
+              try {
+                return await mainContext.evaluate(([injected, node, { callbackText: callbackText2, scope: handle2, taskData: taskData2 }]) => {
+                  const callback = injected.eval(callbackText2);
+                  return callback(injected, handle2, taskData2);
+                }, [
+                  await mainContext.injectedScript(),
+                  adoptedScope,
+                  { callbackText, scope: adoptedScope, taskData },
+                ]);
+              } finally {
+                adoptedScope.dispose();
+              }
+            })();
+          } else {
+            promise = scopeParentNode.evaluateInUtility(([injected, node, { callbackText: callbackText2, scope: handle2, taskData: taskData2 }]) => {
+              const callback = injected.eval(callbackText2);
+              return callback(injected, handle2, taskData2);
+            }, {
+              callbackText,
+              scope,
+              taskData
+            });
+          }
         } else {
           promise = scopeParentNode.evaluate((injected, { callbackText: callbackText2, scope: handle2, taskData: taskData2 }) => {
             const callback = injected.eval(callbackText2);
@@ -587,8 +776,26 @@ export function patchFrames(project) {
           });
         }
       } else {
-        promise = this._retryWithProgressIfNotConnected(progress, selector, options.strict, false, async (handle) => {
+
+        promise = this._retryWithProgressIfNotConnected(progress, selector, { ...options, performActionPreChecks: false }, async (handle) => {
           if (handle.parentNode.constructor.name == "ElementHandle") {
+            if (options?.mainWorld) {
+              const mainContext = await handle._frame._mainContext();
+              const adoptedHandle = await this._page.delegate.adoptElementHandle(handle, mainContext);
+              try {
+                return await mainContext.evaluate(([injected, node, { callbackText: callbackText2, handle: handle2, taskData: taskData2 }]) => {
+                  const callback = injected.eval(callbackText2);
+                  return callback(injected, handle2, taskData2);
+                }, [
+                  await mainContext.injectedScript(),
+                  adoptedHandle,
+                  { callbackText, handle: adoptedHandle, taskData },
+                ]);
+              } finally {
+                adoptedHandle.dispose();
+              }
+            }
+
             // Handling dispatch_event's in isolated and Main Contexts
             const [taskScope] = Object.values(taskData?.eventInit ?? {});
             if (taskScope) {

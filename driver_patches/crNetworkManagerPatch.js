@@ -46,13 +46,20 @@ export function patchCRNetworkManager(project) {
 
     // -- _updateProtocolRequestInterceptionForSession Method --
     const updateProtocolRequestInterceptionForSessionMethod = crNetworkManagerClass.getMethod("_updateProtocolRequestInterceptionForSession");
-    // Remove old loop and logic for localFrames and isolated world creation
+    // Replace cache disabled logic: keep cache enabled unless user has route interceptors
     updateProtocolRequestInterceptionForSessionMethod.getStatements().forEach((statement) => {
       const text = statement.getText();
-      // Check if the statement matches the patterns
       if (text.includes('const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: enabled });'))
-        statement.replaceWithText('const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: false });');
+        statement.replaceWithText('const userInterception = this._page ? this._page.needsRequestInterception() : false;\n    const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: userInterception });');
     });
+
+    // -- setRequestInterception Method --
+    // Always update cache state so user-added routes trigger cache bypass
+    const setRequestInterceptionMethod = crNetworkManagerClass.getMethod("setRequestInterception");
+    const setRequestInterceptionBody = setRequestInterceptionMethod.getBody();
+    setRequestInterceptionBody.addStatements(
+      `if (this._page)\n      await this._forEachSession(info => info.session.send('Network.setCacheDisabled', { cacheDisabled: this._page.needsRequestInterception() }));`
+    );
 
     // -- _handleRequestRedirect Method --
     //const handleRequestRedirectMethod = crNetworkManagerClass.getMethod("_handleRequestRedirect");
@@ -62,6 +69,23 @@ export function patchCRNetworkManager(project) {
     const crOnRequestMethod = crNetworkManagerClass.getMethod("_onRequest");
     const crOnRequestMethodBody = crOnRequestMethod.getBody();
     crOnRequestMethodBody.insertStatements(0, 'if (this._alreadyTrackedNetworkIds.has(requestWillBeSentEvent.initiator.requestId)) return;')
+
+    // Move `const isInterceptedOptionsPreflight` up before frame resolution so it's defined before first use
+    const isInterceptedOptionsPreflightIndex = crOnRequestMethodBody.getStatements().findIndex(s => s.getText().includes('const isInterceptedOptionsPreflight'));
+    if (isInterceptedOptionsPreflightIndex !== -1) {
+        const constText = crOnRequestMethodBody.getStatements()[isInterceptedOptionsPreflightIndex].getText();
+        crOnRequestMethodBody.getStatements()[isInterceptedOptionsPreflightIndex].remove();
+
+        // Insert before the `let frame` statement so it's defined early enough
+        const frameIndex = crOnRequestMethodBody.getStatements().findIndex(s => s.getText().startsWith('let frame'));
+        if (frameIndex !== -1) {
+            crOnRequestMethodBody.insertStatements(frameIndex, constText);
+            // OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
+            crOnRequestMethodBody.insertStatements(frameIndex + 1,
+                `if (isInterceptedOptionsPreflight && !(this._page || this._serviceWorker).needsRequestInterception()) {\n      requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent!.requestId });\n      return;\n    }`
+            );
+        }
+    }
 
     // -- _onRequestPaused Method --
     const onRequestPausedMethod = crNetworkManagerClass.getMethod("_onRequestPaused");

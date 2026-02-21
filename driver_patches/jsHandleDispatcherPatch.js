@@ -10,22 +10,22 @@ export function patchJSHandleDispatcher(project) {
     // ------- workerDispatcher Class -------
     const jsHandleDispatcherClass = jsHandleDispatcherSourceFile.getClass("JSHandleDispatcher");
 
-    // -- evaluateExpression Method --
-    const jsHandleDispatcherEvaluateExpressionMethod = jsHandleDispatcherClass.getMethod("evaluateExpression");
-    const jsHandleDispatcherEvaluateExpressionReturn = jsHandleDispatcherEvaluateExpressionMethod.getFirstDescendantByKind(SyntaxKind.ReturnStatement);
-    const jsHandleDispatcherEvaluateExpressionCall = jsHandleDispatcherEvaluateExpressionReturn.getFirstDescendantByKind(SyntaxKind.CallExpression).getFirstDescendantByKind(SyntaxKind.CallExpression);
-    // add isolatedContext Bool Param
-    if (jsHandleDispatcherEvaluateExpressionCall && jsHandleDispatcherEvaluateExpressionCall.getExpression().getText().includes("this._object.evaluateExpression")) {
-      // Add the new argument to the function call
-      jsHandleDispatcherEvaluateExpressionCall.addArgument("params.isolatedContext");
-    }
+    const patchCall = (methodName, calleeText) => {
+      const method = jsHandleDispatcherClass.getMethod(methodName);
+      if (!method)
+        return;
 
-    // -- evaluateExpressionHandle Method --
-    const jsHandleDispatcherEvaluateExpressionHandleMethod = jsHandleDispatcherClass.getMethod("evaluateExpressionHandle");
-    const jsHandleDispatcherEvaluateExpressionHandleCall = jsHandleDispatcherEvaluateExpressionHandleMethod.getFirstDescendantByKind(SyntaxKind.CallExpression);
-    // add isolatedContext Bool Param
-    if (jsHandleDispatcherEvaluateExpressionHandleCall && jsHandleDispatcherEvaluateExpressionHandleCall.getExpression().getText().includes("this._object.evaluateExpression")) {
-      // Add the new argument to the function call
-      jsHandleDispatcherEvaluateExpressionHandleCall.addArgument("params.isolatedContext");
-    }
+      const targetCalls = method
+        .getDescendantsOfKind(SyntaxKind.CallExpression)
+        .filter(call => call.getExpression().getText() === calleeText);
+
+      for (const call of targetCalls) {
+        const args = call.getArguments().map(a => a.getText());
+        if (!args.includes("params.isolatedContext"))
+          call.addArgument("params.isolatedContext");
+      }
+    };
+
+    patchCall("evaluateExpression", "this._object.evaluateExpression");
+    patchCall("evaluateExpressionHandle", "this._object.evaluateExpressionHandle");
 }

@@ -1,4 +1,5 @@
 export * from "./browserContextPatch.js";
+export * from "./browserContextDispatcherPatch.js";
 export * from "./chromiumPatch.js";
 export * from "./chromiumSwitchesPatch.js";
 export * from "./clockPatch.js";
@@ -15,7 +16,11 @@ export * from "./jsHandleDispatcherPatch.js";
 export * from "./pageBindingPatch.js";
 export * from "./pageDispatcherPatch.js";
 export * from "./pagePatch.js";
+export * from "./expectUtilsPatch.js";
 export * from "./utilityScriptSerializersPatch.js";
 export * from "./XPathSelectorEnginePatch.js";
 export * from "./serverRegistryIndex.js";
 export * from "./recorderPatch.js";
+export * from "./screenshotterPatch.js";
+export * from "./snapshotterPatch.js";
+export * from "./snapshotterInjectedPatch.js";

@@ -118,6 +118,25 @@ export function patchCRPage(project) {
     // -- _initialize Method --
     const initializeFrameSessionMethod = frameSessionClass.getMethod("_initialize");
     const initializeFrameSessionMethodBody = initializeFrameSessionMethod.getBody();
+
+    // patchright - Send Page.enable early so dialog events are not lost during popup initialization
+    initializeFrameSessionMethodBody.insertStatements(0, `
+      const pageEnablePromise = this._client.send('Page.enable');
+    `);
+
+    // patchright - Buffer dialog events for main frames so that dialogs on newly opened popups are never missed
+    const addBrowserListenersStatement = initializeFrameSessionMethodBody
+      .getStatements()
+      .find((statement) => statement.getText().includes("this._addBrowserListeners()"));
+    if (addBrowserListenersStatement) {
+      const addBrowserListenersIndex = addBrowserListenersStatement.getChildIndex();
+      initializeFrameSessionMethodBody.insertStatements(addBrowserListenersIndex, `
+        let bufferedDialogEvents: any[] | undefined = this._isMainFrame() ? [] : undefined;
+        if (bufferedDialogEvents)
+          this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.javascriptDialogOpening', (event: any) => bufferedDialogEvents ? bufferedDialogEvents.push(event) : undefined));
+      `);
+    }
+
     const promisesDeclaration = initializeFrameSessionMethod.getVariableDeclarationOrThrow("promises");
     // Find the initializer array
     const promisesInitializer = promisesDeclaration.getInitializerIfKindOrThrow(
@@ -132,6 +151,12 @@ export function patchCRPage(project) {
           .includes("this._client.send('Runtime.addBinding', { name: PageBinding.kPlaywrightBinding })")
       ) {
         promisesInitializer.removeElement(element);
+      }
+    });
+    // patchright - Replace Page.enable send in promises with the early-started promise
+    promisesInitializer.getElements().forEach((element) => {
+      if (element.getText().trim() === "this._client.send('Page.enable')") {
+        element.replaceWithText("pageEnablePromise");
       }
     });
     // Find the relevant element inside the array that we need to update
@@ -149,6 +174,27 @@ export function patchCRPage(project) {
         .getFirstDescendantByKindOrThrow(SyntaxKind.ArrowFunction)
         .getBody()
         .asKindOrThrow(SyntaxKind.Block);
+
+      // patchright - Replay buffered dialog events after _addRendererListeners()
+      const addRendererIfBlock = thenBlock
+        .getStatements()
+        .find((statement) =>
+          statement.isKind(SyntaxKind.IfStatement) &&
+          statement.getText().includes("this._addRendererListeners()")
+        );
+      if (addRendererIfBlock && addRendererIfBlock.isKind(SyntaxKind.IfStatement)) {
+        const thenStatement = addRendererIfBlock.getThenStatement();
+        if (thenStatement.isKind(SyntaxKind.Block)) {
+          thenStatement.addStatements(`
+            // patchright - Replay any dialog events that arrived before _addRendererListeners
+            const pendingDialogEvents = bufferedDialogEvents || [];
+            bufferedDialogEvents = undefined;
+            for (const event of pendingDialogEvents)
+              this._onDialog(event);
+          `);
+        }
+      }
+
       // Remove old loop and logic for localFrames and isolated world creation
       const statementsToRemove = thenBlock
         .getStatements()
@@ -259,29 +305,26 @@ export function patchCRPage(project) {
     });
     const initBindingMethod = frameSessionClass.getMethod("_initBinding");
     initBindingMethod.setBodyText(`
-      var result = await this._client._sendMayFail('Page.createIsolatedWorld', {
-        frameId: this._targetId, grantUniveralAccess: true, worldName: "utility"
-      });
-      if (!result) return
-      var isolatedContextId = result.executionContextId
-
-      var globalThis = await this._client._sendMayFail('Runtime.evaluate', {
-        expression: "globalThis",
-        serializationOptions: { serialization: "idOnly" }
-      });
-      if (!globalThis) return
-      var globalThisObjId = globalThis["result"]['objectId']
-      var mainContextId = parseInt(globalThisObjId.split('.')[1], 10);
-
-      await Promise.all([
-        this._client._sendMayFail('Runtime.addBinding', { name: binding.name }),
-        this._client._sendMayFail('Runtime.addBinding', { name: binding.name, executionContextId: mainContextId }),
-        this._client._sendMayFail('Runtime.addBinding', { name: binding.name, executionContextId: isolatedContextId }),
-        // this._client._sendMayFail("Runtime.evaluate", { expression: binding.source, contextId: mainContextId, awaitPromise: true })
-      ]);
+      // Remember this binding so future execution contexts get it in _onExecutionContextCreated.
       this._exposedBindingNames.push(binding.name);
       this._exposedBindingScripts.push(binding.source);
-      //this._client._sendMayFail('Runtime.runIfWaitingForDebugger')`);
+
+      // Install binding in all existing execution contexts.
+      const contextIds = Array.from(this._contextIdToContext.keys());
+      await Promise.all([
+        this._client._sendMayFail('Runtime.addBinding', { name: binding.name }),
+        ...contextIds.map(executionContextId => this._client._sendMayFail('Runtime.addBinding', { name: binding.name, executionContextId })),
+      ]);
+
+      // Evaluate binding bootstrap in all existing execution contexts.
+      for (const contextId of contextIds) {
+        this._client._sendMayFail('Runtime.evaluate', {
+          expression: binding.source,
+          contextId,
+          awaitPromise: true,
+        });
+      }
+    `);
       // initBindingMethod.setBodyText(`const [, response] = await Promise.all([
       //   this._client.send('Runtime.addBinding', { name: binding.name }),
       //   this._client.send('Page.addScriptToEvaluateOnNewDocument', { source: binding.source })
@@ -315,12 +358,44 @@ export function patchCRPage(project) {
       `this._client._sendMayFail('Page.waitForDebugger');`,
     );*/
 
-    // -- _onLifecycleEvent & _onFrameNavigated Method --
-    for (const methodName of ["_onLifecycleEvent", "_onFrameNavigated"]) {
-      const frameSessionMethod = frameSessionClass.getMethod(methodName);
+    // -- _onLifecycleEvent Method --
+    {
+      const frameSessionMethod = frameSessionClass.getMethod("_onLifecycleEvent");
+      const frameSessionMethodBody = frameSessionMethod.getBody();
+      frameSessionMethod.setIsAsync(true);
+      frameSessionMethodBody.addStatements(`// patchright: Only do full init script cleanup on load to reduce CDP round-trip pressure.
+      // Other lifecycle events just get a minimal runIfWaitingForDebugger call.
+      if (event.name !== "load") {
+        await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
+        return;
+      }
+      await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
+      var document = await this._client._sendMayFail("DOM.getDocument");
+      if (!document) return
+      var query = await this._client._sendMayFail("DOM.querySelectorAll", {
+        nodeId: document.root.nodeId,
+        selector: "[class=" + this._crPage.initScriptTag + "]"
+      });
+      if (!query) return
+      for (const nodeId of query.nodeIds) await this._client._sendMayFail("DOM.removeNode", { nodeId: nodeId });
+      await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
+      // ensuring execution context
+      try { await this._page.frameManager.frame(this._targetId)._context("utility") } catch { };`);
+    }
+
+    // -- _onFrameNavigated Method --
+    {
+      const frameSessionMethod = frameSessionClass.getMethod("_onFrameNavigated");
       const frameSessionMethodBody = frameSessionMethod.getBody();
       frameSessionMethod.setIsAsync(true);
       frameSessionMethodBody.addStatements(`await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
+      // patchright: For non-initial navigations, skip DOM cleanup since the document just changed
+      // and init script tags haven't been re-added yet. The _onLifecycleEvent("load") handler
+      // will perform cleanup after the page finishes loading.
+      if (!initial) {
+        try { await this._page.frameManager.frame(this._targetId)._context("utility") } catch { };
+        return;
+      }
       var document = await this._client._sendMayFail("DOM.getDocument");
       if (!document) return
       var query = await this._client._sendMayFail("DOM.querySelectorAll", {
@@ -365,6 +440,15 @@ export function patchCRPage(project) {
         statement.replaceWithText("let worldName = contextPayload.name;");
       else statement.remove();
     });
+    // Guard _contextCreated to only register known worlds ('main' or 'utility')
+    const contextCreatedIfStatement = onExecutionContextCreatedMethod
+      .getDescendantsOfKind(SyntaxKind.IfStatement)
+      .find((stmt) => stmt.getText().includes("if (worldName)") && stmt.getText().includes("_contextCreated"));
+    if (contextCreatedIfStatement) {
+      contextCreatedIfStatement.replaceWithText(
+        `if (worldName && (worldName === 'main' || worldName === 'utility'))\n      frame._contextCreated(worldName, context);`
+      );
+    }
     onExecutionContextCreatedMethodBody.addStatements(`
       for (const source of this._exposedBindingScripts) {
         this._client._sendMayFail("Runtime.evaluate", {

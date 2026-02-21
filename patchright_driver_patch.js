@@ -67,6 +67,11 @@ patches.patchCRPage(project);
 patches.patchPage(project);
 
 // ----------------------------
+// server/utils/expectUtils.ts
+// ----------------------------
+patches.patchExpectUtils(project);
+
+// ----------------------------
 // utils/isomorphic/utilityScriptSerializers.ts
 // ----------------------------
 patches.patchUtilityScriptSerializers(project);
@@ -89,6 +94,11 @@ patches.patchJavascript(project);
 // server/dispatchers/frameDispatcher.ts
 // ----------------------------
 patches.patchFrameDispatcher(project);
+
+// ----------------------------
+// server/dispatchers/browserContextDispatcher.ts
+// ----------------------------
+patches.patchBrowserContextDispatcher(project);
 
 // ----------------------------
 // server/dispatchers/jsHandleDispatcher.ts
@@ -114,6 +124,21 @@ patches.patchServerRegistryIndex(project);
 // recorder/src/recorder.tsx
 // ----------------------------
 patches.patchRecorder(project);
+
+// ----------------------------
+// server/screenshotter.ts
+// ----------------------------
+patches.patchScreenshotter(project);
+
+// ----------------------------
+// server/trace/recorder/snapshotter.ts
+// ----------------------------
+patches.patchSnapshotter(project);
+
+// ----------------------------
+// server/trace/recorder/snapshotterInjected.ts
+// ----------------------------
+patches.patchSnapshotterInjected(project);
 
 // Save the changes without reformatting
 project.saveSync();

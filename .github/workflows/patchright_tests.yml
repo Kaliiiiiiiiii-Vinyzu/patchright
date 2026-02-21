@@ -1,0 +1,79 @@
+name: Patchright Chromium Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  run-patchright-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Configure Fast APT Mirror
+        uses: vegardit/fast-apt-mirror.sh@v1
+
+      - name: Setup Node v24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Install Playwright Driver
+        run: |
+          response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
+          branch_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          git clone https://github.com/microsoft/playwright --branch "$branch_version"
+          cd playwright
+          npm ci
+
+      - name: Fetch Client Patches from patchright-nodejs
+        run: |
+          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
+          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
+          # Append driver patches (skip first 12 lines which are imports/setup already in nodejs patch)
+          tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
+          rm -rf patchright-nodejs
+
+      - name: Patch Playwright Driver
+        run: |
+          cd playwright
+          node "../patchright_nodejs_patch.js"
+
+      - name: Generate Channels
+        # Script exits 1 when files are modified, which is expected
+        continue-on-error: true
+        run: |
+          cd playwright
+          node utils/generate_channels.js
+
+      - name: Build Patchright Driver
+        run: |
+          cd playwright
+          npm run build
+
+      - name: Install Browser Dependencies
+        run: |
+          cd playwright
+          npx playwright install-deps
+
+      - name: Install Chromium Browser
+        run: |
+          cd playwright
+          npx playwright install chromium
+
+      - name: Modify Tests for Patchright
+        run: node modify_tests.js
+
+      - name: Run Page Tests
+        run: |
+          cd playwright
+          PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-page
