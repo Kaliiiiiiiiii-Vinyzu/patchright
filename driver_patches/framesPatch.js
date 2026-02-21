@@ -49,7 +49,7 @@ export function patchFrames(project) {
     evalOnSelectorMethod.setBodyText(`const handle = await this.selectors.query(selector, { strict }, scope);
         if (!handle)
           throw new Error('Failed to find element matching selector "' + selector + '"');
-        const result = await handle.evaluateExpression(expression, { isFunction }, arg, false);
+        const result = await handle.evaluateExpression(expression, { isFunction }, arg, true);
         handle.dispose();
         return result;`)
 
