@@ -183,7 +183,7 @@ export function patchFrames(project) {
           var executionContextId = iframeExecutionContextId
           var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
           this._iframeWorld = new FrameExecutionContext(crContext, this, world)
-          this._page.delegate._mainFrameSession._onExecutionContextCreated({
+          this._page.delegate._sessionForFrame(this)._onExecutionContextCreated({
             id: executionContextId, origin: world, name: world, auxData: { isDefault: this === this._page.mainFrame(), type: 'isolated', frameId: this._id }
           })
         } else if (this._mainWorld == undefined) {
@@ -200,7 +200,7 @@ export function patchFrames(project) {
 
           var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
           this._mainWorld = new FrameExecutionContext(crContext, this, world)
-          this._page.delegate._mainFrameSession._onExecutionContextCreated({
+          this._page.delegate._sessionForFrame(this)._onExecutionContextCreated({
             id: executionContextId, origin: world, name: world, auxData: { isDefault: this === this._page.mainFrame(), type: 'isolated', frameId: this._id }
           })
         }
@@ -217,7 +217,7 @@ export function patchFrames(project) {
         var executionContextId = result.executionContextId
         var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
         this._isolatedWorld = new FrameExecutionContext(crContext, this, world)
-        this._page.delegate._mainFrameSession._onExecutionContextCreated({
+        this._page.delegate._sessionForFrame(this)._onExecutionContextCreated({
           id: executionContextId, origin: world, name: world, auxData: { isDefault: this === this._page.mainFrame(), type: 'isolated', frameId: this._id }
         })
       }
@@ -241,7 +241,7 @@ export function patchFrames(project) {
           this._onClearLifecycle();
           this.waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
         });
-        const setContentPromise = this._page.delegate._mainFrameSession._client.send("Page.setDocumentContent", {
+        const setContentPromise = this._page.delegate._sessionForFrame(this)._client.send("Page.setDocumentContent", {
           frameId: this._id,
           html
         });
