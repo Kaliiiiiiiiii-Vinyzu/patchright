@@ -595,6 +595,11 @@ patches.patchSnapshotter(project);
 // ----------------------------
 patches.patchSnapshotterInjected(project);
 
+// ----------------------------
+// server/network.ts
+// ----------------------------
+patches.patchServerNetwork(project);
+
 // Save the changes without reformatting
 project.saveSync();
 
