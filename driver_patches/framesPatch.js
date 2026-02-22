@@ -165,80 +165,64 @@ export function patchFrames(project) {
     const contextMethod = frameClass.getMethod("_context");
     contextMethod.setIsAsync(true);
     contextMethod.setBodyText(`
+      /* await this._page.delegate._mainFrameSession._client._sendMayFail('DOM.enable');
+      var globalDoc = await this._page.delegate._mainFrameSession._client._sendMayFail('DOM.getFrameOwner', { frameId: this._id });
+      if (globalDoc) {
+        await this._page.delegate._mainFrameSession._client._sendMayFail("DOM.resolveNode", { nodeId: globalDoc.nodeId })
+      } */
+
       if (this.isDetached()) throw new Error('Frame was detached');
-
-      // patchright: helper to register a context without creating a duplicate via _onExecutionContextCreated
-      const registerContext = (session, executionContextId, context, worldName) => {
-        // Register in frame's context data (resolves waiters)
-        this._contextCreated(worldName, context);
-        // Register in session's context map
-        session._contextIdToContext.set(executionContextId, context);
-        // Install exposed bindings
-        for (const name of session._exposedBindingNames)
-          session._client._sendMayFail('Runtime.addBinding', { name, executionContextId });
-        for (const source of session._exposedBindingScripts)
-          session._client._sendMayFail('Runtime.evaluate', { expression: source, contextId: executionContextId, awaitPromise: true });
-      };
-
       try {
-        var session = this._page.delegate._sessionForFrame(this)
-        var client = session._client
-      } catch (e) {
-        var session = this._page.delegate._mainFrameSession
-        var client = session._client
-      }
+        var client = this._page.delegate._sessionForFrame(this)._client
+      } catch (e) { var client = this._page.delegate._mainFrameSession._client }
+      var iframeExecutionContextId = await this._getFrameMainFrameContextId(client)
 
       if (world == "main") {
-        var iframeExecutionContextId = await this._getFrameMainFrameContextId(client)
         // Iframe Only
         if (this != this._page.mainFrame() && iframeExecutionContextId && this._iframeWorld == undefined) {
           var executionContextId = iframeExecutionContextId
           var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
           this._iframeWorld = new FrameExecutionContext(crContext, this, world)
-          registerContext(session, executionContextId, this._iframeWorld, world)
+          this._page.delegate._sessionForFrame(this)._onExecutionContextCreated({
+            id: executionContextId, origin: world, name: world, auxData: { isDefault: this === this._page.mainFrame(), type: 'isolated', frameId: this._id }
+          })
         } else if (this._mainWorld == undefined) {
-          // patchright: use promise cache to prevent concurrent initialization races
-          if (!this._mainWorldInitPromise) {
-            this._mainWorldInitPromise = (async () => {
-              var globalThis = await client._sendMayFail('Runtime.evaluate', {
-                expression: "globalThis",
-                serializationOptions: { serialization: "idOnly" }
-              });
-              if (!globalThis) {
-                this._mainWorldInitPromise = undefined;
-                if (this.isDetached()) throw new Error('Frame was detached');
-                return
-              }
-              var globalThisObjId = globalThis["result"]['objectId']
-              var executionContextId = parseInt(globalThisObjId.split('.')[1], 10);
-              var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
-              this._mainWorld = new FrameExecutionContext(crContext, this, world)
-              registerContext(session, executionContextId, this._mainWorld, world)
-            })();
+          var globalThis = await client._sendMayFail('Runtime.evaluate', {
+            expression: "globalThis",
+            serializationOptions: { serialization: "idOnly" }
+          });
+          if (!globalThis) {
+            if (this.isDetached()) throw new Error('Frame was detached');
+            return
           }
-          await this._mainWorldInitPromise;
+          var globalThisObjId = globalThis["result"]['objectId']
+          var executionContextId = parseInt(globalThisObjId.split('.')[1], 10);
+
+          var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
+          this._mainWorld = new FrameExecutionContext(crContext, this, world)
+          this._page.delegate._sessionForFrame(this)._onExecutionContextCreated({
+            id: executionContextId, origin: world, name: world, auxData: { isDefault: this === this._page.mainFrame(), type: 'isolated', frameId: this._id }
+          })
         }
       }
-      if (world != "main") {
-        if (this._isolatedWorld == undefined) {
-          if (!this._isolatedWorldInitPromise) {
-            this._isolatedWorldInitPromise = (async () => {
-              var result = await client._sendMayFail('Page.createIsolatedWorld', {
-                frameId: this._id, grantUniveralAccess: true, worldName: "utility"
-              });
-              if (!result) {
-                this._isolatedWorldInitPromise = undefined;
-                if (this.isDetached()) throw new Error("Frame was detached");
-                return
-              }
-              var executionContextId = result.executionContextId
-              var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
-              this._isolatedWorld = new FrameExecutionContext(crContext, this, "utility")
-              registerContext(session, executionContextId, this._isolatedWorld, "utility")
-            })();
-          }
-          await this._isolatedWorldInitPromise;
+      if (world != "main" && this._isolatedWorld == undefined) {
+        world = "utility"
+        var result = await client._sendMayFail('Page.createIsolatedWorld', {
+          frameId: this._id, grantUniveralAccess: true, worldName: world
+        });
+        if (!result) {
+          if (this.isDetached()) throw new Error("Frame was detached");
+          return
         }
+        var executionContextId = result.executionContextId
+        var crContext = new CRExecutionContext(client, { id: executionContextId }, this._id)
+        this._isolatedWorld = new FrameExecutionContext(crContext, this, world)
+        this._page.delegate._sessionForFrame(this)._onExecutionContextCreated({
+          id: executionContextId, origin: world, name: world, auxData: { isDefault: this === this._page.mainFrame(), type: 'isolated', frameId: this._id }
+        })
+      }
+
+      if (world != "main") {
         return this._isolatedWorld;
       } else if (this != this._page.mainFrame() && this._iframeWorld) {
         return this._iframeWorld;
