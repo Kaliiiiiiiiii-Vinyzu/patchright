@@ -247,23 +247,10 @@ const FIXME_TARGETS = {
 	'tests/library/resource-timing.spec.ts': new Map([
 		['should work when serving from memory cache', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
 	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
+	'tests/library/tracing.spec.ts': new Map([
+		['should not flush console events', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
+		['should flush console events on tracing stop', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
+		['should not emit after w/o before', 'Console CDP domain is disabled in Patchright, so console.log never fires and the evaluate promise never resolves.'],
 	]),
 };
 
