@@ -3,9 +3,9 @@ name: Patchright Chromium Tests
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, dev-tests]
   pull_request:
-    branches: [main]
+    branches: [main, dev-tests]
 
 jobs:
   run-patchright-tests:
