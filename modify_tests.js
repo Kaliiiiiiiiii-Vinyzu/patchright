@@ -247,23 +247,8 @@ const FIXME_TARGETS = {
 	'tests/library/resource-timing.spec.ts': new Map([
 		['should work when serving from memory cache', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
 	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
-	]),
-	'': new Map([
-		['', ''],
+	'tests/library/chromium/oopif.spec.ts': new Map([
+		['should support addInitScript', 'Patchright init scripts use route-based injection which does not reach out-of-process iframes.'],
 	]),
 	'tests/library/tracing.spec.ts': new Map([
 		['should not flush console events', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
