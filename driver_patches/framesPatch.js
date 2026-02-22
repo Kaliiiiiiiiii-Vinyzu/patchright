@@ -683,19 +683,6 @@ export function patchFrames(project) {
           const handle = result[0];
           const handles = result[1];
 
-          if (options.expression === "to.have.property") {
-            const mainCtx = await this._mainContext();
-            const mainInjected = await mainCtx.injectedScript();
-            const adoptedHandle = handle._context === mainCtx ? handle : await this._page.delegate.adoptElementHandle(handle, mainCtx);
-            const adoptedHandles: any[] = [];
-            for (const h of handles) {
-              adoptedHandles.push(h._context === mainCtx ? h : await this._page.delegate.adoptElementHandle(h, mainCtx));
-            }
-            return await mainInjected.evaluate(async (injected, { handle: handle2, options: options2, handles: handles2 }) => {
-              return await injected.expect(handle2, options2, handles2);
-            }, { handle: adoptedHandle, options, handles: adoptedHandles });
-          }
-
           if (handle.parentNode.constructor.name == "ElementHandle") {
             return await handle.parentNode.evaluateInUtility(async ([injected, node, { handle, options, handles }]) => {
               return await injected.expect(handle, options, handles);
