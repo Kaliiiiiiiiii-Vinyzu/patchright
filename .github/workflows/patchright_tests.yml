@@ -76,9 +76,9 @@ jobs:
       - name: Run Page Tests
         run: |
           cd playwright
-          PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-page --max-failures=0 --reporter=dot --retries=3
+          xvfb-run -a PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-page --max-failures=0 --reporter=github --retries=3
 
       - name: Run Library Tests
         run: |
           cd playwright
-          PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-library --max-failures=0 --reporter=dot --retries=3
+          xvfb-run -a PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-library --max-failures=0 --reporter=github
