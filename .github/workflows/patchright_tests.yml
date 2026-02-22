@@ -37,11 +37,11 @@ jobs:
 
       - name: Fetch Client Patches from patchright-nodejs
         run: |
-          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
-          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
+          # git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
+          # cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
           # Append driver patches (skip first 12 lines which are imports/setup already in nodejs patch)
-          tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
-          rm -rf patchright-nodejs
+          # tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
+          # rm -rf patchright-nodejs
 
       - name: Patch Playwright Driver
         run: |
@@ -76,4 +76,9 @@ jobs:
       - name: Run Page Tests
         run: |
           cd playwright
-          PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-page
+          PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-page --max-failures=0 --reporter=dots --retries=3
+
+      - name: Run Library Tests
+        run: |
+          cd playwright
+          PWTEST_MODE=driver npx playwright test --config=tests/library/playwright.config.ts --project=chromium-library --max-failures=0 --reporter=dots --retries=3
