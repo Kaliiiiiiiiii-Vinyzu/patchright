@@ -594,11 +594,6 @@ patches.patchRecorder(project);
 patches.patchScreenshotter(project);
 
 // ----------------------------
-// server/network.ts
-// ----------------------------
-patches.patchNetwork(project);
-
-// ----------------------------
 // server/trace/recorder/snapshotter.ts
 // ----------------------------
 patches.patchSnapshotter(project);
