@@ -87,6 +87,16 @@ export function patchCRNetworkManager(project) {
         }
     }
 
+    // Guard null page delegate when resolving synthetic main-frame id.
+    crOnRequestMethodBody.getStatements().forEach((statement) => {
+      const text = statement.getText();
+      if (text.includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)")) {
+        statement.replaceWithText(
+          "const pageDelegate = this._page?.delegate;\\n    if (!frame && pageDelegate && requestWillBeSentEvent.frameId === pageDelegate._targetId) {\\n      frame = this._page.frameManager.frameAttached(requestWillBeSentEvent.frameId, null);\\n    }"
+        );
+      }
+    });
+
     // -- _onRequestPaused Method --
     const onRequestPausedMethod = crNetworkManagerClass.getMethod("_onRequestPaused");
     const onRequestPausedMethodBody = onRequestPausedMethod.getBody();
@@ -253,8 +263,12 @@ export function patchCRNetworkManager(project) {
     // Replace the body of the fulfill method with custom code
     fulfillMethod.setBodyText(`
       const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
-      var allInjections = [...this._page.delegate._mainFrameSession._evaluateOnNewDocumentScripts];
-      if (isTextHtml && allInjections.length) {
+      const pageDelegate = this._page?.delegate || null;
+      const initScriptTag = pageDelegate?.initScriptTag || "";
+      let allInjections = [];
+      if (pageDelegate)
+        allInjections = [...pageDelegate._mainFrameSession._evaluateOnNewDocumentScripts];
+      if (isTextHtml && allInjections.length && initScriptTag) {
         let useNonce = false;
         let scriptNonce = null;
         // Decode body if needed
@@ -328,7 +342,7 @@ export function patchCRNetworkManager(project) {
           let scriptId = crypto.randomBytes(22).toString("hex");
           let scriptSource = script.source || script;
           const nonceAttr = useNonce ? \`nonce="\${scriptNonce}"\` : '';
-          injectionHTML += \`<script class="\${this._page.delegate.initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
+          injectionHTML += \`<script class="\${initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
         });
 
         // Inject at END of <head>
