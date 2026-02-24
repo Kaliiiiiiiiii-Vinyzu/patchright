@@ -42,6 +42,11 @@ patches.patchCRDevTools(project);
 patches.patchCRNetworkManager(project);
 
 // ----------------------------
+// server/chromium/crCoverage.ts
+// ----------------------------
+patches.patchCRCoverage(project);
+
+// ----------------------------
 // server/chromium/crServiceWorker.ts
 // ----------------------------
 patches.patchCRServiceWorker(project);

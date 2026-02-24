@@ -4,6 +4,7 @@ export * from "./chromiumPatch.js";
 export * from "./chromiumSwitchesPatch.js";
 export * from "./clockPatch.js";
 export * from "./crBrowserPatch.js";
+export * from "./crCoveragePatch.js";
 export * from "./crDevToolsPatch.js";
 export * from "./crNetworkManagerPatch.js";
 export * from "./crPagePatch.js";
