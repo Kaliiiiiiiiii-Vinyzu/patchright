@@ -204,6 +204,8 @@ const FIXME_TARGETS = {
 	]),
 	'tests/library/chromium/chromium.spec.ts': new Map([
 		['serviceWorker(), and fromServiceWorker() work', 'Patchright routing/injection changes service-worker attribution semantics.'],
+		['should emit console messages from service worker', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
+		['should capture console.log from ServiceWorker start', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/page/selectors-css.spec.ts': new Map([
 		['should work with attribute selectors', 'Patchright selector engines are not fully atomic compared to upstream expectations.'],
@@ -228,18 +230,18 @@ const FIXME_TARGETS = {
 	'tests/library/browsercontext-reuse.spec.ts': new Map([
 		['should work with routeWebSocket', 'WebsocketRoutes do not work in Patchright.'],
 	]),
-	'tests/library/browsercontext-service-worker-policy': new Map([
-		['blocks service worker registration', 'console'],
+	'tests/library/browsercontext-service-worker-policy.spec.ts': new Map([
+		['blocks service worker registration', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/library/browsercontext-viewport-mobile.spec.ts': new Map([
-		['should fire orientationchange event', 'console'],
+		['should fire orientationchange event', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/library/browsertype-connect.spec.ts': new Map([
 		['should send extra headers with connect request', 'WebsocketRoutes do not work in Patchright.'],
 		['should send default User-Agent and X-Playwright-Browser headers with connect request', 'WebsocketRoutes do not work in Patchright.'],
 	]),
 	'tests/library/geolocation.spec.ts': new Map([
-		['watchPosition should be notified', 'console'],
+		['watchPosition should be notified', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/library/popup.spec.ts': new Map([
 		['should expose function from browser context', 'Patchright inject-route bootstrap can alter init-script timing/order.'],
