@@ -111,6 +111,25 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 		);
 	}
 
+	if (relativePath === 'tests/library/emulation-focus.spec.ts') {
+		// Patchright's modify_tests.js only adds isolatedContext=false to evaluate calls with
+		// inline arrow/function expressions. These tests pass function references (identifiers)
+		// like evaluate(clickCounter) which are skipped by the safety check. Add the main-world
+		// flag so window/self properties are visible to subsequent reads.
+
+		// Test: should not affect mouse event target page
+		replaceOnce(
+			"page.evaluate(clickCounter),\n    page2.evaluate(clickCounter),",
+			"page.evaluate(clickCounter, undefined, false),\n    page2.evaluate(clickCounter, undefined, false),"
+		);
+
+		// Test: should change focused iframe
+		replaceOnce(
+			"frame1.evaluate(logger),\n    frame2.evaluate(logger),",
+			"frame1.evaluate(logger, undefined, false),\n    frame2.evaluate(logger, undefined, false),"
+		);
+	}
+
 	if (relativePath === 'tests/library/hit-target.spec.ts') {
 		// Patchright runs $eval in the utility/isolated world. These tests set window properties
 		// from $eval callbacks, then read them from the main world via evaluate(..., false).
