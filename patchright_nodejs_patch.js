@@ -70,6 +70,23 @@ clientBrowserContextInstallInjectRouteMethod.setBodyText(`
   });
 `);
 
+// -- constructor: wrap auto-dismiss dialog in internal zone to avoid trace pollution --
+// Patchright always dispatches dialog events to the client (server patch). When no listener
+// is attached, the client auto-dismisses. Without this patch, the auto-dismiss creates a
+// "Dismiss dialog" trace entry. Wrapping in _wrapApiCall({ internal: true }) suppresses it.
+{
+  let sourceText = clientBrowserContextSourceFile.getFullText();
+  sourceText = sourceText.replace(
+    "dialog.accept({}).catch(() => {});",
+    "dialogObject._wrapApiCall(() => dialog.accept({}).catch(() => {}), { internal: true });"
+  );
+  sourceText = sourceText.replace(
+    "dialog.dismiss().catch(() => {});",
+    "dialogObject._wrapApiCall(() => dialog.dismiss().catch(() => {}), { internal: true });"
+  );
+  clientBrowserContextSourceFile.replaceWithText(sourceText);
+}
+
 // ----------------------------
 // client/page.ts
 // ----------------------------
@@ -467,7 +484,7 @@ const tracingSourceFile = project.addSourceFileAtPath(
 const clientTracingClass = tracingSourceFile.getClass("Tracing");
 // -- start Method --
 const tracingStartMethod = clientTracingClass.getMethod("start");
-tracingStartMethod.insertStatements(0, "if (typeof this._parent.installInjectRoute === 'function') await this._parent.installInjectRoute();");
+// Note: installInjectRoute is NOT called in tracing.start() to avoid polluting traces with "Continue request" entries
 
 // Here the Driver Patch will be added by fetching the code from the main Driver Repository (in the workflow).
 // The URL from which the code is added is: https://raw.githubusercontent.com/Kaliiiiiiiiii-Vinyzu/patchright/refs/heads/main/patchright_driver_patch.js
