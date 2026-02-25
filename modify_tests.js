@@ -307,6 +307,9 @@ const FIXME_TARGETS = {
 		['should flush console events on tracing stop', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should not emit after w/o before', 'Console CDP domain is disabled in Patchright, so console.log never fires and the evaluate promise never resolves.'],
 	]),
+	'tests/library/selectors-register.spec.ts': new Map([
+		['should work in main and isolated world', '$eval is deprecated by Playwright and not supported by Patchright.'],
+	])
 };
 
 const FIXME_TARGET_FILES = {
