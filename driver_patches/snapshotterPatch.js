@@ -1,5 +1,8 @@
 import { SyntaxKind } from "ts-morph";
 
+// ----------------------------
+// server/trace/recorder/snapshotter.ts
+// ----------------------------
 export function patchSnapshotter(project) {
   const sourceFile = project.addSourceFileAtPath(
     "packages/playwright-core/src/server/trace/recorder/snapshotter.ts"

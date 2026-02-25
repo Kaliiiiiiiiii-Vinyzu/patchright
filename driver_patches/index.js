@@ -25,3 +25,4 @@ export * from "./recorderPatch.js";
 export * from "./screenshotterPatch.js";
 export * from "./snapshotterPatch.js";
 export * from "./snapshotterInjectedPatch.js";
+export * from "./tracingPatch.js";

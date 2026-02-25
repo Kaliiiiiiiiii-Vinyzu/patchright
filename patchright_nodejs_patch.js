@@ -625,6 +625,11 @@ patches.patchSnapshotter(project);
 // ----------------------------
 patches.patchSnapshotterInjected(project);
 
+// ----------------------------
+// server/trace/recorder/tracing.ts
+// ----------------------------
+patches.patchTracing(project);
+
 // Save the changes without reformatting
 project.saveSync();
 
