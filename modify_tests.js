@@ -111,6 +111,40 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 		);
 	}
 
+	if (relativePath === 'tests/library/hit-target.spec.ts') {
+		// Patchright runs $eval in the utility/isolated world. These tests set window properties
+		// from $eval callbacks, then read them from the main world via evaluate(..., false).
+		// Convert $eval('button', ...) to evaluate(() => { querySelector + ... }, undefined, false).
+
+		// Test: should block click when mousedown fails
+		replaceOnce(
+			"await page.$eval('button', button => {\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  });",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  }, undefined, false);"
+		);
+
+		// Test: should click when element detaches in mousedown
+		replaceOnce(
+			"await page.$eval('button', button => {\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  });",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  }, undefined, false);"
+		);
+
+		// Test: should block all events when hit target is wrong and element detaches
+		replaceOnce(
+			"await page.$eval('button', button => {\n    const blocker = document.createElement('div');",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    const blocker = document.createElement('div');"
+		);
+		replaceOnce(
+			"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  });",
+			"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  }, undefined, false);"
+		);
+
+		// Test: should not block programmatic events
+		replaceOnce(
+			"await page.$eval('button', button => {\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  });",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  }, undefined, false);"
+		);
+	}
+
 	if (relativePath === 'tests/library/popup.spec.ts') {
 		replaceOnce(
 			"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, false);",
