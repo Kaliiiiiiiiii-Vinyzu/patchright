@@ -13,6 +13,6 @@ export function patchTracing(project) {
   for (const funcName of funcNamesToPatch) {
     const func = sourceFile.getFunction(funcName);
     const body = func.getBody();
-    body.insertStatements(0, `// Filter out Route.continue calls - they are internal routing operations\nif (metadata.type === 'Route' && metadata.method === 'continue')\n  return null;`);
+    body.insertStatements(0, `// Filter out internal fallback Route.continue calls from Patchright's inject routing\nif (metadata.type === 'Route' && metadata.method === 'continue' && metadata.params?.isFallback)\n  return null;`);
   }
 }
