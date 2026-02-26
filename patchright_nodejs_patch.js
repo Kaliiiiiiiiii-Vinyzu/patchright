@@ -70,6 +70,23 @@ clientBrowserContextInstallInjectRouteMethod.setBodyText(`
   });
 `);
 
+// -- constructor: wrap auto-dismiss dialog in internal zone to avoid trace pollution --
+// Patchright always dispatches dialog events to the client (server patch). When no listener
+// is attached, the client auto-dismisses. Without this patch, the auto-dismiss creates a
+// "Dismiss dialog" trace entry. Wrapping in _wrapApiCall({ internal: true }) suppresses it.
+{
+  let sourceText = clientBrowserContextSourceFile.getFullText();
+  sourceText = sourceText.replace(
+    "dialog.accept({}).catch(() => {});",
+    "dialogObject._wrapApiCall(() => dialog.accept({}).catch(() => {}), { internal: true });"
+  );
+  sourceText = sourceText.replace(
+    "dialog.dismiss().catch(() => {});",
+    "dialogObject._wrapApiCall(() => dialog.dismiss().catch(() => {}), { internal: true });"
+  );
+  clientBrowserContextSourceFile.replaceWithText(sourceText);
+}
+
 // ----------------------------
 // client/page.ts
 // ----------------------------
@@ -497,6 +514,11 @@ patches.patchCRDevTools(project);
 patches.patchCRNetworkManager(project);
 
 // ----------------------------
+// server/chromium/crCoverage.ts
+// ----------------------------
+patches.patchCRCoverage(project);
+
+// ----------------------------
 // server/chromium/crServiceWorker.ts
 // ----------------------------
 patches.patchCRServiceWorker(project);
@@ -596,9 +618,9 @@ patches.patchSnapshotter(project);
 patches.patchSnapshotterInjected(project);
 
 // ----------------------------
-// server/network.ts
+// server/trace/recorder/tracing.ts
 // ----------------------------
-patches.patchServerNetwork(project);
+patches.patchTracing(project);
 
 // Save the changes without reformatting
 project.saveSync();

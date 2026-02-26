@@ -111,6 +111,59 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 		);
 	}
 
+	if (relativePath === 'tests/library/emulation-focus.spec.ts') {
+		// Patchright's modify_tests.js only adds isolatedContext=false to evaluate calls with
+		// inline arrow/function expressions. These tests pass function references (identifiers)
+		// like evaluate(clickCounter) which are skipped by the safety check. Add the main-world
+		// flag so window/self properties are visible to subsequent reads.
+
+		// Test: should not affect mouse event target page
+		replaceOnce(
+			"page.evaluate(clickCounter),\n    page2.evaluate(clickCounter),",
+			"page.evaluate(clickCounter, undefined, false),\n    page2.evaluate(clickCounter, undefined, false),"
+		);
+
+		// Test: should change focused iframe
+		replaceOnce(
+			"frame1.evaluate(logger),\n    frame2.evaluate(logger),",
+			"frame1.evaluate(logger, undefined, false),\n    frame2.evaluate(logger, undefined, false),"
+		);
+	}
+
+	if (relativePath === 'tests/library/hit-target.spec.ts') {
+		// Patchright runs $eval in the utility/isolated world. These tests set window properties
+		// from $eval callbacks, then read them from the main world via evaluate(..., false).
+		// Convert $eval('button', ...) to evaluate(() => { querySelector + ... }, undefined, false).
+
+		// Test: should block click when mousedown fails
+		replaceOnce(
+			"await page.$eval('button', button => {\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  });",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  }, undefined, false);"
+		);
+
+		// Test: should click when element detaches in mousedown
+		replaceOnce(
+			"await page.$eval('button', button => {\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  });",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  }, undefined, false);"
+		);
+
+		// Test: should block all events when hit target is wrong and element detaches
+		replaceOnce(
+			"await page.$eval('button', button => {\n    const blocker = document.createElement('div');",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    const blocker = document.createElement('div');"
+		);
+		replaceOnce(
+			"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  });",
+			"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  }, undefined, false);"
+		);
+
+		// Test: should not block programmatic events
+		replaceOnce(
+			"await page.$eval('button', button => {\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  });",
+			"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  }, undefined, false);"
+		);
+	}
+
 	if (relativePath === 'tests/library/popup.spec.ts') {
 		replaceOnce(
 			"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, false);",
@@ -204,6 +257,8 @@ const FIXME_TARGETS = {
 	]),
 	'tests/library/chromium/chromium.spec.ts': new Map([
 		['serviceWorker(), and fromServiceWorker() work', 'Patchright routing/injection changes service-worker attribution semantics.'],
+		['should emit console messages from service worker', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
+		['should capture console.log from ServiceWorker start', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/page/selectors-css.spec.ts': new Map([
 		['should work with attribute selectors', 'Patchright selector engines are not fully atomic compared to upstream expectations.'],
@@ -228,18 +283,18 @@ const FIXME_TARGETS = {
 	'tests/library/browsercontext-reuse.spec.ts': new Map([
 		['should work with routeWebSocket', 'WebsocketRoutes do not work in Patchright.'],
 	]),
-	'tests/library/browsercontext-service-worker-policy': new Map([
-		['blocks service worker registration', 'console'],
+	'tests/library/browsercontext-service-worker-policy.spec.ts': new Map([
+		['blocks service worker registration', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/library/browsercontext-viewport-mobile.spec.ts': new Map([
-		['should fire orientationchange event', 'console'],
+		['should fire orientationchange event', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/library/browsertype-connect.spec.ts': new Map([
 		['should send extra headers with connect request', 'WebsocketRoutes do not work in Patchright.'],
 		['should send default User-Agent and X-Playwright-Browser headers with connect request', 'WebsocketRoutes do not work in Patchright.'],
 	]),
 	'tests/library/geolocation.spec.ts': new Map([
-		['watchPosition should be notified', 'console'],
+		['watchPosition should be notified', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
 	'tests/library/popup.spec.ts': new Map([
 		['should expose function from browser context', 'Patchright inject-route bootstrap can alter init-script timing/order.'],
@@ -247,14 +302,18 @@ const FIXME_TARGETS = {
 	'tests/library/resource-timing.spec.ts': new Map([
 		['should work when serving from memory cache', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
 	]),
-	'tests/library/chromium/oopif.spec.ts': new Map([
-		['should support addInitScript', 'Patchright init scripts use route-based injection which does not reach out-of-process iframes.'],
-	]),
 	'tests/library/tracing.spec.ts': new Map([
 		['should not flush console events', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should flush console events on tracing stop', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should not emit after w/o before', 'Console CDP domain is disabled in Patchright, so console.log never fires and the evaluate promise never resolves.'],
+		['should use the correct title for event driven callbacks ', "Patchright disables Continue Request Traces for Internal purposes."]
 	]),
+	'tests/library/selectors-register.spec.ts': new Map([
+		['should work in main and isolated world', '$eval is deprecated by Playwright and not supported by Patchright.'],
+	]),
+	'tests/library/chromium/oopif.spec.ts': new Map([
+		['should be able to click in iframe', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.']
+	])
 };
 
 const FIXME_TARGET_FILES = {

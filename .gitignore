@@ -166,3 +166,4 @@ cython_debug/
 node_modules/
 package-lock.json
 playwright/
+test_output.txt

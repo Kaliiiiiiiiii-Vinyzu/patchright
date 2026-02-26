@@ -42,6 +42,11 @@ patches.patchCRDevTools(project);
 patches.patchCRNetworkManager(project);
 
 // ----------------------------
+// server/chromium/crCoverage.ts
+// ----------------------------
+patches.patchCRCoverage(project);
+
+// ----------------------------
 // server/chromium/crServiceWorker.ts
 // ----------------------------
 patches.patchCRServiceWorker(project);
@@ -139,6 +144,11 @@ patches.patchSnapshotter(project);
 // server/trace/recorder/snapshotterInjected.ts
 // ----------------------------
 patches.patchSnapshotterInjected(project);
+
+// ----------------------------
+// server/trace/recorder/tracing.ts
+// ----------------------------
+patches.patchTracing(project);
 
 // Save the changes without reformatting
 project.saveSync();
