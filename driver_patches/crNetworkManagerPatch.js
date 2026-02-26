@@ -50,7 +50,7 @@ export function patchCRNetworkManager(project) {
     updateProtocolRequestInterceptionForSessionMethod.getStatements().forEach((statement) => {
       const text = statement.getText();
       if (text.includes('const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: enabled });'))
-        statement.replaceWithText('const userInterception = this._page ? this._page.needsRequestInterception() : false;\n    const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: userInterception });');
+        statement.replaceWithText('const hasHarRecorders = !!this._page?.browserContext?._harRecorders?.size;\n    const userInterception = this._page ? this._page.needsRequestInterception() : false;\n    const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: userInterception || hasHarRecorders });');
     });
 
     // -- setRequestInterception Method --
