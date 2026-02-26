@@ -13,6 +13,7 @@ export * from "./frameDispatcherPatch.js";
 export * from "./frameSelectorsPatch.js";
 export * from "./framesPatch.js";
 export * from "./javascriptPatch.js";
+export * from "./networkPatch.js";
 export * from "./jsHandleDispatcherPatch.js";
 export * from "./pageBindingPatch.js";
 export * from "./pageDispatcherPatch.js";

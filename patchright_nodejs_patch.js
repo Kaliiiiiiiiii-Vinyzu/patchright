@@ -576,6 +576,11 @@ patches.patchClock(project);
 patches.patchJavascript(project);
 
 // ----------------------------
+// client/network.ts
+// ----------------------------
+patches.patchNetwork(project);
+
+// ----------------------------
 // server/dispatchers/frameDispatcher.ts
 // ----------------------------
 patches.patchFrameDispatcher(project);
