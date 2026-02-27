@@ -227,7 +227,9 @@ export function patchCRPage(project) {
             for (const binding of this._crPage._browserContext._pageBindings.values())
               frame.evaluateExpression(binding.source).catch(e => {});
             for (const source of this._crPage._browserContext.initScripts)
-              frame.evaluateExpression(source).catch(e => {});
+              frame.evaluateExpression(source.source).catch(e => {});
+            for (const source of this._crPage._page.initScripts)
+              frame.evaluateExpression(source.source).catch(e => {});
           }
         `);
       }
