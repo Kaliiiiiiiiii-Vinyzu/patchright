@@ -384,10 +384,6 @@ locatorEvaluateMethod.addParameter({
   initializer: "true",
 });
 locatorEvaluateMethod.setBodyText(`
-  if (typeof options === 'boolean') {
-    isolatedContext = options;
-    options = undefined;
-  }
   return await this._withElement(
     async (h) =>
       parseResult(
@@ -412,10 +408,6 @@ locatorEvaluateHandleMethod.addParameter({
   initializer: "true",
 });
 locatorEvaluateHandleMethod.setBodyText(`
-  if (typeof options === 'boolean') {
-    isolatedContext = options;
-    options = undefined;
-  }
   return await this._withElement(
     async (h) =>
       JSHandle.from(
