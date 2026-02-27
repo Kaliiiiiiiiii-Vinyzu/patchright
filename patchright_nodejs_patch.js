@@ -134,24 +134,6 @@ clientPageInstallInjectRouteMethod.setBodyText(`
   });
 `);
 
-// -- waitForResponse Method --
-const clientPageWaitForResponseMethod = clientPageClass.getMethod("waitForResponse");
-clientPageWaitForResponseMethod.setBodyText(`
-  const predicate = async (response: Response) => {
-    if (isString(urlOrPredicate) || isRegExp(urlOrPredicate)) {
-      if (urlMatches(this._browserContext._options.baseURL, response.url(), urlOrPredicate))
-        return true;
-      if ((response.url() === 'http://patchright-init-script-inject.internal/' || response.url() === 'https://patchright-init-script-inject.internal/') && response.request().isNavigationRequest())
-        return true;
-      return false;
-    }
-    return await urlOrPredicate(response);
-  };
-  const trimmedUrl = trimUrl(urlOrPredicate);
-  const logLine = trimmedUrl ? 'waiting for response ' + trimmedUrl : undefined;
-  return await this._waitForEvent(Events.Page.Response, { predicate, timeout: options.timeout }, logLine);
-`);
-
 // -- evaluate Method --
 const clientPageEvaluateMethod = clientPageClass.getMethod("evaluate");
 clientPageEvaluateMethod.addParameter({
@@ -652,11 +634,6 @@ patches.patchSnapshotterInjected(project);
 // server/trace/recorder/tracing.ts
 // ----------------------------
 patches.patchTracing(project);
-
-// ----------------------------
-// server/trace/viewer/traceViewer.ts
-// ----------------------------
-patches.patchTraceViewer(project);
 
 // Save the changes without reformatting
 project.saveSync();

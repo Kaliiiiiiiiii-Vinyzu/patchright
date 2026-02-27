@@ -150,11 +150,6 @@ patches.patchSnapshotterInjected(project);
 // ----------------------------
 patches.patchTracing(project);
 
-// ----------------------------
-// server/trace/viewer/traceViewer.ts
-// ----------------------------
-patches.patchTraceViewer(project);
-
 // Save the changes without reformatting
 project.saveSync();
 
