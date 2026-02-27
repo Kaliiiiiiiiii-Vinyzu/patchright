@@ -7,6 +7,15 @@ export function patchJavascript(project) {
     // Add source file to the project
     const javascriptSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/javascript.ts");
 
+    {
+        let sourceText = javascriptSourceFile.getFullText();
+        sourceText = sourceText.replace(
+            "return new (module.exports.UtilityScript())(globalThis, ${isUnderTest()});",
+            "const utilityScript = new (module.exports.UtilityScript())(globalThis, ${isUnderTest()});\n        (globalThis as any).builtins = utilityScript.builtins;\n        return utilityScript;"
+        );
+        javascriptSourceFile.replaceWithText(sourceText);
+    }
+
     // -------JSHandle Class -------
     const jsHandleClass = javascriptSourceFile.getClass("JSHandle");
 
