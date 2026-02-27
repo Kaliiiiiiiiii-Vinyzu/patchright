@@ -59,4 +59,18 @@ export function patchJavascript(project) {
       if (context !== this._context && context.adoptIfNeeded(this) === null)
         context = this._context;
     `);
+
+        // ------- ExecutionContext Class -------
+        // -- utilityScript Method --
+        const executionContextClass = javascriptSourceFile.getClass("ExecutionContext");
+        const utilityScriptMethod = executionContextClass.getMethod("utilityScript");
+        const utilityScriptMethodBody = utilityScriptMethod.getBody();
+        utilityScriptMethodBody.replaceWithText(
+            utilityScriptMethodBody
+                .getText()
+                .replace(
+                    "return new (module.exports.UtilityScript())(globalThis, ${isUnderTest()});",
+                    "const utilityScript = new (module.exports.UtilityScript())(globalThis, ${isUnderTest()});\n        globalThis.builtins = utilityScript.builtins;\n        return utilityScript;",
+                ),
+        );
 }

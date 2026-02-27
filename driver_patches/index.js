@@ -27,3 +27,4 @@ export * from "./screenshotterPatch.js";
 export * from "./snapshotterPatch.js";
 export * from "./snapshotterInjectedPatch.js";
 export * from "./tracingPatch.js";
+export * from "./traceViewerPatch.js";
