@@ -469,6 +469,18 @@ export function patchFrames(project) {
       return value;
     `);
 
+    // -- nonStallingEvaluateInExistingContext Method --
+    const nonStallingEvalMethod = frameClass.getMethod("nonStallingEvaluateInExistingContext");
+    nonStallingEvalMethod.setBodyText(`
+      return this.raceAgainstEvaluationStallingEvents(async () => {
+        try { await this._context(world); } catch {}
+        const context = this._contextData.get(world)?.context;
+        if (!context)
+          throw new Error('Frame does not yet have the execution context');
+        return context.evaluateExpression(expression, { isFunction: false });
+      });
+    `);
+
     // -- queryCount Method --
     const queryCountMethod = frameClass.getMethod("queryCount");
     queryCountMethod.setBodyText(`

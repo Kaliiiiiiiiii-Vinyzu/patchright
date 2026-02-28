@@ -115,6 +115,16 @@ patches.patchServerRegistryIndex(project);
 // ----------------------------
 patches.patchRecorder(project);
 
+// ----------------------------
+// server/trace/recorder/snapshotter.ts
+// ----------------------------
+patches.patchSnapshotter(project);
+
+// ----------------------------
+// server/trace/recorder/snapshotterInjected.ts
+// ----------------------------
+patches.patchSnapshotterInjected(project);
+
 // Save the changes without reformatting
 project.saveSync();
 
