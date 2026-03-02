@@ -74,6 +74,14 @@ export function patchCRPage(project) {
     // Insert a new line of code before the first statement
     addInitScriptMethodBody.insertStatements(0, "this._page.initScripts.push(initScript);",);
 
+    // -- normalize detached-frame wording for _sessionForFrame only --
+    // Keep frame.frameElement() wording untouched because tests assert it separately.
+    const sessionForFrameMethod = crPageClass.getMethod("_sessionForFrame");
+    if (sessionForFrameMethod) {
+      const methodText = sessionForFrameMethod.getText();
+      sessionForFrameMethod.replaceWithText(methodText.replace('Frame has been detached.', 'Frame was detached'));
+    }
+
 
     // ------- FrameSession Class -------
     const frameSessionClass = crPageSourceFile.getClass("FrameSession");
