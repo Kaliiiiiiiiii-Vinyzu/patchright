@@ -74,8 +74,7 @@ export function patchCRPage(project) {
     // Insert a new line of code before the first statement
     addInitScriptMethodBody.insertStatements(0, "this._page.initScripts.push(initScript);",);
 
-    // -- normalize detached-frame wording for _sessionForFrame only --
-    // Keep frame.frameElement() wording untouched because tests assert it separately.
+    // -- _sessionForFrame Method --
     const sessionForFrameMethod = crPageClass.getMethod("_sessionForFrame");
     if (sessionForFrameMethod) {
       const methodText = sessionForFrameMethod.getText();
@@ -126,13 +125,9 @@ export function patchCRPage(project) {
     // -- _initialize Method --
     const initializeFrameSessionMethod = frameSessionClass.getMethod("_initialize");
     const initializeFrameSessionMethodBody = initializeFrameSessionMethod.getBody();
+    initializeFrameSessionMethodBody.insertStatements(0, `const pageEnablePromise = this._client.send('Page.enable');`);
 
-    // patchright - Send Page.enable early so dialog events are not lost during popup initialization
-    initializeFrameSessionMethodBody.insertStatements(0, `
-      const pageEnablePromise = this._client.send('Page.enable');
-    `);
-
-    // patchright - Buffer dialog events for main frames so that dialogs on newly opened popups are never missed
+    // Buffer dialog events for main frames so that dialogs on newly opened popups are never missed
     const addBrowserListenersStatement = initializeFrameSessionMethodBody
       .getStatements()
       .find((statement) => statement.getText().includes("this._addBrowserListeners()"));

@@ -4,9 +4,11 @@ import { SyntaxKind } from "ts-morph";
 // server/trace/recorder/snapshotter.ts
 // ----------------------------
 export function patchSnapshotter(project) {
+  // Add source file to the project
   const sourceFile = project.addSourceFileAtPath(
     "packages/playwright-core/src/server/trace/recorder/snapshotter.ts"
   );
+  // ------- Snapshotter Class -------
   const snapshotterClass = sourceFile.getClass("Snapshotter");
 
   // Replace _initScript type, add _initScriptSource, remove InitScript import

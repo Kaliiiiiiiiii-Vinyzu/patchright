@@ -251,38 +251,6 @@ export function patchFrames(project) {
       });
     `);
 
-    /*
-    // -- retryWithProgressAndTimeouts Method --
-    const retryWithProgressAndTimeoutsMethod = frameClass.getMethod("retryWithProgressAndTimeouts");
-    retryWithProgressAndTimeoutsMethod.setBodyText(`
-      const continuePolling = Symbol('continuePolling');
-      timeouts = [0, ...timeouts];
-      let timeoutIndex = 0;
-      while (true) {
-        const timeout = timeouts[Math.min(timeoutIndex++, timeouts.length - 1)];
-        if (timeout) {
-          // Make sure we react immediately upon page close or frame detach.
-          // We need this to show expected/received values in time.
-          const actionPromise = new Promise(f => setTimeout(f, timeout));
-          await progress.race(LongStandingScope.raceMultiple([
-            this._page.openScope,
-            this._detachedScope,
-          ], actionPromise));
-        }
-        try {
-          const result = await action(continuePolling);
-          if (result === continuePolling)
-            continue;
-          return result as R;
-        } catch (e) {
-          if (this.isNonRetriableError(e))
-            throw e;
-          continue;
-        }
-      }
-    `);
-    */
-
     // -- _retryWithProgressIfNotConnected Method --
     const retryWithProgressIfNotConnectedMethod = frameClass.getMethod("_retryWithProgressIfNotConnected");
     retryWithProgressIfNotConnectedMethod.addParameter({
@@ -350,7 +318,7 @@ export function patchFrames(project) {
       }
       (progress as any).__patchrightInitialScope = (resolved as any).scope;
 
-      // patchright - Save parsed selector before _customFindElementsByParsed mutates it via parts.shift()
+      // Save parsed selector before _customFindElementsByParsed mutates it via parts.shift()
       const parsedSnapshot = (options as any).__patchrightWaitForSelector ? JSON.parse(JSON.stringify(resolved.info.parsed)) : null;
       let currentScopingElements;
       try {
@@ -364,7 +332,7 @@ export function patchFrames(project) {
       if (currentScopingElements.length == 0) {
         if ((options as any).__testHookNoAutoWaiting || (options as any).noAutoWaiting)
           throw new dom.NonRecoverableDOMError('Element(s) not found');
-        // patchright - CDP-based element search is non-atomic and can temporarily miss
+        // CDP-based element search is non-atomic and can temporarily miss
         // elements during DOM mutations. Verify element absence in-page before reporting
         // "not found" to the waitForSelector callback.
         if (parsedSnapshot && (returnAction === 'returnOnNotResolved' || returnAction === 'returnAll')) {
@@ -416,10 +384,7 @@ export function patchFrames(project) {
         } else if (result === 'internal:continuepolling') {
           return continuePolling;
         }
-        // patchright - CDP-based element search may return stale handles during DOM mutations.
-        // When waitForSelector reports hidden success (result === null with a found element),
-        // the handle may be stale (disconnected). Verify in-page that no matching visible
-        // elements actually exist before accepting the result.
+        // Verify no visible elements exist before accepting a null result to avoid stale CDP handles during mutations.
         if (parsedSnapshot && result === null && ((options as any).state === 'hidden' || (options as any).state === 'detached')) {
           const visibleCount = await resolved.injected.evaluate((injected, { parsed }) => {
             const elements = injected.querySelectorAll(parsed, document);
@@ -569,8 +534,6 @@ export function patchFrames(project) {
     `);
 
     // -- _onDetached Method --
-    // Destroy custom context fields (_mainWorld, _iframeWorld, _isolatedWorld) on frame detach.
-    // Without this, pending evaluations on these contexts never get cancelled, causing timeouts.
     const onDetachedMethod = frameClass.getMethod("_onDetached");
     onDetachedMethod.setBodyText(`
       this._stopNetworkIdleTimer();

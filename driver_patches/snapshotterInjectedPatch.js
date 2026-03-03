@@ -1,10 +1,12 @@
 import { SyntaxKind } from "ts-morph";
 
 export function patchSnapshotterInjected(project) {
+  // Add source file to the project
   const sourceFile = project.addSourceFileAtPath(
     "packages/playwright-core/src/server/trace/recorder/snapshotterInjected.ts"
   );
 
+  // ------- frameSnapshotStreamer Function -------
   const func = sourceFile.getFunction("frameSnapshotStreamer");
   const streamerClass = func.getDescendantsOfKind(SyntaxKind.ClassDeclaration)
     .find(c => c.getName() === "Streamer");

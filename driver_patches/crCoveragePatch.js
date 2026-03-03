@@ -5,7 +5,9 @@ export function patchCRCoverage(project) {
     // Add source file to the project
     const crCoverageSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/chromium/crCoverage.ts");
 
-    const patchStartMethod = (coverageClass) => {
+    for (const coverageClassName of ["JSCoverage", "CSSCoverage"]) {
+      const coverageClass = crCoverageSourceFile.getClass(coverageClassName);
+      // -- start Method --
       const startMethod = coverageClass.getMethod("start");
       startMethod.getBody().getStatements().forEach((statement) => {
         const text = statement.getText();
@@ -19,27 +21,18 @@ export function patchCRCoverage(project) {
           );
         }
       });
-    };
 
-    const ensureFrameNavigatedMethod = (coverageClass, clearMethodName) => {
-      if (coverageClass.getMethod("_onFrameNavigated"))
-        return;
-      coverageClass.addMethod({
-        name: "_onFrameNavigated",
-        parameters: [{ name: "event", type: "Protocol.Page.frameNavigatedPayload" }],
-        statements: [
-          "if (event.frame.parentId)",
-          "  return;",
-          `this.${clearMethodName}();`,
-        ],
-      });
-    };
-
-    const jsCoverageClass = crCoverageSourceFile.getClass("JSCoverage");
-    patchStartMethod(jsCoverageClass);
-    ensureFrameNavigatedMethod(jsCoverageClass, "_onExecutionContextsCleared");
-
-    const cssCoverageClass = crCoverageSourceFile.getClass("CSSCoverage");
-    patchStartMethod(cssCoverageClass);
-    ensureFrameNavigatedMethod(cssCoverageClass, "_onExecutionContextsCleared");
+      // -- _onFrameNavigated Method --
+      if (!coverageClass.getMethod("_onFrameNavigated")) {
+        coverageClass.addMethod({
+          name: "_onFrameNavigated",
+          parameters: [{ name: "event", type: "Protocol.Page.frameNavigatedPayload" }],
+          statements: [
+            "if (event.frame.parentId)",
+            "  return;",
+            `this.${clearMethodName}();`,
+          ],
+        });
+      }
+    }
 }

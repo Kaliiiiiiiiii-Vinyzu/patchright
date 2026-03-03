@@ -4,11 +4,14 @@ import { SyntaxKind } from "ts-morph";
 // client/network.ts
 // ----------------------------
 export function patchNetwork(project) {
+  // Add source file to the project
   const sourceFile = project.addSourceFileAtPath(
     "packages/playwright-core/src/client/network.ts"
   );
 
+  // ------- Request Class -------
   const requestClass = sourceFile.getClass("Request");
+  // -- allHeaders Method --
   const allHeadersMethod = requestClass.getMethod("allHeaders");
   allHeadersMethod.setBodyText(`
     const headers = await this._actualHeaders();
