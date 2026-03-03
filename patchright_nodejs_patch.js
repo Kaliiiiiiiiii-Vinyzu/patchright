@@ -275,6 +275,21 @@ const frameSourceFile = project.addSourceFileAtPath(
 );
 // ------- Frame Class -------
 const clientFrameClass = frameSourceFile.getClass("Frame");
+// -- waitForURL Method --
+const frameWaitForURLMethod = clientFrameClass.getMethod("waitForURL");
+frameWaitForURLMethod.setBodyText(`
+  if (urlMatches(this._page?.context()._options.baseURL, this.url(), url))
+    return await this.waitForLoadState(options.waitUntil, options);
+  try {
+    await this.waitForNavigation({ url, ...options });
+  } catch (error) {
+    if (urlMatches(this._page?.context()._options.baseURL, this.url(), url)) {
+      await this.waitForLoadState(options.waitUntil, options);
+      return;
+    }
+    throw error;
+  }
+`);
 // -- evaluate Method --
 const frameEvaluateMethod = clientFrameClass.getMethod("evaluate");
 frameEvaluateMethod.addParameter({
