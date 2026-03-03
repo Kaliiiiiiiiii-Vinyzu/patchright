@@ -30,7 +30,7 @@ export function patchCRCoverage(project) {
           statements: [
             "if (event.frame.parentId)",
             "  return;",
-            `this.${clearMethodName}();`,
+            `this._onExecutionContextsCleared();`,
           ],
         });
       }
