@@ -74,6 +74,45 @@ export function patchFrames(project) {
       }
     `);
 
+    // -- dispatchEvent Method --
+    const dispatchEventMethod = frameClass.getMethod("dispatchEvent");
+    dispatchEventMethod.setBodyText(`
+      const eventInitHandles = [];
+      const visited = new WeakSet();
+      const collectHandles = (value: any) => {
+        if (!value || typeof value !== "object")
+          return;
+        if (value instanceof js.JSHandle) {
+          eventInitHandles.push(value);
+          return;
+        }
+        if (visited.has(value))
+          return;
+        visited.add(value);
+        if (Array.isArray(value)) {
+          for (const item of value)
+            collectHandles(item);
+          return;
+        }
+        for (const propertyValue of Object.values(value))
+          collectHandles(propertyValue);
+      };
+      collectHandles(eventInit);
+      const canRetryInSecondaryContext = !selector.includes("internal:control=enter-frame") && eventInitHandles.length > 0 && eventInitHandles.every(handle => handle._context?.frame === this);
+      const callback = (injectedScript, element, data) => {
+        injectedScript.dispatchEvent(element, data.type, data.eventInit);
+      };
+      try {
+        await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { mainWorld: true, ...options }, scope);
+      } catch (e) {
+        if ("JSHandles can be evaluated only in the context they were created!" === e.message && canRetryInSecondaryContext) {
+          await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+          return;
+        }
+        throw e;
+      }
+    `);
+
     // -- querySelectorAll Method --
     const querySelectorAllMethod = frameClass.getMethod("querySelectorAll");
     querySelectorAllMethod.setBodyText(`
