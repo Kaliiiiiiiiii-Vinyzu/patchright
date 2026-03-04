@@ -226,7 +226,7 @@ export function patchCRPage(project) {
         elseStatement.insertStatements(0, `
         const localFrames = this._isMainFrame() ? this._page.frames() : [this._page.frameManager.frame(this._targetId)!];
           for (const frame of localFrames) {
-            this._page.frameManager.frame(frame._id)._context("utility");
+            this._page.frameManager.frame(frame._id)._context("utility").catch(() => {});
             for (const binding of this._crPage._browserContext._pageBindings.values())
               frame.evaluateExpression(binding.source).catch(e => {});
             for (const source of this._crPage._browserContext.initScripts)
