@@ -96,6 +96,11 @@ patches.patchClock(project);
 patches.patchJavascript(project);
 
 // ----------------------------
+// server/launchApp.ts
+// ----------------------------
+patches.patchLaunchApp(project);
+
+// ----------------------------
 // server/dispatchers/frameDispatcher.ts
 // ----------------------------
 patches.patchFrameDispatcher(project);
