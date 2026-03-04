@@ -98,7 +98,9 @@ export function patchFrames(project) {
           collectHandles(propertyValue);
       };
       collectHandles(eventInit);
-      const canRetryInSecondaryContext = !selector.includes("internal:control=enter-frame") && eventInitHandles.length > 0 && eventInitHandles.every(handle => handle._context?.frame === this);
+      const allHandlesFromSameFrame = eventInitHandles.length > 0 && eventInitHandles.every(handle => handle._context?.frame === eventInitHandles[0]?._context?.frame);
+      const handlesFrame = eventInitHandles[0]?._context?.frame;
+      const canRetryInSecondaryContext = allHandlesFromSameFrame && (handlesFrame !== this || !selector.includes("internal:control=enter-frame"));
       const callback = (injectedScript, element, data) => {
         injectedScript.dispatchEvent(element, data.type, data.eventInit);
       };
