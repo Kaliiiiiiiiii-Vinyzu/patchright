@@ -1,4 +1,4 @@
-import { Project, SyntaxKind } from "ts-morph";
+import { SyntaxKind } from "ts-morph";
 
 // ----------------------------
 // server/screenshotter.ts
