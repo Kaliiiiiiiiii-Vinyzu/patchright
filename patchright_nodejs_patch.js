@@ -68,6 +68,7 @@ clientBrowserContextInstallInjectRouteMethod.setBodyText(`
         await route.fallback();
     }
   });
+  this.routeInjecting = true;
 `);
 
 // -- constructor: wrap auto-dismiss dialog in internal zone to avoid trace pollution --
@@ -132,6 +133,7 @@ clientPageInstallInjectRouteMethod.setBodyText(`
       await route.fallback();
     }
   });
+  this.routeInjecting = true;
 `);
 
 // -- evaluate Method --
