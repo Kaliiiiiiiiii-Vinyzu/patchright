@@ -55,7 +55,7 @@
 
 
 <a href="https://www.thordata.com/?ls=github&lk=Vinyzu" target="_blank">
-  <img alt="Thordata Banner" src="https://github.com/user-attachments/assets/58460bff-b057-4191-88da-80e0bd29b745" width="90%" />
+  <img alt="Thordata Banner" src="https://github.com/user-attachments/assets/58460bff-b057-4191-88da-80e0bd29b745" width="80%" />
 </a>
 
 [Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) - Your First Plan is on Us! 💰Get 100% of your first residential proxy purchase back as wallet balance, up to $900.
@@ -65,6 +65,25 @@
 🚀 Optimized for web scraping, ad verification & automation workflows
 
 🔥Don’t wait — this is your **best time to start** with [Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) and experience the safest, fastest proxy network.
+
+---
+<img width="500" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
+
+Running Patchright? Your proxy layer can decide whether you scale — or get blocked.
+
+#### [ProxyEmpire](https://proxyempire.io/?ref=patchright&utm_source=patchright) delivers:
+
+- 🌍 30M+ Residential IPs (170+ countries)
+- 📱 4G/5G Mobile Proxies
+- 🔄 Rotating & Sticky Sessions + Unlimited Concurrent Sessions
+- 🎯 Precise geo-targeting
+- HTTP, HTTPS & SOCKS5 Support
+
+<sup>Built for scraping, automation, and high-stealth workflows.</sup>
+
+<span style="font-size:3em;"> 🔥 **Special Offer**: Use code **Patchright30** to get **30% recurring discount** (not just first month). </span>
+
+<sup>Upgrade your proxies. Reduce bans. Scale properly.</sup>
 
 </details>
 
