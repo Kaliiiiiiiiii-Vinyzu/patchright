@@ -78,11 +78,40 @@ export function patchPage(project) {
 
         static async dispatch(page: Page, payload: string, context: dom.FrameExecutionContext) {
           const { name, seq, serializedArgs } = JSON.parse(payload) as BindingPayload;
+
+          const deliver = async (deliverPayload: any) => {
+            let deliveryError: any;
+            try {
+              await context.evaluate(deliverBindingResult, deliverPayload);
+              return;
+            } catch (e) {
+              deliveryError = e;
+            }
+            const frame = context.frame;
+            if (!frame) {
+              debugLogger.log('error', deliveryError);
+              return;
+            }
+            const mainContext = await frame._mainContext().catch(() => null);
+            const utilityContext = await frame._utilityContext().catch(() => null);
+            for (const ctx of [mainContext, utilityContext]) {
+              if (!ctx || ctx === context)
+                continue;
+              try {
+                await ctx.evaluate(deliverBindingResult, deliverPayload);
+                return;
+              } catch {
+              }
+            }
+            debugLogger.log('error', deliveryError);
+          };
+
           try {
             assert(context.world);
             const binding = page.getBinding(name);
             if (!binding)
               throw new Error(\`Function "\${name}" is not exposed\`);
+
             let result: any;
             if (binding.needsHandle) {
               const handle = await context.evaluateHandle(takeBindingHandle, { name, seq }).catch(e => null);
@@ -93,9 +122,9 @@ export function patchPage(project) {
               const args = serializedArgs!.map(a => parseEvaluationResultValue(a));
               result = await binding.playwrightFunction({ frame: context.frame, page, context: page._browserContext }, ...args);
             }
-            context.evaluate(deliverBindingResult, { name, seq, result }).catch(e => debugLogger.log('error', e));
+            await deliver({ name, seq, result });
           } catch (error) {
-            context.evaluate(deliverBindingResult, { name, seq, error }).catch(e => debugLogger.log('error', e));
+            await deliver({ name, seq, error });
           }
         }
       }

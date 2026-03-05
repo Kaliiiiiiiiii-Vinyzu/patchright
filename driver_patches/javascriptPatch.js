@@ -31,6 +31,8 @@ export function patchJavascript(project) {
               else if (isolatedContext === false) context = await frame._mainContext();
           }
       }
+      if (context !== this._context && context.adoptIfNeeded(this) === null)
+        context = this._context;
     `);
 
     // -- evaluateExpressionHandle Method --
@@ -54,5 +56,7 @@ export function patchJavascript(project) {
               else if (isolatedContext === false) context = await frame._mainContext();
           }
       }
+      if (context !== this._context && context.adoptIfNeeded(this) === null)
+        context = this._context;
     `);
 }
