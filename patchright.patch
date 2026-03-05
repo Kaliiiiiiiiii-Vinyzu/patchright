@@ -889,7 +889,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const options = this._crPage._browserContext._options;
        if (options.bypassCSP)
          promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
-@@ -526,14 +558,24 @@
+@@ -526,8 +558,11 @@
        promises.push(this._updateGeolocation(true));
        promises.push(this._updateEmulateMedia());
        promises.push(this._updateFileChooserInterception(true));
@@ -903,21 +903,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        if (videoOptions)
          promises.push(this._crPage._page.screencast.startVideoRecording(videoOptions));
      }
--    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-+    
-+            if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
-+              promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-+          
-     promises.push(this._firstNonInitialNavigationCommittedPromise);
-     await Promise.all(promises);
-+
-+            if (this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size)
-+              await this._client.send('Runtime.runIfWaitingForDebugger');
-+          
-   }
- 
-   dispose() {
-@@ -557,13 +599,31 @@
+@@ -557,13 +592,31 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -950,7 +936,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -610,12 +670,31 @@
+@@ -610,12 +663,31 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -983,7 +969,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -652,19 +731,31 @@
+@@ -652,19 +724,31 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -1022,7 +1008,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -680,7 +771,7 @@
+@@ -680,7 +764,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -1031,7 +1017,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -722,12 +813,22 @@
+@@ -722,12 +806,22 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -1055,7 +1041,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -1002,20 +1103,11 @@
+@@ -1002,20 +1096,11 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -1078,7 +1064,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async exposePlaywrightBinding() {
-@@ -1126,6 +1218,45 @@
+@@ -1126,6 +1211,45 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
@@ -4733,7 +4719,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const options = this._crPage._browserContext._options;
        if (options.bypassCSP)
          promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
-@@ -526,14 +558,24 @@
+@@ -526,8 +558,11 @@
        promises.push(this._updateGeolocation(true));
        promises.push(this._updateEmulateMedia());
        promises.push(this._updateFileChooserInterception(true));
@@ -4747,21 +4733,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        if (videoOptions)
          promises.push(this._crPage._page.screencast.startVideoRecording(videoOptions));
      }
--    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-+    
-+            if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
-+              promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-+          
-     promises.push(this._firstNonInitialNavigationCommittedPromise);
-     await Promise.all(promises);
-+
-+            if (this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size)
-+              await this._client.send('Runtime.runIfWaitingForDebugger');
-+          
-   }
- 
-   dispose() {
-@@ -557,13 +599,31 @@
+@@ -557,13 +592,31 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -4794,7 +4766,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -610,12 +670,31 @@
+@@ -610,12 +663,31 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -4827,7 +4799,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -652,19 +731,31 @@
+@@ -652,19 +724,31 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -4866,7 +4838,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -680,7 +771,7 @@
+@@ -680,7 +764,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -4875,7 +4847,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -722,12 +813,22 @@
+@@ -722,12 +806,22 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -4899,7 +4871,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -1002,20 +1103,11 @@
+@@ -1002,20 +1096,11 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -4922,7 +4894,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async exposePlaywrightBinding() {
-@@ -1126,6 +1218,45 @@
+@@ -1126,6 +1211,45 @@
        throw new Error(dom.kUnableToAdoptErrorMessage);
      return createHandle(to, result.object).asElement()!;
    }
