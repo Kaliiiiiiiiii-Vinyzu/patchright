@@ -348,7 +348,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +            method: overrides.method,
 +            postData: overrides.postData ? overrides.postData.toString('base64') : undefined,
 +          };
-+          if (overrides.url && (overrides.url.startsWith("http://patchright-init-script-inject.internal") || overrides.url.startsWith("https://patchright-init-script-inject.internal")) {
++          if (overrides.url && (overrides.url.startsWith("http://patchright-init-script-inject.internal") || overrides.url.startsWith("https://patchright-init-script-inject.internal"))) {
 +            await catchDisallowedErrors(async () => {
 +              this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
 +              this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
@@ -4178,7 +4178,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +            method: overrides.method,
 +            postData: overrides.postData ? overrides.postData.toString('base64') : undefined,
 +          };
-+          if (overrides.url && (overrides.url.startsWith("http://patchright-init-script-inject.internal") || overrides.url.startsWith("https://patchright-init-script-inject.internal")) {
++          if (overrides.url && (overrides.url.startsWith("http://patchright-init-script-inject.internal") || overrides.url.startsWith("https://patchright-init-script-inject.internal"))) {
 +            await catchDisallowedErrors(async () => {
 +              this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
 +              this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
