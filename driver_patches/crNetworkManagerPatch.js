@@ -448,7 +448,7 @@ export function patchCRNetworkManager(project) {
         method: overrides.method,
         postData: overrides.postData ? overrides.postData.toString('base64') : undefined,
       };
-      if (overrides.url && (overrides.url === 'http://patchright-init-script-inject.internal/' || overrides.url === 'https://patchright-init-script-inject.internal/')) {
+      if (overrides.url && (overrides.url.startsWith("http://patchright-init-script-inject.internal") || overrides.url.startsWith("https://patchright-init-script-inject.internal")) {
         await catchDisallowedErrors(async () => {
           this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
           this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
