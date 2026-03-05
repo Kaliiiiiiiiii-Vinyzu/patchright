@@ -97,6 +97,8 @@ jobs:
           utils/build/build-playwright-driver.sh
 
       - name: Publish Patchright Driver
+        env:
+          PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
           chmod +x utils/release_driver.sh
           utils/release_driver.sh
