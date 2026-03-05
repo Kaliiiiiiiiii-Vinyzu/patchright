@@ -33,7 +33,7 @@
         <img src="https://img.shields.io/badge/Package-.Net-seagreen">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs/releases">
-        <img alt=".Net Downloads" src="https://img.shields.io/nuget/dt/Patchright?label=.Net Downloads">
+        <img alt=".Net Downloads" src="https://img.shields.io/nuget/dt/Patchright?label=.Net%20Downloads">
     </a>
 <br/>
     <img src="https://img.shields.io/github/actions/workflow/status/Kaliiiiiiiiii-Vinyzu/patchright/patchright_tests.yml?label=Patchright%20Driver%20Tests">
