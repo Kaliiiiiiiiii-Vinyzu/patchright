@@ -1,6 +1,12 @@
 name: Patchright Chromium Tests
 
 on:
+  workflow_call:
+    inputs:
+      playwright_version:
+        description: 'Playwright version (tag) to test against. If empty, latest release is used.'
+        required: false
+        type: string
   workflow_dispatch:
   push:
     branches: [main, dev-tests]
@@ -29,19 +35,22 @@ jobs:
 
       - name: Install Playwright Driver
         run: |
-          response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
-          branch_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          branch_version="${{ github.event.inputs.playwright_version }}"
+          if [ -z "$branch_version" ]; then
+            response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
+            branch_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          fi
           git clone https://github.com/microsoft/playwright --branch "$branch_version"
           cd playwright
           npm ci
 
       - name: Fetch Client Patches from patchright-nodejs
         run: |
-          # git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
-          # cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
+          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
+          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
           # Append driver patches (skip first 12 lines which are imports/setup already in nodejs patch)
-          # tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
-          # rm -rf patchright-nodejs
+          tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
+          rm -rf patchright-nodejs
 
       - name: Patch Playwright Driver
         run: |
