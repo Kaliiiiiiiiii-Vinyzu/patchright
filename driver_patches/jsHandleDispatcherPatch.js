@@ -12,19 +12,24 @@ export function patchJSHandleDispatcher(project) {
 
     // -- evaluateExpression Method --
     const jsHandleDispatcherEvaluateExpressionMethod = jsHandleDispatcherClass.getMethod("evaluateExpression");
-    const jsHandleDispatcherEvaluateExpressionReturn = jsHandleDispatcherEvaluateExpressionMethod.getFirstDescendantByKind(SyntaxKind.ReturnStatement);
-    const jsHandleDispatcherEvaluateExpressionCall = jsHandleDispatcherEvaluateExpressionReturn.getFirstDescendantByKind(SyntaxKind.CallExpression).getFirstDescendantByKind(SyntaxKind.CallExpression);
+    // Find the call to this._object.evaluateExpression within the method body
+    const jsHandleDispatcherEvaluateExpressionCall = jsHandleDispatcherEvaluateExpressionMethod
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find(call => call.getExpression().getText().includes("this._object.evaluateExpression"));
     // add isolatedContext Bool Param
-    if (jsHandleDispatcherEvaluateExpressionCall && jsHandleDispatcherEvaluateExpressionCall.getExpression().getText().includes("this._object.evaluateExpression")) {
+    if (jsHandleDispatcherEvaluateExpressionCall) {
       // Add the new argument to the function call
       jsHandleDispatcherEvaluateExpressionCall.addArgument("params.isolatedContext");
     }
 
     // -- evaluateExpressionHandle Method --
     const jsHandleDispatcherEvaluateExpressionHandleMethod = jsHandleDispatcherClass.getMethod("evaluateExpressionHandle");
-    const jsHandleDispatcherEvaluateExpressionHandleCall = jsHandleDispatcherEvaluateExpressionHandleMethod.getFirstDescendantByKind(SyntaxKind.CallExpression);
+    // Find the call to this._object.evaluateExpressionHandle within the method body
+    const jsHandleDispatcherEvaluateExpressionHandleCall = jsHandleDispatcherEvaluateExpressionHandleMethod
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find(call => call.getExpression().getText().includes("this._object.evaluateExpressionHandle"));
     // add isolatedContext Bool Param
-    if (jsHandleDispatcherEvaluateExpressionHandleCall && jsHandleDispatcherEvaluateExpressionHandleCall.getExpression().getText().includes("this._object.evaluateExpression")) {
+    if (jsHandleDispatcherEvaluateExpressionHandleCall) {
       // Add the new argument to the function call
       jsHandleDispatcherEvaluateExpressionHandleCall.addArgument("params.isolatedContext");
     }
