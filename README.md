@@ -10,9 +10,6 @@
     <a>
         <img src="https://img.shields.io/badge/Based%20on-Playwright-goldenrod">
     </a>
-    <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python/actions/workflows/patchright_tests.yml">
-        <img src="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python/actions/workflows/patchright_tests.yml/badge.svg">
-    </a>
     <a>
         <img src="https://img.shields.io/badge/Driver-Patched-blue">
     </a>
@@ -36,8 +33,12 @@
         <img src="https://img.shields.io/badge/Package-.Net-seagreen">
     </a>
     <a href="https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs/releases">
-        <img alt=".Net Downloads" src="https://img.shields.io/nuget/dt/Patchright?label=Downloads">
+        <img alt=".Net Downloads" src="https://img.shields.io/nuget/dt/Patchright?label=.Net Downloads">
     </a>
+<br/>
+    <img src="https://img.shields.io/github/actions/workflow/status/Kaliiiiiiiiii-Vinyzu/patchright/patchright_tests.yml?label=Patchright%20Driver%20Tests">
+    <img src="https://img.shields.io/github/actions/workflow/status/Kaliiiiiiiiii-Vinyzu/patchright-python/patchright_tests.yml?label=Patchright%20Python%20Tests">
+    <img src="https://img.shields.io/github/actions/workflow/status/DevEnterpriseSoftware/patchright-dotnet/patchright_test.yml?label=Patchright%20.Net%20Tests">
 </p>
 
 #### Patchright is a patched and undetected version of the Playwright Testing and Automation Framework. </br> It can be used as a drop-in replacement for Playwright.
