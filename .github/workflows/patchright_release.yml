@@ -17,8 +17,40 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
+  check-release-version:
+    name: Check Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.version_check.outputs.proceed }}
+      playwright_version: ${{ steps.version_check.outputs.playwright_version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Check Release Version
+        id: version_check
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "proceed=true" >>$GITHUB_OUTPUT
+            echo "playwright_version=${{ github.event.inputs.version }}" >>$GITHUB_OUTPUT
+            echo "playwright_version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          else
+            chmod +x utils/release_version_check.sh
+            utils/release_version_check.sh
+          fi
+
+  run-patchright-tests:
+    name: Run Patchright Tests
+    needs: check-release-version
+    if: needs.check-release-version.outputs.proceed == 'true'
+    uses: ./.github/workflows/patchright_tests.yml
+    with:
+      playwright_version: ${{ needs.check-release-version.outputs.playwright_version }}
+
   patchright-workflow:
     name: "Patchright Release: Install, Patch, Build and Publish Patchright Driver"
+    needs: [check-release-version, run-patchright-tests]
+    if: needs.check-release-version.outputs.proceed == 'true' && needs.run-patchright-tests.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -38,32 +70,18 @@ jobs:
       - name: Install NPM Dependencies
         run: npm install
 
-      - name: Check Release Version
-        id: version_check
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "proceed=true" >>$GITHUB_OUTPUT
-            echo "playwright_version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-          else
-            chmod +x utils/release_version_check.sh
-            utils/release_version_check.sh
-          fi
-
       - name: Install Playwright Driver
-        if: steps.version_check.outputs.proceed == 'true'
         run: |
-          git clone https://github.com/microsoft/playwright --branch ${{ env.playwright_version }}
+          git clone https://github.com/microsoft/playwright --branch ${{ needs.check-release-version.outputs.playwright_version }}
           cd playwright
           npm ci
 
       - name: Patch Playwright Driver
-        if: steps.version_check.outputs.proceed == 'true'
         run: |
           cd playwright
           node "../patchright_driver_patch.js"
 
       - name: Generate Playwright Channels
-        if: steps.version_check.outputs.proceed == 'true'
         # Ignore the error exit code, as the script exits 1 when a file is modified.
         continue-on-error: true
         run: |
@@ -71,7 +89,6 @@ jobs:
           node utils/generate_channels.js
 
       - name: Build Patchright Driver
-        if: steps.version_check.outputs.proceed == 'true'
         run: |
           cd playwright
           npm run build
@@ -80,7 +97,6 @@ jobs:
           utils/build/build-playwright-driver.sh
 
       - name: Publish Patchright Driver
-        if: steps.version_check.outputs.proceed == 'true'
         run: |
           chmod +x utils/release_driver.sh
           utils/release_driver.sh

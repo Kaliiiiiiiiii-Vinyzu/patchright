@@ -21,4 +21,16 @@ export function patchChromium(project) {
         ifStatement.replaceWithText("chromeArguments.push('--headless=new');");
       }
     });
+
+    const unsafeSwiftshaderArgsStatements = innerDefaultArgsMethod
+      .getDescendantsOfKind(SyntaxKind.ExpressionStatement)
+      .filter((statement) => {
+        const text = statement.getText();
+        return text.includes("chromeArguments.push('--enable-unsafe-swiftshader')")
+          || text.includes('chromeArguments.push("--enable-unsafe-swiftshader")');
+      });
+
+    unsafeSwiftshaderArgsStatements.forEach((statement) => statement.remove());
+
+    
 }

@@ -48,8 +48,10 @@ echo "Latest release of the Patchright Driver: $patchright_version"
 if version_is_behind "$patchright_version" "$playwright_version"; then
   echo "$REPO is behind microsoft/playwright. Building & Patching..."
   echo "proceed=true" >>$GITHUB_OUTPUT
+  echo "playwright_version=$playwright_version" >>$GITHUB_OUTPUT
   echo "playwright_version=$playwright_version" >>$GITHUB_ENV
 else
   echo "$REPO is up to date with microsoft/playwright."
   echo "proceed=false" >>$GITHUB_OUTPUT
+  echo "playwright_version=$playwright_version" >>$GITHUB_OUTPUT
 fi
