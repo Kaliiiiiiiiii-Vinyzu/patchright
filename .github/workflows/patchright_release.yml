@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Playwright Version'
+        description: 'Playwright Version (e.g. v1.58.0)'
         default: ''
   # running every hour
   schedule:
