@@ -46,13 +46,20 @@ export function patchCRNetworkManager(project) {
 
     // -- _updateProtocolRequestInterceptionForSession Method --
     const updateProtocolRequestInterceptionForSessionMethod = crNetworkManagerClass.getMethod("_updateProtocolRequestInterceptionForSession");
-    // Remove old loop and logic for localFrames and isolated world creation
+    // Replace cache disabled logic: keep cache enabled unless user has route interceptors
     updateProtocolRequestInterceptionForSessionMethod.getStatements().forEach((statement) => {
       const text = statement.getText();
-      // Check if the statement matches the patterns
       if (text.includes('const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: enabled });'))
-        statement.replaceWithText('const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: false });');
+        statement.replaceWithText('const hasHarRecorders = !!this._page?.browserContext?._harRecorders?.size;\n    const userInterception = this._page ? this._page.needsRequestInterception() : false;\n    const cachePromise = info.session.send(\'Network.setCacheDisabled\', { cacheDisabled: userInterception || hasHarRecorders });');
     });
+
+    // -- setRequestInterception Method --
+    // Always update cache state so user-added routes trigger cache bypass
+    const setRequestInterceptionMethod = crNetworkManagerClass.getMethod("setRequestInterception");
+    const setRequestInterceptionBody = setRequestInterceptionMethod.getBody();
+    setRequestInterceptionBody.addStatements(
+      `if (this._page)\n      await this._forEachSession(info => info.session.send('Network.setCacheDisabled', { cacheDisabled: this._page.needsRequestInterception() }));`
+    );
 
     // -- _handleRequestRedirect Method --
     //const handleRequestRedirectMethod = crNetworkManagerClass.getMethod("_handleRequestRedirect");
@@ -62,6 +69,33 @@ export function patchCRNetworkManager(project) {
     const crOnRequestMethod = crNetworkManagerClass.getMethod("_onRequest");
     const crOnRequestMethodBody = crOnRequestMethod.getBody();
     crOnRequestMethodBody.insertStatements(0, 'if (this._alreadyTrackedNetworkIds.has(requestWillBeSentEvent.initiator.requestId)) return;')
+
+    // Move `const isInterceptedOptionsPreflight` up before frame resolution so it's defined before first use
+    const isInterceptedOptionsPreflightIndex = crOnRequestMethodBody.getStatements().findIndex(s => s.getText().includes('const isInterceptedOptionsPreflight'));
+    if (isInterceptedOptionsPreflightIndex !== -1) {
+        const constText = crOnRequestMethodBody.getStatements()[isInterceptedOptionsPreflightIndex].getText();
+        crOnRequestMethodBody.getStatements()[isInterceptedOptionsPreflightIndex].remove();
+
+        // Insert before the `let frame` statement so it's defined early enough
+        const frameIndex = crOnRequestMethodBody.getStatements().findIndex(s => s.getText().startsWith('let frame'));
+        if (frameIndex !== -1) {
+            crOnRequestMethodBody.insertStatements(frameIndex, constText);
+            // OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
+            crOnRequestMethodBody.insertStatements(frameIndex + 1,
+                `if (isInterceptedOptionsPreflight && !(this._page || this._serviceWorker).needsRequestInterception()) {\n      requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent!.requestId });\n      return;\n    }`
+            );
+        }
+    }
+
+    // Guard null page delegate when resolving synthetic main-frame id.
+    crOnRequestMethodBody.getStatements().forEach((statement) => {
+      const text = statement.getText();
+      if (text.includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)")) {
+        statement.replaceWithText(
+          "const pageDelegate = this._page?.delegate;\\n    if (!frame && pageDelegate && requestWillBeSentEvent.frameId === pageDelegate._targetId) {\\n      frame = this._page.frameManager.frameAttached(requestWillBeSentEvent.frameId, null);\\n    }"
+        );
+      }
+    });
 
     // -- _onRequestPaused Method --
     const onRequestPausedMethod = crNetworkManagerClass.getMethod("_onRequestPaused");
@@ -229,8 +263,12 @@ export function patchCRNetworkManager(project) {
     // Replace the body of the fulfill method with custom code
     fulfillMethod.setBodyText(`
       const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
-      var allInjections = [...this._page.delegate._mainFrameSession._evaluateOnNewDocumentScripts];
-      if (isTextHtml && allInjections.length) {
+      const pageDelegate = this._page?.delegate || null;
+      const initScriptTag = pageDelegate?.initScriptTag || "";
+      let allInjections = [];
+      if (pageDelegate)
+        allInjections = [...pageDelegate._mainFrameSession._evaluateOnNewDocumentScripts];
+      if (isTextHtml && allInjections.length && initScriptTag) {
         let useNonce = false;
         let scriptNonce = null;
         // Decode body if needed
@@ -304,7 +342,7 @@ export function patchCRNetworkManager(project) {
           let scriptId = crypto.randomBytes(22).toString("hex");
           let scriptSource = script.source || script;
           const nonceAttr = useNonce ? \`nonce="\${scriptNonce}"\` : '';
-          injectionHTML += \`<script class="\${this._page.delegate.initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
+          injectionHTML += \`<script class="\${initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
         });
 
         // Inject at END of <head>
@@ -410,7 +448,7 @@ export function patchCRNetworkManager(project) {
         method: overrides.method,
         postData: overrides.postData ? overrides.postData.toString('base64') : undefined,
       };
-      if (overrides.url && (overrides.url === 'http://patchright-init-script-inject.internal/' || overrides.url === 'https://patchright-init-script-inject.internal/')) {
+      if (overrides.url && (overrides.url.startsWith("http://patchright-init-script-inject.internal") || overrides.url.startsWith("https://patchright-init-script-inject.internal"))) {
         await catchDisallowedErrors(async () => {
           this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
           this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
@@ -462,7 +500,11 @@ export function patchCRNetworkManager(project) {
           })
         }
       } catch (error) {
-        await this._session._sendMayFail('Fetch.continueRequest', { requestId: event.requestId });
+        if (error.message.includes("Can only get response body on HeadersReceived pattern matched requests.")) {
+          await this._session.send("Fetch.continueRequest", { requestId: event.requestId, interceptResponse: true });
+        } else {
+          await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
+        }
       }
     `);
 }

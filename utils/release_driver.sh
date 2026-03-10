@@ -1,12 +1,13 @@
 echo "Patching complete. Uploading to GitHub..."
-VERSION_NUMBER="${playwright_version#v}"
-RELEASE_DESCRIPTION="This is an automatic deployment in response to a new release of [microsoft/playwright](https://github.com/microsoft/playwright).\nThe original Release can be seen [here](https://github.com/microsoft/playwright/releases/tag/$playwright_version)."
+PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION:-${playwright_version:-}}"
+VERSION_NUMBER="${PLAYWRIGHT_VERSION#v}"
+RELEASE_DESCRIPTION="This is an automatic deployment in response to a new release of [microsoft/playwright](https://github.com/microsoft/playwright).\nThe original Release can be seen [here](https://github.com/microsoft/playwright/releases/tag/$PLAYWRIGHT_VERSION)."
 
 # Step 1: Create a new GitHub release and get the upload URL
 RELEASE_RESPONSE=$(curl -s -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"tag_name\": \"$playwright_version\", \"name\": \"$playwright_version\", \"body\": \"$RELEASE_DESCRIPTION\", \"draft\": false, \"prerelease\": false}" \
+  -d "{\"tag_name\": \"$PLAYWRIGHT_VERSION\", \"name\": \"$PLAYWRIGHT_VERSION\", \"body\": \"$RELEASE_DESCRIPTION\", \"draft\": false, \"prerelease\": false}" \
   "https://api.github.com/repos/$REPO/releases")
 
 echo "$RELEASE_RESPONSE"
@@ -27,7 +28,6 @@ for ZIP_FILE in "/playwright-$VERSION_NUMBER-mac.zip" "/playwright-$VERSION_NUMB
     do
       FILE_NAME=$(basename "$ZIP_FILE")
       echo "Uploading $FILE_NAME..."
-      echo "token $GITHUB_TOKEN"
 
       curl -s -X POST \
       -H "Authorization: token $GITHUB_TOKEN" \

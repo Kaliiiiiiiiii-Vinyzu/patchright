@@ -256,11 +256,17 @@ export function patchFrameSelectors(project) {
         if (childIndex !== null) return childIndex;
       }
       if (queryingElement.shadowRoots && Array.isArray(queryingElement.shadowRoots)) {
-        // Basically same for CSRs, but we dont have to append its index because patchright treats CSRs like they dont exist
         for (const shadowRoot of queryingElement.shadowRoots) {
+          // For CSRs, we dont have to append its index because patchright treats CSRs like they dont exist
           if (shadowRoot.shadowRootType === "closed" && shadowRoot.backendNodeId) {
             const shadowRootHandle = new ElementHandle(documentScope, shadowRoot.backendNodeId);
             const childIndex = this._findElementPositionInDomTree(element, shadowRootHandle, documentScope, currentIndex);
+            if (childIndex !== null) return childIndex;
+          }
+          // Traverse into shadow root children (open and closed) to properly position elements inside shadow DOMs
+          for (const shadowChild of shadowRoot.children || []) {
+            const shadowChildIndex = (shadowRoot.children || []).indexOf(shadowChild);
+            const childIndex = this._findElementPositionInDomTree(element, shadowChild, documentScope, currentIndex + "." + shadowChildIndex.toString());
             if (childIndex !== null) return childIndex;
           }
         }

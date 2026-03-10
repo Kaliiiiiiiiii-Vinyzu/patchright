@@ -42,6 +42,11 @@ patches.patchCRDevTools(project);
 patches.patchCRNetworkManager(project);
 
 // ----------------------------
+// server/chromium/crCoverage.ts
+// ----------------------------
+patches.patchCRCoverage(project);
+
+// ----------------------------
 // server/chromium/crServiceWorker.ts
 // ----------------------------
 patches.patchCRServiceWorker(project);
@@ -67,6 +72,11 @@ patches.patchCRPage(project);
 patches.patchPage(project);
 
 // ----------------------------
+// server/utils/expectUtils.ts
+// ----------------------------
+patches.patchExpectUtils(project);
+
+// ----------------------------
 // utils/isomorphic/utilityScriptSerializers.ts
 // ----------------------------
 patches.patchUtilityScriptSerializers(project);
@@ -86,9 +96,19 @@ patches.patchClock(project);
 patches.patchJavascript(project);
 
 // ----------------------------
+// server/launchApp.ts
+// ----------------------------
+patches.patchLaunchApp(project);
+
+// ----------------------------
 // server/dispatchers/frameDispatcher.ts
 // ----------------------------
 patches.patchFrameDispatcher(project);
+
+// ----------------------------
+// server/dispatchers/browserContextDispatcher.ts
+// ----------------------------
+patches.patchBrowserContextDispatcher(project);
 
 // ----------------------------
 // server/dispatchers/jsHandleDispatcher.ts
@@ -114,6 +134,26 @@ patches.patchServerRegistryIndex(project);
 // recorder/src/recorder.tsx
 // ----------------------------
 patches.patchRecorder(project);
+
+// ----------------------------
+// server/screenshotter.ts
+// ----------------------------
+patches.patchScreenshotter(project);
+
+// ----------------------------
+// server/trace/recorder/snapshotter.ts
+// ----------------------------
+patches.patchSnapshotter(project);
+
+// ----------------------------
+// server/trace/recorder/snapshotterInjected.ts
+// ----------------------------
+patches.patchSnapshotterInjected(project);
+
+// ----------------------------
+// server/trace/recorder/tracing.ts
+// ----------------------------
+patches.patchTracing(project);
 
 // Save the changes without reformatting
 project.saveSync();
