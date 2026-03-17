@@ -23,6 +23,19 @@ export function patchCRNetworkManager(project) {
       },
     ]);
 
+    //  -- removeSession Method --
+    const removeSessionMethod = crNetworkManagerClass.getMethod("removeSession");
+    // Clean up tracked network IDs when sessions are removed to avoid unbounded growth.
+    if (removeSessionMethod) {
+      const body = removeSessionMethod.getBody();
+      if (body) {
+        const deleteStmt = body.getStatements().find(s => s.getText().includes("this._sessions.delete(session)"));
+        if (deleteStmt) {
+          deleteStmt.insertStatements(1, "if (!this._sessions.size) this._alreadyTrackedNetworkIds.clear();");
+        }
+      }
+    }
+
     // -- _onRequest Method --
     const onRequestMethod = crNetworkManagerClass.getMethod("_onRequest");
     // Find the assignment statement you want to modify
@@ -40,7 +53,7 @@ export function patchCRNetworkManager(project) {
       routeAssignment
         .getRight()
         .replaceWithText(
-          "new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId, this._page, requestPausedEvent.networkId, this)",
+          "new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId, this._page, requestPausedEvent.networkId ?? requestPausedEvent.requestId, this)",
         );
     }
 
@@ -68,7 +81,7 @@ export function patchCRNetworkManager(project) {
     // -- _onRequest Method --
     const crOnRequestMethod = crNetworkManagerClass.getMethod("_onRequest");
     const crOnRequestMethodBody = crOnRequestMethod.getBody();
-    crOnRequestMethodBody.insertStatements(0, 'if (this._alreadyTrackedNetworkIds.has(requestWillBeSentEvent.initiator.requestId)) return;')
+    crOnRequestMethodBody.insertStatements(0, 'if (this._alreadyTrackedNetworkIds.has(requestWillBeSentEvent.requestId)) return;')
 
     // Move `const isInterceptedOptionsPreflight` up before frame resolution so it's defined before first use
     const isInterceptedOptionsPreflightIndex = crOnRequestMethodBody.getStatements().findIndex(s => s.getText().includes('const isInterceptedOptionsPreflight'));
@@ -92,7 +105,10 @@ export function patchCRNetworkManager(project) {
       const text = statement.getText();
       if (text.includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)")) {
         statement.replaceWithText(
-          "const pageDelegate = this._page?.delegate;\\n    if (!frame && pageDelegate && requestWillBeSentEvent.frameId === pageDelegate._targetId) {\\n      frame = this._page.frameManager.frameAttached(requestWillBeSentEvent.frameId, null);\\n    }"
+          `const pageDelegate = this._page?.delegate;
+    if (!frame && pageDelegate && requestWillBeSentEvent.frameId === pageDelegate._targetId) {
+      frame = this._page.frameManager.frameAttached(requestWillBeSentEvent.frameId, null);
+    }`
         );
       }
     });
@@ -451,7 +467,12 @@ export function patchCRNetworkManager(project) {
       if (overrides.url && (overrides.url === 'http://patchright-init-script-inject.internal/' || overrides.url === 'https://patchright-init-script-inject.internal/')) {
         await catchDisallowedErrors(async () => {
           this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
-          this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
+          try {
+            await this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
+          } catch (e) {
+            this._sessionManager._alreadyTrackedNetworkIds.delete(this._networkId);
+            throw e;
+          }
         });
       } else {
         await catchDisallowedErrors(async () => {
@@ -470,14 +491,15 @@ export function patchCRNetworkManager(project) {
     });
     const networkRequestInterceptedMethod = routeImplClass.getMethod("_networkRequestIntercepted");
     networkRequestInterceptedMethod.setBodyText(`
-      if (event.resourceType !== 'Document') {
-        /*await catchDisallowedErrors(async () => {
-          await this._session.send('Fetch.continueRequest', { requestId: event.requestId });
-        });*/
-        return;
-      }
       if (this._networkId != event.networkId || !this._sessionManager._alreadyTrackedNetworkIds.has(event.networkId)) return;
+      const trackedNetworkId = event.networkId;
       try {
+        if (event.resourceType !== 'Document') {
+          /*await catchDisallowedErrors(async () => {
+            await this._session.send('Fetch.continueRequest', { requestId: event.requestId });
+          });*/
+          return;
+        }
         if (event.responseStatusCode >= 301 && event.responseStatusCode <= 308  || (event.redirectedRequestId && !event.responseStatusCode)) {
           await this._session.send('Fetch.continueRequest', { requestId: event.requestId, interceptResponse: true });
         } else {
@@ -497,6 +519,8 @@ export function patchCRNetworkManager(project) {
         } else {
           await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
         }
+      } finally {
+        this._sessionManager._alreadyTrackedNetworkIds.delete(trackedNetworkId);
       }
     `);
 }

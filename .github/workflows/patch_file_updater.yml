@@ -25,18 +25,18 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Get Commit Author and Message
         id: get_commit_info
         run: |
           AUTHOR=$(git log -1 --pretty=format:'%an')
           COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
-          echo "AUTHOR=$AUTHOR" >> $GITHUB_ENV
-          echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+          echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Skip if Commit is from GitHub Actions
-        if: env.AUTHOR == 'github-actions'
+        if: contains(steps.get_commit_info.outputs.author, 'github-actions')
         run: echo "Skipping action as the commit is from github-actions" && exit 0
 
       - name: Install Playwright Driver
@@ -58,13 +58,13 @@ jobs:
 
       - name: Compare Directories and Create Patch File
         run: |
-          echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patchright_workflow.yml)" > patchright.patch
+          echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patch_file_updater.yml)" > patchright.patch
           diff -ruN -x protocol.yml --minimal playwright patchright | sed -E 's/^(---|\+\+\+) .*/\1/' >> patchright.patch || true
 
       - name: Commit and Push Patch File
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "[Patch-Comparison] Automatic Commit: ${{ env.COMMIT_MESSAGE }}"
+          commit_message: "[Patch-Comparison] Automatic Commit: ${{ steps.get_commit_info.outputs.commit_message }}"
           branch: "main"
           file_pattern: "patchright.patch"
           skip_fetch: true

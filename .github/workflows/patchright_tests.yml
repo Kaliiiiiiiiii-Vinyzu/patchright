@@ -31,7 +31,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Playwright Driver
         run: |
@@ -48,8 +48,8 @@ jobs:
         run: |
           git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
           cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
-          # Append driver patches (skip first 12 lines which are imports/setup already in nodejs patch)
-          tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
+          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
+          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.js >> patchright_nodejs_patch.js
           rm -rf patchright-nodejs
 
       - name: Patch Playwright Driver

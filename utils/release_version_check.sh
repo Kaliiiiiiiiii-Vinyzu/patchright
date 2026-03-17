@@ -1,13 +1,20 @@
 #!/bin/bash
+set -euo pipefail
 
 # Function to get the latest release version from a GitHub repository
 get_latest_release() {
   local repo=$1
-  local response=$(curl --silent "https://api.github.com/repos/$repo/releases/latest")
+  local response
+  if ! response=$(curl --fail --silent --show-error "https://api.github.com/repos/$repo/releases/latest"); then
+    echo "Failed to fetch latest release for $repo" >&2
+    echo ""
+    return
+  fi
   local version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
 
   # Check if version is empty (meaning no releases found)
   if [ -z "$version" ]; then
+    echo "Warning: could not parse latest release tag for $repo" >&2
     version="v0.0.0"
   fi
 

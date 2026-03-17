@@ -188,7 +188,7 @@ export function patchPage(project) {
     workerEvaluateExpressionHandleMethodBody.insertStatements(0, `
       let context = await this._executionContextPromise;
       if (context.constructor.name === "FrameExecutionContext") {
-          const frame = this._context.frame;
+          const frame = context.frame;
           if (frame) {
               if (isolatedContext) context = await frame._utilityContext();
               else if (!isolatedContext) context = await frame._mainContext();

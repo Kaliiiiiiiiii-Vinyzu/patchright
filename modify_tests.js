@@ -25,13 +25,18 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 	let text = sourceFile.getFullText();
 	const original = text;
 
+	const missingReplacements = [];
 	const replaceAll = (from, to) => {
 		if (text.includes(from))
 			text = text.split(from).join(to);
 	};
 	const replaceOnce = (from, to) => {
-		if (text.includes(from))
+		if (text.includes(from)) {
 			text = text.replace(from, to);
+			return true;
+		}
+		missingReplacements.push({ relativePath, from });
+		return false;
 	};
 
 	if (relativePath === 'tests/library/browsercontext-add-init-script.spec.ts') {
@@ -173,6 +178,14 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 			"  await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(async () => {\n      const win = window.open('about:blank');\n      win['add'](9, 4);\n      win.close();\n    }, undefined, false),\n  ]);",
 			"  const [popup] = await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(url => window.open(url), server.EMPTY_PAGE, false),\n  ]);\n  await popup.waitForLoadState();\n  await Promise.all([\n    popup.waitForEvent('close'),\n    popup.evaluate(() => { window['add'](9, 4); window.close(); }, undefined, false),\n  ]);"
 		);
+	}
+
+	if (missingReplacements.length) {
+		console.error(`[modify_tests] Failed to apply expected modifications for ${relativePath}`);
+		for (const { from } of missingReplacements)
+			console.error(`  - Missing replacement: ${from}`);
+		if (!dryRun)
+			process.exit(1);
 	}
 
 	if (text !== original) {

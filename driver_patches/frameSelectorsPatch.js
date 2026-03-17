@@ -115,7 +115,7 @@ export function patchFrameSelectors(project) {
         if (part.name == "nth") {
           const partNth = Number(part.body);
           if (partNth > currentScopingElements.length || partNth < -currentScopingElements.length) {
-            return continuePolling;
+            return [];
           } else {
             currentScopingElements = [currentScopingElements.at(partNth)];
             continue;
@@ -200,7 +200,7 @@ export function patchFrameSelectors(project) {
                   depth: -1
                 });
                 elementToCheck.backendNodeId = resolvedElement.node.backendNodeId;
-                elementToCheck.nodePosition = this._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
+                elementToCheck.nodePosition = await this._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
                 elements.push(elementToCheck);
               }
             }
@@ -232,11 +232,11 @@ export function patchFrameSelectors(project) {
     // -- _findElementPositionInDomTree Method --
     frameSelectorsClass.addMethod({
       name: "_findElementPositionInDomTree",
-      isAsync: false,
+      isAsync: true,
       parameters: [
         { name: "element" },
         { name: "queryingElement" },
-        { name: "documentScope" },
+        { name: "context" },
         { name: "currentIndex" },
       ],
     });
@@ -247,26 +247,32 @@ export function patchFrameSelectors(project) {
       if (element.backendNodeId === queryingElement.backendNodeId) {
         return currentIndex;
       }
+
+      // Resolve the CDP client for the current context so closed shadow roots can be traversed safely.
+      const client = context.frame._page.delegate._sessionForFrame(context.frame)._client;
+
       // Iterating through children of queryingElement
       for (const child of queryingElement.children || []) {
         // Getting index of child in queryingElement's children
         const childrenNodeIndex = queryingElement.children.indexOf(child);
         // Further querying the child recursively and appending the children index to the currentIndex
-        const childIndex = this._findElementPositionInDomTree(element, child, documentScope, currentIndex + "." + childrenNodeIndex.toString());
+        const childIndex = await this._findElementPositionInDomTree(element, child, context, currentIndex + "." + childrenNodeIndex.toString());
         if (childIndex !== null) return childIndex;
       }
       if (queryingElement.shadowRoots && Array.isArray(queryingElement.shadowRoots)) {
         for (const shadowRoot of queryingElement.shadowRoots) {
           // For CSRs, we dont have to append its index because patchright treats CSRs like they dont exist
           if (shadowRoot.shadowRootType === "closed" && shadowRoot.backendNodeId) {
-            const shadowRootHandle = new ElementHandle(documentScope, shadowRoot.backendNodeId);
-            const childIndex = this._findElementPositionInDomTree(element, shadowRootHandle, documentScope, currentIndex);
-            if (childIndex !== null) return childIndex;
+            const describedShadowRoot = await client.send("DOM.describeNode", { backendNodeId: shadowRoot.backendNodeId, depth: -1, pierce: true });
+            if (describedShadowRoot && describedShadowRoot.node) {
+              const childIndex = await this._findElementPositionInDomTree(element, describedShadowRoot.node, context, currentIndex);
+              if (childIndex !== null) return childIndex;
+            }
           }
           // Traverse into shadow root children (open and closed) to properly position elements inside shadow DOMs
           for (const shadowChild of shadowRoot.children || []) {
             const shadowChildIndex = (shadowRoot.children || []).indexOf(shadowChild);
-            const childIndex = this._findElementPositionInDomTree(element, shadowChild, documentScope, currentIndex + "." + shadowChildIndex.toString());
+            const childIndex = await this._findElementPositionInDomTree(element, shadowChild, context, currentIndex + "." + shadowChildIndex.toString());
             if (childIndex !== null) return childIndex;
           }
         }

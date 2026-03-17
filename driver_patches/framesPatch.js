@@ -61,16 +61,19 @@ export function patchFrames(project) {
         hasQuestionToken: true,
     });
     evalOnSelectorAllMethod.setBodyText(`
-      try {
-        isolatedContext = this.selectors._parseSelector(selector, { strict: false }).world !== "main" && isolatedContext;
-        const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
-        const result = await arrayHandle.evaluateExpression(expression, { isFunction }, arg, isolatedContext);
-        arrayHandle.dispose();
-        return result;
-      } catch (e) {
-        // Do i look like i know whats going on here?
-        if ("JSHandles can be evaluated only in the context they were created!" === e.message) return await this.evalOnSelectorAll(selector, expression, isFunction, arg, scope, isolatedContext);
-        throw e;
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          isolatedContext = this.selectors._parseSelector(selector, { strict: false }).world !== "main" && isolatedContext;
+          const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
+          const result = await arrayHandle.evaluateExpression(expression, { isFunction }, arg, isolatedContext);
+          arrayHandle.dispose();
+          return result;
+        } catch (e) {
+          // Retry only on specific context mismatch errors, and only a bounded number of times.
+          if ("JSHandles can be evaluated only in the context they were created!" !== e.message || attempt === maxAttempts) throw e;
+          await new Promise(resolve => setTimeout(resolve, 50 * attempt));
+        }
       }
     `);
 
@@ -883,42 +886,54 @@ export function patchFrames(project) {
           const backendNodeIds = new Set(andedElements.map(item => item.backendNodeId));
           elements = currentScopingElements.filter(item => backendNodeIds.has(item.backendNodeId));
         } else {
+          // Cache DOM structure lookups per polling iteration to avoid repeated expensive describe/resolve calls.
+          const cache = progress.__patchrightFindElementsCache || (progress.__patchrightFindElementsCache = new Map());
           for (const scope of currentScopingElements) {
-            const describedScope = await client.send('DOM.describeNode', {
-              objectId: scope._objectId,
-              depth: -1,
-              pierce: true
-            });
-
-            // Elements Queryed in the "current round"
-            var queryingElements = [];
-            function findClosedShadowRoots(node, results = []) {
-              if (!node || typeof node !== 'object') return results;
-              if (node.shadowRoots && Array.isArray(node.shadowRoots)) {
-                for (const shadowRoot of node.shadowRoots) {
-                  if (shadowRoot.shadowRootType === 'closed' && shadowRoot.backendNodeId) {
-                    results.push(shadowRoot.backendNodeId);
-                  }
-                  findClosedShadowRoots(shadowRoot, results);
-                }
-              }
-              if (node.nodeName !== 'IFRAME' && node.children && Array.isArray(node.children)) {
-                for (const child of node.children) {
-                  findClosedShadowRoots(child, results);
-                }
-              }
-              return results;
-            }
-
-            var shadowRootBackendIds = findClosedShadowRoots(describedScope.node);
-            var shadowRoots = [];
-            for (var shadowRootBackendId of shadowRootBackendIds) {
-              var resolvedShadowRoot = await client.send('DOM.resolveNode', {
-                backendNodeId: shadowRootBackendId,
-                contextId: context.delegate._contextId
+            let cached = cache.get(scope._objectId);
+            if (!cached) {
+              const describedScope = await client.send('DOM.describeNode', {
+                objectId: scope._objectId,
+                depth: -1,
+                pierce: true
               });
-              shadowRoots.push(new dom.ElementHandle(context, resolvedShadowRoot.object.objectId));
+
+              // Elements Queryed in the "current round"
+              var queryingElements = [];
+              function findClosedShadowRoots(node, results = []) {
+                if (!node || typeof node !== 'object') return results;
+                if (node.shadowRoots && Array.isArray(node.shadowRoots)) {
+                  for (const shadowRoot of node.shadowRoots) {
+                    if (shadowRoot.shadowRootType === 'closed' && shadowRoot.backendNodeId) {
+                      results.push(shadowRoot.backendNodeId);
+                    }
+                    findClosedShadowRoots(shadowRoot, results);
+                  }
+                }
+                if (node.nodeName !== 'IFRAME' && node.children && Array.isArray(node.children)) {
+                  for (const child of node.children) {
+                    findClosedShadowRoots(child, results);
+                  }
+                }
+                return results;
+              }
+
+              var shadowRootBackendIds = findClosedShadowRoots(describedScope.node);
+              var shadowRoots = [];
+              for (var shadowRootBackendId of shadowRootBackendIds) {
+                var resolvedShadowRoot = await client.send('DOM.resolveNode', {
+                  backendNodeId: shadowRootBackendId,
+                  contextId: context.delegate._contextId
+                });
+                shadowRoots.push(new dom.ElementHandle(context, resolvedShadowRoot.object.objectId));
+              }
+
+              cached = { describedScope, shadowRoots };
+              cache.set(scope._objectId, cached);
             }
+
+            const describedScope = cached.describedScope;
+            const shadowRoots = cached.shadowRoots;
+            var queryingElements = [];
 
             for (var shadowRoot of shadowRoots) {
               const shadowElements = await shadowRoot.evaluateHandleInUtility(([injected, node, { parsed, callId }]) => {
@@ -965,7 +980,7 @@ export function patchFrames(project) {
                 });
                 // Note: Possible Bug, Maybe well actually have to check the Documents Node Position instead of using the backendNodeId
                 elementToCheck.backendNodeId = resolvedElement.node.backendNodeId;
-                elementToCheck.nodePosition = this.selectors._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
+                elementToCheck.nodePosition = await this.selectors._findElementPositionInDomTree(elementToCheck, describedScope.node, context, "");
                 elements.push(elementToCheck);
               }
             }

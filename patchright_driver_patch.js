@@ -3,6 +3,8 @@ import path from "path";
 import { Project, SyntaxKind, IndentationText, ObjectLiteralExpression } from "ts-morph";
 import YAML from "yaml";
 
+// patchright-driver-patch: start
+
 import * as patches from "./driver_patches/index.js";
 
 const project = new Project({
@@ -155,9 +157,6 @@ patches.patchSnapshotterInjected(project);
 // ----------------------------
 patches.patchTracing(project);
 
-// Save the changes without reformatting
-project.saveSync();
-
 // ----------------------------
 // protocol/protocol.yml
 // ----------------------------
@@ -173,3 +172,6 @@ protocol["Frame"].commands.evalOnSelectorAll.parameters.isolatedContext = "boole
 protocol["ContextOptions"].properties.focusControl = "boolean?";
 
 await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
+
+// Save the changes without reformatting
+project.saveSync();

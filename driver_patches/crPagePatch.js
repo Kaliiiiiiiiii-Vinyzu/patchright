@@ -322,13 +322,14 @@ export function patchCRPage(project) {
       ]);
 
       // Evaluate binding bootstrap in all existing execution contexts.
-      for (const contextId of contextIds) {
+      const evaluationPromises = contextIds.map(contextId =>
         this._client._sendMayFail('Runtime.evaluate', {
           expression: binding.source,
           contextId,
           awaitPromise: true,
-        });
-      }
+        }).catch(e => { }),
+      );
+      await Promise.all(evaluationPromises);
     `);
       // initBindingMethod.setBodyText(`const [, response] = await Promise.all([
       //   this._client.send('Runtime.addBinding', { name: binding.name }),
@@ -422,7 +423,7 @@ export function patchCRPage(project) {
         this._client._sendMayFail('Runtime.addBinding', { name: name, executionContextId: contextPayload.id });
     `);
     onExecutionContextCreatedMethodBody.insertStatements(2, `
-      if (contextPayload.auxData.type == "worker") throw new Error("ExecutionContext is worker");
+      if (contextPayload.auxData?.type === "worker") throw new Error("ExecutionContext is worker");
     `);
     // Locate the statements you want to replace
     const statementsToRemove = onExecutionContextCreatedMethod
