@@ -99,9 +99,9 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 		);
 
 		// Ensure tests in this file that now use server have it in fixtures.
-		text = text.replace(/async \(\{([^}]*)\}\) => \{/g, (full, inside) => {
+		text = text.replace(/async \(\{([^}]*)\}\) => \{/g, (match, inside) => {
 			if (!inside.includes('page') || inside.includes('server'))
-				return full;
+				return match;
 			const next = inside.trim().length ? `${inside.trim()}, server` : 'server';
 			return `async ({ ${next} }) => {`;
 		});
@@ -391,16 +391,16 @@ const FIXME_TARGET_LINES = {
 };
 
 function walkFiles(dirPath) {
-	const result = [];
+	const specFiles = [];
 	for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
 		const fullPath = path.join(dirPath, entry.name);
 		if (entry.isDirectory()) {
-			result.push(...walkFiles(fullPath));
+			specFiles.push(...walkFiles(fullPath));
 		} else if (entry.isFile() && entry.name.endsWith('.spec.ts')) {
-			result.push(fullPath);
+			specFiles.push(fullPath);
 		}
 	}
-	return result;
+	return specFiles;
 }
 
 function isFunctionLikeEvaluateExpressionArg(node) {

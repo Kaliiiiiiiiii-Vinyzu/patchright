@@ -27,17 +27,21 @@ if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
 fi
 
 # Step 2: Upload each .zip file in the directory as an asset
-for ZIP_FILE in "/playwright-$VERSION_NUMBER-mac.zip" "/playwright-$VERSION_NUMBER-mac-arm64.zip" "/playwright-$VERSION_NUMBER-linux.zip" "/playwright-$VERSION_NUMBER-linux-arm64.zip" "/playwright-$VERSION_NUMBER-win32_x64.zip" "/playwright-$VERSION_NUMBER-win32_arm64.zip";
-    do
-      FILE_NAME=$(basename "$ZIP_FILE")
-      echo "Uploading $FILE_NAME..."
-      echo "token $GITHUB_TOKEN"
+for zipFile in \
+  "/playwright-$VERSION_NUMBER-mac.zip" \
+  "/playwright-$VERSION_NUMBER-mac-arm64.zip" \
+  "/playwright-$VERSION_NUMBER-linux.zip" \
+  "/playwright-$VERSION_NUMBER-linux-arm64.zip" \
+  "/playwright-$VERSION_NUMBER-win32_x64.zip" \
+  "/playwright-$VERSION_NUMBER-win32_arm64.zip"; do
+  fileName=$(basename "$zipFile")
+  echo "Uploading $fileName..."
 
-      curl -sSf --fail-with-body -X POST \
-      -H "Authorization: token $GITHUB_TOKEN" \
-      -H "Content-Type: application/zip" \
-      --data-binary @"./playwright/utils/build/output/$ZIP_FILE" \
-      "$UPLOAD_URL?name=$FILE_NAME"
-    done
+  curl -sSf --fail-with-body -X POST \
+    -H "Authorization: token $GITHUB_TOKEN" \
+    -H "Content-Type: application/zip" \
+    --data-binary @"./playwright/utils/build/output/$zipFile" \
+    "$UPLOAD_URL?name=$fileName"
+done
 
 printf '\n\nRelease and assets uploaded successfully!\n'

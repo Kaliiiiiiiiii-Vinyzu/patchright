@@ -38,7 +38,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Check Release Version
         id: version_check
@@ -55,7 +55,7 @@ jobs:
       - name: Patch Playwright Driver
         run: |
           cd playwright
-          node "../patchright_driver_patch.js"
+          node "../patchright_driver_patch.ts"
 
       - name: Generate Playwright Channels
         # Ignore the error exit code, as the script exits 1 when a file is modified.

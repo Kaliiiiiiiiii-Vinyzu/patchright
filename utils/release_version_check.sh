@@ -10,7 +10,8 @@ get_latest_release() {
     echo ""
     return
   fi
-  local version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+  local version
+  version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
 
   # Check if version is empty (meaning no releases found)
   if [ -z "$version" ]; then
@@ -38,9 +39,9 @@ version_is_behind() {
 
   if ((10#$ver1_1 < 10#$ver2_1)) || ((10#$ver1_1 == 10#$ver2_1 && 10#$ver1_2 < 10#$ver2_2)) || ((10#$ver1_1 == 10#$ver2_1 && 10#$ver1_2 == 10#$ver2_2 && 10#$ver1_3 < 10#$ver2_3)); then
     return 0
-  else
-    return 1
   fi
+
+  return 1
 }
 
 # Get the latest release version of microsoft/playwright
@@ -48,17 +49,17 @@ playwright_version=$(get_latest_release "microsoft/playwright")
 echo "Latest release of the Playwright Driver: $playwright_version"
 
 # Get the latest release version of Patchright
-patchright_version=$(get_latest_release $REPO)
+patchright_version=$(get_latest_release "$REPO")
 echo "Latest release of the Patchright Driver: $patchright_version"
 
 # Compare the versions
 if version_is_behind "$patchright_version" "$playwright_version"; then
   echo "$REPO is behind microsoft/playwright. Building & Patching..."
-  echo "proceed=true" >>$GITHUB_OUTPUT
-  echo "playwright_version=$playwright_version" >>$GITHUB_OUTPUT
-  echo "playwright_version=$playwright_version" >>$GITHUB_ENV
+  echo "proceed=true" >>"$GITHUB_OUTPUT"
+  echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
+  echo "playwright_version=$playwright_version" >>"$GITHUB_ENV"
 else
   echo "$REPO is up to date with microsoft/playwright."
-  echo "proceed=false" >>$GITHUB_OUTPUT
-  echo "playwright_version=$playwright_version" >>$GITHUB_OUTPUT
+  echo "proceed=false" >>"$GITHUB_OUTPUT"
+  echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
 fi

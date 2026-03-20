@@ -25,7 +25,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Get Commit Author and Message
         id: get_commit_info
@@ -51,14 +51,14 @@ jobs:
         run: |
           cp -r playwright playwright_not_patched
           cd playwright
-          node "../patchright_driver_patch.js"
+          node "../patchright_driver_patch.ts"
           cd ..
           mv playwright patchright
           mv playwright_not_patched playwright
 
       - name: Compare Directories and Create Patch File
         run: |
-          echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patch_file_updater.yml)" > patchright.patch
+          echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.ts), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patch_file_updater.yml)" > patchright.patch
           diff -ruN -x protocol.yml --minimal playwright patchright | sed -E 's/^(---|\+\+\+) .*/\1/' >> patchright.patch || true
 
       - name: Commit and Push Patch File
