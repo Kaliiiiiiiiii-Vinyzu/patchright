@@ -259,30 +259,34 @@ export function patchFrames(project: Project) {
 
 	// -- _retryWithProgressIfNotConnected Method --
 	const retryWithProgressIfNotConnectedMethod = frameClass.getMethodOrThrow("_retryWithProgressIfNotConnected");
-	retryWithProgressIfNotConnectedMethod.addParameter({
+	if (!retryWithProgressIfNotConnectedMethod.getParameter("returnAction")) {
+		retryWithProgressIfNotConnectedMethod.addParameter({
 			name: "returnAction",
 			type: "'returnOnNotResolved' | 'returnAll' | undefined",
-	});
-	retryWithProgressIfNotConnectedMethod.setBodyText(`
-		let options: any;
-		let actionCallback: any;
-		let normalizedReturnAction: any = returnAction;
-
-		if (typeof strict === 'object' && strict) {
-			options = strict as any;
-			actionCallback = performActionPreChecks as any;
-			normalizedReturnAction = action as any;
-		} else {
-			options = { strict, performActionPreChecks };
-			actionCallback = action;
-		}
-
-		if (!(options as any)?.__patchrightSkipRetryLogWaiting)
-			progress.log("waiting for " + this._asLocator(selector));
-		return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
-			return this._retryWithoutProgress(progress, selector, options, actionCallback, normalizedReturnAction, continuePolling);
 		});
-	`);
+	}
+	const retryParamNames = retryWithProgressIfNotConnectedMethod.getParameters().map(p => p.getName());
+	if (retryParamNames.includes("options") && !retryParamNames.includes("strict")) {
+		retryWithProgressIfNotConnectedMethod.setBodyText(`
+			if (!(options as any)?.__patchrightSkipRetryLogWaiting)
+				progress.log("waiting for " + this._asLocator(selector));
+			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
+				return this._retryWithoutProgress(progress, selector, options as any, action as any, returnAction, continuePolling);
+			});
+		`);
+	} else if (retryParamNames.includes("strict") && retryParamNames.includes("performActionPreChecks")) {
+		retryWithProgressIfNotConnectedMethod.setBodyText(`
+			const normalizedOptions: any = { strict, performActionPreChecks };
+
+			if (!(normalizedOptions as any)?.__patchrightSkipRetryLogWaiting)
+				progress.log("waiting for " + this._asLocator(selector));
+			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
+				return this._retryWithoutProgress(progress, selector, normalizedOptions, action as any, returnAction, continuePolling);
+			});
+		`);
+	} else {
+		throw new Error("_retryWithProgressIfNotConnected has unsupported parameter signature");
+	}
 
 	// -- _retryWithoutProgress Method --
 	frameClass.addMethod({
