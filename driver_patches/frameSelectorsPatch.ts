@@ -56,7 +56,7 @@ export function patchFrameSelectors(project: Project) {
 
 	// -- resolveFrameForSelector Method --
 	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveFrameForSelector");
-	// Change 'element' variable declaration from const to let to allow reassignment
+	// Change 'element' variable declaration from const to let to allow reassignment.
 	assertDefined(
 		resolveFrameForSelectorMethod
 			.getDescendantsOfKind(SyntaxKind.VariableStatement)
@@ -65,10 +65,7 @@ export function patchFrameSelectors(project: Project) {
 	// Handle the case when element is not found - fetch it from the document using the parsed selector
 	const resolveFrameForSelectorIfStatement = resolveFrameForSelectorMethod
 		.getDescendantsOfKind(SyntaxKind.IfStatement)
-		.find(statement =>
-			statement.getExpression().getText() === "!element" &&
-			statement.getText() === "return null;"
-		);
+		.find(statement => statement.getExpression().getText() === "!element");
 	assertDefined(resolveFrameForSelectorIfStatement).replaceWithText(`
 		if (!element) {
 			try {
@@ -83,7 +80,7 @@ export function patchFrameSelectors(project: Project) {
 				contextId: mainContext.delegate._contextId
 			});
 			const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-			var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, progress, info.parsed);
+				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
 			if (check.length === 0) return null;
 			element = check[0];
 		}
@@ -119,13 +116,14 @@ export function patchFrameSelectors(project: Project) {
 			{ name: "client", type: "CRSession" },
 			{ name: "context", type: "FrameExecutionContext" },
 			{ name: "documentScope", type: "ElementHandle" },
-			{ name: "progress", type: "Progress" },
+			{ name: "progress", type: "Progress | undefined" },
 			{ name: "parsed", type: "ParsedSelector" },
 		],
 	});
 	const customFindFramesByParsedSelectorsMethod = frameSelectorsClass.getMethodOrThrow("_customFindFramesByParsed");
 	customFindFramesByParsedSelectorsMethod.setBodyText(`
 		var parsedEdits = { ...parsed };
+		const callId = progress?.metadata.id;
 		// Note: We start scoping at document level
 		var currentScopingElements = [documentScope];
 
@@ -200,7 +198,7 @@ export function patchFrameSelectors(project: Project) {
 								return elements;
 							}, {
 								parsed: parsedEdits,
-								callId: progress.metadata.id
+								callId
 							}
 						);
 						queryGroups.push({ handles: shadowHandles, parentNode: shadowRoot });
@@ -215,7 +213,7 @@ export function patchFrameSelectors(project: Project) {
 							return elements;
 						}, {
 							parsed: parsedEdits,
-							callId: progress.metadata.id
+							callId
 						}
 					);
 					queryGroups.push({ handles: rootHandles, parentNode: scope });

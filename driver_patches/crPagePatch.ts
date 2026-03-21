@@ -432,11 +432,11 @@ export function patchCRPage(project: Project) {
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
 			.find((statement) =>
 				statement.getExpression().getText() === "context" &&
-				statement.getText().includes("await this._page._onBindingCalled(event.payload, context)"),
+					statement.getText().includes("await this._page.onBindingCalled(event.payload, context)"),
 			)
 	);
 	onBindingCalledIfStatement.replaceWithText(`
-		if (context) await this._page._onBindingCalled(event.payload, context);
+		if (context) await this._page.onBindingCalled(event.payload, context);
 		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame()._mainContext())) // This might be a bit sketchy but it works for now
 	`);
 

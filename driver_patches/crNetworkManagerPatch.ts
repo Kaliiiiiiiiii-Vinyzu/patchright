@@ -32,11 +32,15 @@ export function patchCRNetworkManager(project: Project) {
 
 	// -- _onRequest Method --
 	const onRequestMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
-	// Find the assignment statement you want to modify
+	// Find the route assignment, whether it is still pristine or already expanded.
 	const routeAssignment = assertDefined(
 		onRequestMethod
 			.getDescendantsOfKind(SyntaxKind.BinaryExpression)
-			.find((expr) => expr.getText().includes("route = new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId)"))
+			.find(expr => {
+				if (expr.getLeft().getText() !== "route")
+					return false;
+				return expr.getRight().getText().startsWith("new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId");
+			})
 	);
 	// Adding new parameter to the RouteImpl call
 	routeAssignment.getRight().replaceWithText(
