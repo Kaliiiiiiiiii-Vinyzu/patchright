@@ -240,21 +240,21 @@ export function patchFrames(project: Project) {
 	// -- _setContext Method --
 	const setContentMethod = frameClass.getMethodOrThrow("setContent");
 	setContentMethod.setBodyText(`
-		await this.raceNavigationAction(progress, async () => {
-			const waitUntil = options.waitUntil === void 0 ? "load" : options.waitUntil;
-			progress.log(\`setting frame content, waiting until "\${waitUntil}"\`);
-			const lifecyclePromise = new Promise((resolve, reject) => {
-				this._onClearLifecycle();
-				this._waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
-			});
-			const setContentPromise = this._page.delegate._sessionForFrame(this)._client.send("Page.setDocumentContent", {
-				frameId: this._id,
-				html
-			});
-			await Promise.all([setContentPromise, lifecyclePromise]);
+    await this.raceNavigationAction(progress, async () => {
+      const waitUntil = options.waitUntil === void 0 ? "load" : options.waitUntil;
+      progress.log(\`setting frame content, waiting until "\${waitUntil}"\`);
+      const lifecyclePromise = new Promise((resolve, reject) => {
+        this._onClearLifecycle();
+        this.waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
+      });
+      const setContentPromise = this._page.delegate._sessionForFrame(this)._client.send("Page.setDocumentContent", {
+        frameId: this._id,
+        html
+      });
+      await Promise.all([setContentPromise, lifecyclePromise]);
 
-			return null;
-		});
+      return null;
+    });
 	`);
 
 	// -- _retryWithProgressIfNotConnected Method --
