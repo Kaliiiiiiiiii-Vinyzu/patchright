@@ -67,7 +67,7 @@ export function patchFrameSelectors(project: Project) {
 		.getDescendantsOfKind(SyntaxKind.IfStatement)
 		.find(statement =>
 			statement.getExpression().getText() === "!element" &&
-			statement.getThenStatement().getText() === "return null;"
+			statement.getText() === "return null;"
 		);
 	assertDefined(resolveFrameForSelectorIfStatement).replaceWithText(`
 		if (!element) {
@@ -92,17 +92,22 @@ export function patchFrameSelectors(project: Project) {
 		// -- resolveInjectedForSelector Method --
 		const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
 		// Find the statement where 'injected' is assigned from 'context.injectedScript' and add a null check
-		const contextInjectedStatementIndex = resolveInjectedForSelectorMethod
+		const contextStatement = assertDefined(resolveInjectedForSelectorMethod
 			.getStatements()
-			.findIndex(stmt => {
-				const decl = assertDefined(stmt.asKindOrThrow(SyntaxKind.VariableStatement).getDeclarations()[0]);
+			.find(stmt => {
+				const varStmt = stmt.asKind(SyntaxKind.VariableStatement);
+				if (!varStmt)
+					return false;
+				const decl = assertDefined(varStmt.getDeclarations()[0]);
 				const callExpr = decl
-					.getInitializerIfKindOrThrow(SyntaxKind.AwaitExpression)
-					.getExpressionIfKindOrThrow(SyntaxKind.CallExpression);
+					.getInitializerIfKind(SyntaxKind.AwaitExpression)
+					?.getExpressionIfKind(SyntaxKind.CallExpression);
+				if (!callExpr)
+					return false;
 
-				return decl.getName() === "injected" && callExpr.getExpression().getText() === "context.injectedScript";
-			});
-		resolveInjectedForSelectorMethod.insertStatements(contextInjectedStatementIndex + 1, `if (!context) throw new Error("Frame was detached");`);
+				return decl.getName() === "context" && callExpr.getExpression().getText().includes("._context");
+			}));
+		resolveInjectedForSelectorMethod.insertStatements(contextStatement.getChildIndex() + 1, `if (!context) throw new Error("Frame was detached");`);
 
 
 	// -- _customFindFramesByParsed Method -- progress

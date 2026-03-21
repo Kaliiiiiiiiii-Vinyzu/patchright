@@ -503,10 +503,17 @@ export function patchFrames(project: Project) {
 	// Take the last (innermost) match to avoid replacing the outer
 	// `return this.retryWithProgressAndTimeouts(...)` statement whose
 	// getText() also contains the substring.
-	const targetReturnStmt = assertDefined(
-		matchingReturnStmts[matchingReturnStmts.length - 1]
-	);
-	targetReturnStmt.replaceWithText('return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));');
+	const targetReturnStmt = matchingReturnStmts[matchingReturnStmts.length - 1];
+	if (targetReturnStmt) {
+		targetReturnStmt.replaceWithText('return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));');
+	} else {
+		// Upstream may already include _detachedScope wrapping; assert expected shape exists.
+		assertDefined(
+			waitForFunctionExpressionMethod
+				.getDescendantsOfKind(SyntaxKind.ReturnStatement)
+				.find(stmt => stmt.getText().includes('progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)))'))
+		);
+	}
 
 	// -- isVisibleInternal Method --
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");

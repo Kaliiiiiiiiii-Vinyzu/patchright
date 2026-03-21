@@ -21,7 +21,10 @@ export function patchCRPage(project: Project) {
 	const crPageConstructor = assertDefined(
 		crPageClass
 		  .getConstructors()
-			.find((ctor) => ctor.getText().includes("constructor(client: CRSession, targetId: string, browserContext: CRBrowserContext, opener: CRPage | null"))
+			.find((ctor) => {
+				const params = ctor.getParameters();
+				return params[0]?.getName() === "client" && params[1]?.getName() === "targetId" && params[2]?.getName() === "browserContext" && params[3]?.getName() === "opener";
+			})
 	);
 
 	// Swap legacy updateRequestInterception for direct network manager interception + unique script tag.
@@ -175,23 +178,18 @@ export function patchCRPage(project: Project) {
 				statement.getText().includes("this._client._sendMayFail('Page.createIsolatedWorld', {"),
 		)
 		.forEach((statement) => { statement.remove() });
-	// Find the IfStatement that contains the "else" block
+	// Find the non-initial navigation branch and ensure our localFrames setup is present.
 	const lifecycleEventIfStatement = assertDefined(
-		pageGetFrameTreeThenBlock
-			.getStatements()
-			.find(
-				(statement) =>
-					statement.isKind(SyntaxKind.IfStatement) &&
-					statement.getText().includes("Page.lifecycleEvent"),
-			)
+		initializeFrameSessionMethodBody
+			.getDescendantsOfKind(SyntaxKind.IfStatement)
+			.find((statement) => statement.getText().includes("this._firstNonInitialNavigationCommittedFulfill()"))
 	);
 	const lifecycleEventElseBlock = assertDefined(
 		lifecycleEventIfStatement
-			.asKindOrThrow(SyntaxKind.IfStatement)
 			.getElseStatement()
 	);
 	lifecycleEventElseBlock
-		.asKindOrThrow(SyntaxKind.Block)	
+		.asKindOrThrow(SyntaxKind.Block)
 		.insertStatements(0, `
 			const localFrames = this._isMainFrame() ? this._page.frames() : [this._page.frameManager.frame(this._targetId)!];
 			for (const frame of localFrames) {
@@ -434,7 +432,7 @@ export function patchCRPage(project: Project) {
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
 			.find((statement) =>
 				statement.getExpression().getText() === "context" &&
-				statement.getThenStatement().getText().includes("await this._page._onBindingCalled(event.payload, context)"),
+				statement.getText().includes("await this._page._onBindingCalled(event.payload, context)"),
 			)
 	);
 	onBindingCalledIfStatement.replaceWithText(`
@@ -461,7 +459,7 @@ export function patchCRPage(project: Project) {
 			.find(
 				(statement) =>
 					statement.getText().includes("const result = await this._client._sendMayFail('DOM.resolveNode'") &&
-					statement.getText().includes("executionContextId: ((to as any)[contextDelegateSymbol] as CRExecutionContext)._contextId"),
+					statement.getText().includes("executionContextId: (to.delegate as CRExecutionContext)._contextId"),
 			)
 	);
 	const executionContextIdAssignment = assertDefined(

@@ -85,13 +85,13 @@ export function patchSnapshotterInjected(project: Project) {
 
 	// -- captureSnapshot Method --
 	const captureMethod = streamerClass.getMethodOrThrow("captureSnapshot");
-	// iterate document.styleSheets instead of _staleStyleSheets
+	// iterate document.styleSheets instead of _modifiedStyleSheets
 	const forOfStatement = assertDefined(
 			captureMethod
 			.getStatements()
-			.find(s => s.getText().includes("this._staleStyleSheets"))
+			.find(s => s.getText().includes("this._modifiedStyleSheets"))
 	);
-	forOfStatement.replaceWithText(forOfStatement.getText().replace("this._staleStyleSheets", "document.styleSheets"));
+	forOfStatement.replaceWithText(forOfStatement.getText().replace("this._modifiedStyleSheets", "document.styleSheets"));
 
 	// -- reset Method --
 	const resetMethod = streamerClass.getMethodOrThrow("reset");
@@ -99,7 +99,7 @@ export function patchSnapshotterInjected(project: Project) {
 	const staleStylesheetsClearStatement = assertDefined(
 		resetMethod
 			.getStatements()
-			.find(s => s.getText().includes("this._staleStyleSheets.clear()"))
+			.find(s => s.getText().includes("this._staleStyleSheets.clear();"))
 	);
 	staleStylesheetsClearStatement.remove();
 }

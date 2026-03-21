@@ -23,11 +23,12 @@ export function patchCRNetworkManager(project: Project) {
 	const removeSessionMethod = crNetworkManagerClass.getMethodOrThrow("removeSession");
 	// Clean up tracked network IDs when sessions are removed to avoid unbounded growth.
 	const removeSessionBody = removeSessionMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
-	const deleteSessionStatementIndex = removeSessionBody
-		.getStatements()
-		.findIndex(s => s.getText().includes("this._sessions.delete(session)"));
-	if (deleteSessionStatementIndex !== -1)
-		removeSessionBody.insertStatements(deleteSessionStatementIndex + 1, "if (!this._sessions.size) this._alreadyTrackedNetworkIds.clear();")
+	const deleteSessionStatement = assertDefined(
+		removeSessionBody
+			.getStatements()
+			.find(s => s.getText().includes("this._sessions.delete(session)"))
+	);
+	removeSessionBody.insertStatements(deleteSessionStatement.getChildIndex() + 1, "if (!this._sessions.size) this._alreadyTrackedNetworkIds.clear();")
 
 	// -- _onRequest Method --
 	const onRequestMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
@@ -71,7 +72,6 @@ export function patchCRNetworkManager(project: Project) {
 	// -- _onRequest Method --
 	const onRequestHandlerMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
 	const onRequestHandlerMethodBody = onRequestHandlerMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
-	const onRequestHandlerMethodStatements = onRequestHandlerMethodBody.getStatements();
 	onRequestHandlerMethod
 		.getBodyOrThrow()
 		.asKindOrThrow(SyntaxKind.Block)
@@ -81,26 +81,30 @@ export function patchCRNetworkManager(project: Project) {
 		`);
 
 	// Move `const isInterceptedOptionsPreflight` up before frame resolution so it's defined before first use
-	const isInterceptedOptionsPreflightIndex = onRequestHandlerMethodStatements.findIndex(s => s.getText().includes('const isInterceptedOptionsPreflight'));
-	if (isInterceptedOptionsPreflightIndex !== -1) {
-		const preflightStatement = onRequestHandlerMethodStatements[isInterceptedOptionsPreflightIndex].getText();
-		onRequestHandlerMethodStatements[isInterceptedOptionsPreflightIndex].remove();
+	const preflightStatementNode = assertDefined(
+		onRequestHandlerMethodBody
+			.getStatements()
+			.find(s => s.getText().includes('const isInterceptedOptionsPreflight'))
+	);
+	preflightStatementNode.remove();
 
-		// Insert before the `let frame` statement so it's defined early enough
-		const frameIndex = onRequestHandlerMethodStatements.findIndex(s => s.getText().startsWith('let frame'));
-		if (frameIndex !== -1) {
-			onRequestHandlerMethodBody.insertStatements(frameIndex, preflightStatement);
-			// OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
-			onRequestHandlerMethodBody.insertStatements(frameIndex + 1, `
-				if (isInterceptedOptionsPreflight && !(this._page || this._serviceWorker).needsRequestInterception()) {
-					requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent!.requestId });
-					return;
-				}
-			`);
+	// Insert before the `let frame` statement so it's defined early enough
+	const frameStatement = assertDefined(
+		onRequestHandlerMethodBody
+			.getStatements()
+			.find(s => s.getText().startsWith('let frame'))
+	);
+	const frameIndex = frameStatement.getChildIndex();
+	onRequestHandlerMethodBody.insertStatements(frameIndex, preflightStatementNode.getText());
+	// OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
+	onRequestHandlerMethodBody.insertStatements(frameIndex + 1, `
+		if (isInterceptedOptionsPreflight && !(this._page || this._serviceWorker).needsRequestInterception()) {
+			requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent!.requestId });
+			return;
 		}
-	}
+	`);
 	// Guard null page delegate when resolving synthetic main-frame id.
-	onRequestHandlerMethodStatements.forEach((statement) => {
+	onRequestHandlerMethodBody.getStatements().forEach((statement) => {
 		if (statement.getText().includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)"))
 			statement.replaceWithText(`
 				const pageDelegate = this._page?.delegate;
@@ -125,7 +129,10 @@ export function patchCRNetworkManager(project: Project) {
 	const routeImplConstructor = assertDefined(
 		routeImplClass
 			.getConstructors()
-			.find((ctor) => ctor.getText().includes("constructor(session: CRSession, interceptionId: string)"))
+			.find((ctor) => {
+				const params = ctor.getParameters();
+				return params[0]?.getName() === "session" && params[1]?.getName() === "interceptionId";
+			})
 	);
 	// Get current parameters and add the new `page`, `networkId` and `sessionManager` parameter
 	const routeImplConstructorParameters = routeImplConstructor.getParameters();
@@ -341,7 +348,7 @@ export function patchCRNetworkManager(project: Project) {
 		const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
 		const pageDelegate = this._page?.delegate ?? null;
 		const initScriptTag = pageDelegate?.initScriptTag ?? "";
-		const allInjections = pageDelegate;
+		const allInjections = pageDelegate
 			? [...pageDelegate._mainFrameSession._evaluateOnNewDocumentScripts]
 			: [];
 

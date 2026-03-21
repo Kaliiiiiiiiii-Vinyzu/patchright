@@ -15,7 +15,10 @@ export function patchCRServiceWorker(project: Project) {
 	const crServiceWorkerConstructorDeclaration = assertDefined(
 		crServiceWorkerClass
 			.getConstructors()
-			.find((ctor) => ctor.getText().includes("constructor(browserContext: CRBrowserContext, session: CRSession, url: string)"))
+			.find((ctor) => {
+				const params = ctor.getParameters();
+				return params[0]?.getName() === "browserContext" && params[1]?.getName() === "session" && params[2]?.getName() === "url";
+			})
 	);
 	const crServiceWorkerConstructorBody = crServiceWorkerConstructorDeclaration.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
 		
@@ -23,7 +26,7 @@ export function patchCRServiceWorker(project: Project) {
 	assertDefined(
 		crServiceWorkerConstructorBody
 			.getStatements()
-			.find((s) => s.getText().includes("session.send('Runtime.enable', {}).catch(e => { });"))
+			.find((s) => s.getText().includes("session.send") && s.getText().includes("Runtime.enable"))
 	).remove();
 
 	crServiceWorkerConstructorBody.addStatements(`
