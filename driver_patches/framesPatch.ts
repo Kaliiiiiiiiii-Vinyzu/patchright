@@ -338,6 +338,7 @@ export function patchFrames(project: Project) {
 
 					if (scopeInUtility?.object?.objectId) {
 						initialScope = new dom.ElementHandle(utilityContext, scopeInUtility.object.objectId);
+					}
 				}
 			}
 		}

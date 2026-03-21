@@ -31,9 +31,9 @@ export function patchCRPage(project: Project) {
 			.find((statement) => statement.getText() === "this.updateRequestInterception();")
 	);
 	updateRequestInterceptionStatement.replaceWithText(`
-			this._networkManager.setRequestInterception(true);
-			this.initScriptTag = crypto.randomBytes(20).toString('hex');
-		`);
+		this._networkManager.setRequestInterception(true);
+		this.initScriptTag = crypto.randomBytes(20).toString('hex');
+	`);
 
 	// -- exposeBinding Method --
 	crPageClass.addMethod({
@@ -215,9 +215,9 @@ export function patchCRPage(project: Project) {
 			)
 	);
 	focusEmulationIfStatement.replaceWithText(`
-			if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
-				promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
-		`);
+		if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
+			promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
+	`);
 	// Find and patch the initScript Evaluation Loop to inject pageBindings alongside initScripts for both main and utility contexts
 	initializeFrameSessionMethodBody
 		.getDescendantsOfKind(SyntaxKind.ForOfStatement)
@@ -381,8 +381,9 @@ export function patchCRPage(project: Project) {
 			.find((stmt) => stmt.getText().includes("if (worldName)") && stmt.getText().includes("_contextCreated"))
 	);
 	contextCreatedIfStatement.replaceWithText(`
-			if (worldName && (worldName === 'main' || worldName === 'utility'))\n      frame._contextCreated(worldName, context);
-		`);
+		if (worldName && (worldName === 'main' || worldName === 'utility'))
+			frame._contextCreated(worldName, context);
+	`);
 	// Execute all exposed binding scripts in the created execution context
 	onExecutionContextCreatedMethod.addStatements(`
 		for (const source of this._exposedBindingScripts) {
@@ -437,9 +438,9 @@ export function patchCRPage(project: Project) {
 			)
 	);
 	onBindingCalledIfStatement.replaceWithText(`
-			if (context) await this._page._onBindingCalled(event.payload, context);
-			else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame()._mainContext())) // This might be a bit sketchy but it works for now
-		`);
+		if (context) await this._page._onBindingCalled(event.payload, context);
+		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame()._mainContext())) // This might be a bit sketchy but it works for now
+	`);
 
 	// -- _evaluateOnNewDocument Method --
 	frameSessionClass

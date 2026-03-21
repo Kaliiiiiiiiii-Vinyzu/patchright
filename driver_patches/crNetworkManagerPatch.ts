@@ -31,15 +31,16 @@ export function patchCRNetworkManager(project: Project) {
 
 	// -- _onRequest Method --
 	const onRequestMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
-	// Find and rewrite `route = new RouteImpl(...)` in a shape-tolerant way.
-	const routeAssignment = onRequestMethod
-		.getDescendantsOfKind(SyntaxKind.BinaryExpression)
-		.find((expr) => expr.getOperatorToken().getText() === "=" && expr.getLeft().getText() === "route" && expr.getRight().getText().startsWith("new RouteImpl("));
-	if (routeAssignment) {
-		routeAssignment.getRight().replaceWithText(
-			"new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId, this._page, requestPausedEvent.networkId ?? requestPausedEvent.requestId, this)",
-		);
-	}
+	// Find the assignment statement you want to modify
+	const routeAssignment = assertDefined(
+		onRequestMethod
+			.getDescendantsOfKind(SyntaxKind.BinaryExpression)
+			.find((expr) => expr.getText().includes("route = new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId)"))
+	);
+	// Adding new parameter to the RouteImpl call
+	routeAssignment.getRight().replaceWithText(
+		"new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId, this._page, requestPausedEvent.networkId ?? requestPausedEvent.requestId, this)",
+	);
 
 	// -- _updateProtocolRequestInterceptionForSession Method --
 	const updateProtocolRequestInterceptionForSessionMethod = crNetworkManagerClass.getMethodOrThrow("_updateProtocolRequestInterceptionForSession");
@@ -70,6 +71,7 @@ export function patchCRNetworkManager(project: Project) {
 	// -- _onRequest Method --
 	const onRequestHandlerMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
 	const onRequestHandlerMethodBody = onRequestHandlerMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
+	const onRequestHandlerMethodStatements = onRequestHandlerMethodBody.getStatements();
 	onRequestHandlerMethod
 		.getBodyOrThrow()
 		.asKindOrThrow(SyntaxKind.Block)
@@ -79,14 +81,13 @@ export function patchCRNetworkManager(project: Project) {
 		`);
 
 	// Move `const isInterceptedOptionsPreflight` up before frame resolution so it's defined before first use
-	const isInterceptedOptionsPreflightIndex = onRequestHandlerMethodBody.getStatements().findIndex(s => s.getText().includes('const isInterceptedOptionsPreflight'));
+	const isInterceptedOptionsPreflightIndex = onRequestHandlerMethodStatements.findIndex(s => s.getText().includes('const isInterceptedOptionsPreflight'));
 	if (isInterceptedOptionsPreflightIndex !== -1) {
-		const statements = onRequestHandlerMethodBody.getStatements();
-		const preflightStatement = statements[isInterceptedOptionsPreflightIndex].getText();
-		statements[isInterceptedOptionsPreflightIndex].remove();
+		const preflightStatement = onRequestHandlerMethodStatements[isInterceptedOptionsPreflightIndex].getText();
+		onRequestHandlerMethodStatements[isInterceptedOptionsPreflightIndex].remove();
 
 		// Insert before the `let frame` statement so it's defined early enough
-		const frameIndex = onRequestHandlerMethodBody.getStatements().findIndex(s => s.getText().startsWith('let frame'));
+		const frameIndex = onRequestHandlerMethodStatements.findIndex(s => s.getText().startsWith('let frame'));
 		if (frameIndex !== -1) {
 			onRequestHandlerMethodBody.insertStatements(frameIndex, preflightStatement);
 			// OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
@@ -99,7 +100,7 @@ export function patchCRNetworkManager(project: Project) {
 		}
 	}
 	// Guard null page delegate when resolving synthetic main-frame id.
-	onRequestHandlerMethodBody.getStatements().forEach((statement) => {
+	onRequestHandlerMethodStatements.forEach((statement) => {
 		if (statement.getText().includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)"))
 			statement.replaceWithText(`
 				const pageDelegate = this._page?.delegate;
@@ -124,42 +125,28 @@ export function patchCRNetworkManager(project: Project) {
 	const routeImplConstructor = assertDefined(
 		routeImplClass
 			.getConstructors()
-			.find((ctor) => {
-				const params = ctor.getParameters();
-				return params[0]?.getName() === "session" && params[1]?.getName() === "interceptionId";
-			})
+			.find((ctor) => ctor.getText().includes("constructor(session: CRSession, interceptionId: string)"))
 	);
 	// Get current parameters and add the new `page`, `networkId` and `sessionManager` parameter
 	const routeImplConstructorParameters = routeImplConstructor.getParameters();
-	const hasPageParam = routeImplConstructorParameters.some(param => param.getName() === "page");
-	const hasNetworkIdParam = routeImplConstructorParameters.some(param => param.getName() === "networkId");
-	const hasSessionManagerParam = routeImplConstructorParameters.some(param => param.getName() === "sessionManager");
-	const paramsToInsert = [];
-	if (!hasPageParam)
-		paramsToInsert.push({ name: "page", type: "Page | null" });
-	if (!hasNetworkIdParam)
-		paramsToInsert.push({ name: "networkId", type: "string" });
-	if (!hasSessionManagerParam)
-		paramsToInsert.push({ name: "sessionManager", type: "CRNetworkManager" });
-	if (paramsToInsert.length)
-		routeImplConstructor.insertParameters(routeImplConstructor.getParameters().length, paramsToInsert);
+	routeImplConstructor.insertParameters(routeImplConstructorParameters.length, [
+		{ name: 'page', type: 'Page | null' },
+		{ name: 'networkId', type: 'string' },
+		{ name: 'sessionManager', type: 'CRNetworkManager' },
+	]);
 	// Modify the constructor's body to include `this._page = page;` and other properties
 	const routeImplConstructorBody = routeImplConstructor.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
-	const routeImplConstructorText = routeImplConstructorBody.getText();
-	if (!routeImplConstructorText.includes("this._page = void 0;"))
-		routeImplConstructorBody.insertStatements(0, "this._page = void 0;");
-	if (!routeImplConstructorText.includes("this._networkId = void 0;"))
-		routeImplConstructorBody.insertStatements(0, "this._networkId = void 0;");
-	if (!routeImplConstructorText.includes("this._sessionManager = void 0;"))
-		routeImplConstructorBody.insertStatements(0, "this._sessionManager = void 0;");
-	if (!routeImplConstructorText.includes("this._page = page;"))
-		routeImplConstructorBody.addStatements("this._page = page;");
-	if (!routeImplConstructorText.includes("this._networkId = networkId;"))
-		routeImplConstructorBody.addStatements("this._networkId = networkId;");
-	if (!routeImplConstructorText.includes("this._sessionManager = sessionManager;"))
-		routeImplConstructorBody.addStatements("this._sessionManager = sessionManager;");
-	if (!routeImplConstructorText.includes("this._networkRequestIntercepted(e)"))
-		routeImplConstructorBody.addStatements("eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));");
+	routeImplConstructorBody.insertStatements(0, [
+		'this._page = void 0;',
+		'this._networkId = void 0;',
+		'this._sessionManager = void 0;',
+	]);
+	routeImplConstructorBody.addStatements([
+		'this._page = page;',
+		'this._networkId = networkId;',
+		'this._sessionManager = sessionManager;',
+		"eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));",
+	]);
 
 	// -- _fixCSP Method --
 	routeImplClass.addMethod({
@@ -351,33 +338,66 @@ export function patchCRNetworkManager(project: Project) {
 	const fulfillMethod = routeImplClass.getMethodOrThrow("fulfill");
 	// Replace the body of the fulfill method with custom code
 	fulfillMethod.setBodyText(`
-			const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
-			const pageDelegate = this._page?.delegate ?? null;
-			const initScriptTag = pageDelegate?.initScriptTag ?? "";
-			const allInjections = pageDelegate
-				? [...pageDelegate._mainFrameSession._evaluateOnNewDocumentScripts]
-				: [];
+		const isTextHtml = response.headers.some((header) => header.name.toLowerCase() === "content-type" && header.value.includes("text/html"));
+		const pageDelegate = this._page?.delegate ?? null;
+		const initScriptTag = pageDelegate?.initScriptTag ?? "";
+		const allInjections = pageDelegate;
+			? [...pageDelegate._mainFrameSession._evaluateOnNewDocumentScripts]
+			: [];
 
-			if (isTextHtml && allInjections.length && initScriptTag) {
-				// Decode body if needed
-				if (response.isBase64) {
-					response.isBase64 = false;
-					response.body = Buffer.from(response.body, "base64").toString("utf-8");
+		if (isTextHtml && allInjections.length && initScriptTag) {
+			// Decode body if needed
+			if (response.isBase64) {
+				response.isBase64 = false;
+				response.body = Buffer.from(response.body, "base64").toString("utf-8");
+			}
+
+			// CSP Detection and Fixing
+			const cspHeaderNames = ["content-security-policy", "content-security-policy-report-only"];
+			const extractNonce = (cspValue) => {
+				const match = cspValue.match(/script-src[^;]*'nonce-([^'"\s;]+)'/i);
+				return match?.[1] ?? null;
+			};
+		  let useNonce = false;
+			let scriptNonce = null;
+
+			// Fix CSP in headers
+			for (const header of response.headers) {
+				if (cspHeaderNames.includes(header.name.toLowerCase())) {
+					const originalCsp = header.value ?? "";
+					// Extract nonce if present
+					const nonce = !useNonce && extractNonce(originalCsp);
+					if (nonce) {
+						scriptNonce = nonce;
+						useNonce = true;
+					}
+
+					header.value = this._fixCSP(originalCsp, scriptNonce);
 				}
+			}
 
-				// CSP Detection and Fixing
-				const cspHeaderNames = ["content-security-policy", "content-security-policy-report-only"];
-				const extractNonce = (cspValue) => {
-					const match = cspValue.match(/script-src[^;]*'nonce-([^'"\s;]+)'/i);
-					return match?.[1] ?? null;
-				};
-		    let useNonce = false;
-				let scriptNonce = null;
+			// Fix CSP in meta tags
+			if (typeof response.body === "string" && response.body.length) {
+				response.body = response.body.replace(
+					/<meta\b[^>]*http-equiv=(?:"|')?Content-Security-Policy(?:"|')?[^>]*>/gi,
+					(match) => {
+						const contentMatch = match.match(/\bcontent=(?:"|')([^"']*)(?:"|')/i);
+						if (!contentMatch)
+							return match;
 
-				// Fix CSP in headers
-				for (const header of response.headers) {
-					if (cspHeaderNames.includes(header.name.toLowerCase())) {
-						const originalCsp = header.value ?? "";
+						let originalCsp = contentMatch[1];
+						// Decode HTML entities
+						originalCsp = originalCsp
+							.replace(/&amp;/g, '&')  // Must be first!
+							.replace(/&lt;/g, '<')
+							.replace(/&gt;/g, '>')
+							.replace(/&quot;/g, '"')
+							.replace(/&#x27;/g, "'")
+							.replace(/&#x22;/g, '"')
+							.replace(/&nbsp;/g, ' ')
+							.replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+							.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
 						// Extract nonce if present
 						const nonce = !useNonce && extractNonce(originalCsp);
 						if (nonce) {
@@ -385,77 +405,44 @@ export function patchCRNetworkManager(project: Project) {
 							useNonce = true;
 						}
 
-						header.value = this._fixCSP(originalCsp, scriptNonce);
+						const fixedCsp = this._fixCSP(originalCsp, scriptNonce);
+						// Re-encode for HTML
+						const encodedCsp = fixedCsp.replace(/'/g, '&#x27;').replace(/"/g, '&#x22;');
+						return match.replace(contentMatch[1], encodedCsp);
 					}
-				}
-
-				// Fix CSP in meta tags
-				if (typeof response.body === "string" && response.body.length) {
-					response.body = response.body.replace(
-						/<meta\b[^>]*http-equiv=(?:"|')?Content-Security-Policy(?:"|')?[^>]*>/gi,
-						(match) => {
-							const contentMatch = match.match(/\bcontent=(?:"|')([^"']*)(?:"|')/i);
-							if (!contentMatch)
-								return match;
-
-							let originalCsp = contentMatch[1];
-							// Decode HTML entities
-							originalCsp = originalCsp
-								.replace(/&amp;/g, '&')  // Must be first!
-								.replace(/&lt;/g, '<')
-								.replace(/&gt;/g, '>')
-								.replace(/&quot;/g, '"')
-								.replace(/&#x27;/g, "'")
-								.replace(/&#x22;/g, '"')
-								.replace(/&nbsp;/g, ' ')
-								.replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
-								.replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-
-							// Extract nonce if present
-							const nonce = !useNonce && extractNonce(originalCsp);
-							if (nonce) {
-								scriptNonce = nonce;
-								useNonce = true;
-							}
-
-							const fixedCsp = this._fixCSP(originalCsp, scriptNonce);
-							// Re-encode for HTML
-							const encodedCsp = fixedCsp.replace(/'/g, '&#x27;').replace(/"/g, '&#x22;');
-							return match.replace(contentMatch[1], encodedCsp);
-						}
-					);
-				}
-
-				// Build injection HTML - only use nonce if one was found in existing CSP
-				const nonceAttr = useNonce ? \`nonce="\${scriptNonce}"\` : '';
-				let injectionHTML = "";
-				allInjections.forEach((script) => {
-					let scriptId = crypto.randomBytes(22).toString("hex");
-					let scriptSource = script.source ?? script;
-					injectionHTML += \`<script class="\${initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
-				});
-
-				// Inject at END of <head>
-				response.body = injectIntoHead(response.body, injectionHTML);
+				);
 			}
 
-			this._fulfilled = true;
-			const body = response.isBase64 ? response.body : Buffer.from(response.body).toString("base64");
-			const responseHeaders = splitSetCookieHeader(response.headers);
-			await catchDisallowedErrors(async () => {
-				await this._session.send("Fetch.fulfillRequest", {
-					requestId: response.interceptionId ? response.interceptionId : this._interceptionId,
-					responseCode: response.status,
-					responsePhrase: network.statusText(response.status),
-					responseHeaders,
-					body
-				});
+			// Build injection HTML - only use nonce if one was found in existing CSP
+			const nonceAttr = useNonce ? \`nonce="\${scriptNonce}"\` : '';
+			let injectionHTML = "";
+			allInjections.forEach((script) => {
+				let scriptId = crypto.randomBytes(22).toString("hex");
+				let scriptSource = script.source ?? script;
+				injectionHTML += \`<script class="\${initScriptTag}" \${nonceAttr} id="\${scriptId}" type="text/javascript">document.getElementById("\${scriptId}")?.remove();\${scriptSource}</script>\`;
 			});
+
+			// Inject at END of <head>
+			response.body = this._injectIntoHead(response.body, injectionHTML);
+		}
+
+		this._fulfilled = true;
+		const body = response.isBase64 ? response.body : Buffer.from(response.body).toString("base64");
+		const responseHeaders = splitSetCookieHeader(response.headers);
+		await catchDisallowedErrors(async () => {
+			await this._session.send("Fetch.fulfillRequest", {
+				requestId: response.interceptionId ? response.interceptionId : this._interceptionId,
+				responseCode: response.status,
+				responsePhrase: network.statusText(response.status),
+				responseHeaders,
+				body
+			});
+		});
 	`);
 
 	// -- continue Method --
 	const continueMethod = routeImplClass.getMethodOrThrow("continue");
-	continueMethod.setBodyText(`;
+	continueMethod.setBodyText(`		;
 		this._alreadyContinuedParams = {
 			requestId: this._interceptionId,
 			url: overrides.url,

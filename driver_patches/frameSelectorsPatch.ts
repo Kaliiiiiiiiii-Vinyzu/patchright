@@ -70,23 +70,23 @@ export function patchFrameSelectors(project: Project) {
 			statement.getThenStatement().getText() === "return null;"
 		);
 	assertDefined(resolveFrameForSelectorIfStatement).replaceWithText(`
-			if (!element) {
-				try {
-					var client = frame._page.delegate._sessionForFrame(frame)._client;
-				} catch (e) {
-					var client = frame._page.delegate._mainFrameSession._client;
-				}
-				var mainContext = await frame._context("main");
-				const documentNode = await client.send("Runtime.evaluate", {
-					expression: "document",
-					serializationOptions: { serialization: "idOnly" },
-					contextId: mainContext.delegate._contextId
-				});
-				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, progress, info.parsed);
-				if (check.length === 0) return null;
-	 			element = check[0];
+		if (!element) {
+			try {
+				var client = frame._page.delegate._sessionForFrame(frame)._client;
+			} catch (e) {
+				var client = frame._page.delegate._mainFrameSession._client;
 			}
+			var mainContext = await frame._context("main");
+			const documentNode = await client.send("Runtime.evaluate", {
+				expression: "document",
+				serializationOptions: { serialization: "idOnly" },
+				contextId: mainContext.delegate._contextId
+			});
+			const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
+			var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, progress, info.parsed);
+			if (check.length === 0) return null;
+			element = check[0];
+		}
 	`);
 
 		// -- resolveInjectedForSelector Method --
