@@ -126,7 +126,7 @@ export function patchFrames(project: Project) {
 		}
 		return await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
 			if (!result || !result[0]) return [];
-			return result[1];
+			return Array.isArray(result[1]) ? result[1] : [];
 		}, 'returnAll', null);
 	`);
 
@@ -245,7 +245,7 @@ export function patchFrames(project: Project) {
 			progress.log(\`setting frame content, waiting until "\${waitUntil}"\`);
 			const lifecyclePromise = new Promise((resolve, reject) => {
 				this._onClearLifecycle();
-				this.waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
+				this._waitForLoadState(progress, waitUntil).then(resolve).catch(reject);
 			});
 			const setContentPromise = this._page.delegate._sessionForFrame(this)._client.send("Page.setDocumentContent", {
 				frameId: this._id,
@@ -261,13 +261,26 @@ export function patchFrames(project: Project) {
 	const retryWithProgressIfNotConnectedMethod = frameClass.getMethodOrThrow("_retryWithProgressIfNotConnected");
 	retryWithProgressIfNotConnectedMethod.addParameter({
 			name: "returnAction",
-			type: "boolean | undefined",
+			type: "'returnOnNotResolved' | 'returnAll' | undefined",
 	});
 	retryWithProgressIfNotConnectedMethod.setBodyText(`
+		let options: any;
+		let actionCallback: any;
+		let normalizedReturnAction: any = returnAction;
+
+		if (typeof strict === 'object' && strict) {
+			options = strict as any;
+			actionCallback = performActionPreChecks as any;
+			normalizedReturnAction = action as any;
+		} else {
+			options = { strict, performActionPreChecks };
+			actionCallback = action;
+		}
+
 		if (!(options as any)?.__patchrightSkipRetryLogWaiting)
 			progress.log("waiting for " + this._asLocator(selector));
 		return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async continuePolling => {
-			return this._retryWithoutProgress(progress, selector, options, action, returnAction, continuePolling);
+			return this._retryWithoutProgress(progress, selector, options, actionCallback, normalizedReturnAction, continuePolling);
 		});
 	`);
 
@@ -862,17 +875,18 @@ export function patchFrames(project: Project) {
 				if (currentScopingElements.length == 0)
 					return [];
 
-				if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1))
+				if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1)) {
 					if (parsed.capture !== undefined)
 						throw new Error("Can't query n-th element in a request with the capture.");
 					return [];
+				}
 				currentScopingElements = [currentScopingElements.at(partNth)];
 				continue;
 			} else if (part.name === "internal:or") {
-				var orredElements = await this._customFindFramesByParsed(resolved, client, context, documentScope, progress, part.body.parsed);
+				var orredElements = await this._customFindElementsByParsed(resolved, client, context, documentScope, progress, part.body.parsed);
 				elements = [...currentScopingElements, ...orredElements];
 			} else if (part.name == "internal:and") {
-				var andedElements = await this._customFindFramesByParsed(resolved, client, context, documentScope, progress, part.body.parsed);
+				var andedElements = await this._customFindElementsByParsed(resolved, client, context, documentScope, progress, part.body.parsed);
 				const backendNodeIds = new Set(andedElements.map(elem => elem.backendNodeId));
 				elements = currentScopingElements.filter(elem => backendNodeIds.has(elem.backendNodeId));
 			} else {

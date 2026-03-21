@@ -137,10 +137,11 @@ export function patchFrameSelectors(project: Project) {
 				if (currentScopingElements.length == 0)
 					return [];
 
-				if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1))
+				if (partNth > currentScopingElements.length-1 || partNth < -(currentScopingElements.length-1)) {
 					if (parsed.capture !== undefined)
 						throw new Error("Can't query n-th element in a request with the capture.");
 					return [];
+				}
 				currentScopingElements = [currentScopingElements.at(partNth)];
 				continue;
 			} else if (part.name === "internal:or") {
