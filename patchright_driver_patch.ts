@@ -1,5 +1,6 @@
 import { IndentationText, Project } from "ts-morph";
 import YAML from "yaml";
+import { readFile, writeFile } from "node:fs/promises";
 
 import * as patches from "./driver_patches/index.ts";
 
@@ -10,6 +11,7 @@ const project = new Project({
 });
 
 // patchright-driver-patch: start
+// NOTE: Workflows append everything after this marker into patchright-nodejs patch script.
 
 // ------------------------
 // server/browserContext.ts
@@ -159,7 +161,6 @@ patches.patchTracing(project);
 // -------------------------
 // protocol/protocol.yml
 // -------------------------
-import { readFile, writeFile } from "node:fs/promises";
 const protocol = YAML.parse(await readFile("packages/protocol/src/protocol.yml", "utf8"));
 
 // isolatedContext parameters
