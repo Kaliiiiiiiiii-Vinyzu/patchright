@@ -1,4 +1,3 @@
-import { readFile, writeFile } from "node:fs/promises";
 import { IndentationText, Project } from "ts-morph";
 import YAML from "yaml";
 
@@ -160,6 +159,7 @@ patches.patchTracing(project);
 // -------------------------
 // protocol/protocol.yml
 // -------------------------
+import { readFile, writeFile } from "node:fs/promises";
 const protocol = YAML.parse(await readFile("packages/protocol/src/protocol.yml", "utf8"));
 
 // isolatedContext parameters
