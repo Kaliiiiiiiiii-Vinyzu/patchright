@@ -2,8 +2,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { IndentationText, Project } from "ts-morph";
 import YAML from "yaml";
 
-// patchright-driver-patch: start
-
 import * as patches from "./driver_patches/index.ts";
 
 const project = new Project({
@@ -11,6 +9,8 @@ const project = new Project({
 		indentationText: IndentationText.TwoSpaces,
 	},
 });
+
+// patchright-driver-patch: start
 
 // ------------------------
 // server/browserContext.ts
