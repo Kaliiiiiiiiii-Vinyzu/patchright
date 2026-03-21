@@ -646,9 +646,10 @@ export function patchFrames(project: Project) {
 			metadata,
 			race: (promise) => Promise.race(Array.isArray(promise) ? promise : [promise])
 		}
-		return await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false }, async ([handle, handles] = []) => {
-			if (!handle) return 0;
-			return handles.length;
+		return await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false }, async (result) => {
+			if (!result || !result[0])
+				return 0;
+			return Array.isArray(result[1]) ? result[1].length : 0;
 		}, 'returnAll', null);
 	`);
 
