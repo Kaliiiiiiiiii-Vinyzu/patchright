@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Playwright Version'
+        description: 'Playwright Version (e.g. v1.58.0)'
         default: ''
   # running every hour
   schedule:
@@ -105,6 +105,8 @@ jobs:
           utils/build/build-playwright-driver.sh
 
       - name: Publish Patchright Driver
+        env:
+          PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
           chmod +x utils/release_driver.sh
           utils/release_driver.sh
