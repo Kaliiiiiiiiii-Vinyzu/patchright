@@ -86,6 +86,7 @@ export function patchCRNetworkManager(project: Project) {
 			.getStatements()
 			.find(s => s.getText().includes('const isInterceptedOptionsPreflight'))
 	);
+	const preflightStatementText = preflightStatementNode.getText();
 	preflightStatementNode.remove();
 
 	// Insert before the `let frame` statement so it's defined early enough
@@ -95,7 +96,7 @@ export function patchCRNetworkManager(project: Project) {
 			.find(s => s.getText().startsWith('let frame'))
 	);
 	const frameIndex = frameStatement.getChildIndex();
-	onRequestHandlerMethodBody.insertStatements(frameIndex, preflightStatementNode.getText());
+	onRequestHandlerMethodBody.insertStatements(frameIndex, preflightStatementText);
 	// OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
 	onRequestHandlerMethodBody.insertStatements(frameIndex + 1, `
 		if (isInterceptedOptionsPreflight && !(this._page || this._serviceWorker).needsRequestInterception()) {
