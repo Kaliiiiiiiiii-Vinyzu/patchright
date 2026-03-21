@@ -1,6 +1,6 @@
 import { IndentationText, Project } from "ts-morph";
 import YAML from "yaml";
-import { readFile, writeFile } from "node:fs/promises";
+import fs from "node:fs/promises";
 
 import * as patches from "./driver_patches/index.ts";
 
@@ -161,7 +161,7 @@ patches.patchTracing(project);
 // -------------------------
 // protocol/protocol.yml
 // -------------------------
-const protocol = YAML.parse(await readFile("packages/protocol/src/protocol.yml", "utf8"));
+const protocol = YAML.parse(await fs.readFile("packages/protocol/src/protocol.yml", "utf8"));
 
 // isolatedContext parameters
 for (const type of ["Frame", "JSHandle", "Worker"]) {
@@ -174,7 +174,7 @@ protocol.Frame.commands.evalOnSelectorAll.parameters.isolatedContext = "boolean?
 // focusControl parameter
 protocol.ContextOptions.properties.focusControl = "boolean?";
 
-await writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
+await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
 
 // Save the changes without reformatting
 project.saveSync();
