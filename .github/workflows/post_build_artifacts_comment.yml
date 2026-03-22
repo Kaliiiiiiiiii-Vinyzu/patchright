@@ -73,7 +73,7 @@ jobs:
               '__Do not download or use these artifacts in production! They are only for testing purposes on this Pull Request.__',
               '',
               '**Download**',
-              `- Open this workflow run and download the artifact named \`build-artifacts\`:\n  ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`,
+              `- Download the PRs driver build via \`build-artifacts\`:\n  [Download Driver Build Artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}/artifacts/${artifact.id})`,
               '',
               '**Debug info**',
               `- Artifact ID: \`${artifact.id}\``,
