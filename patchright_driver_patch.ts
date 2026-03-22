@@ -1,6 +1,6 @@
+import fs from "node:fs/promises";
 import { IndentationText, Project } from "ts-morph";
 import YAML from "yaml";
-import fs from "node:fs/promises";
 
 import * as patches from "./driver_patches/index.ts";
 
@@ -93,6 +93,11 @@ patches.patchPageBinding(project);
 // --------------
 patches.patchClock(project);
 
+// ----------------------
+// Patchright CLI Aliases
+// ----------------------
+patches.patchCliAlias(project);
+
 // --------------------
 // server/javascript.ts
 // --------------------
@@ -127,11 +132,6 @@ patches.patchPageDispatcher(project);
 // injected/src/xpathSelectorEngine.ts
 // -----------------------------------
 patches.patchXPathSelectorEngine(project);
-
-// ------------------------
-// server/registry/index.ts
-// ------------------------
-patches.patchServerRegistryIndex(project);
 
 // -------------------------
 // recorder/src/recorder.tsx
