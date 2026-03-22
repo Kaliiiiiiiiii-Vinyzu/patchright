@@ -28,24 +28,25 @@ if [ -z "$repo" ]; then
   exit 1
 fi
 
-# Function to compare two semantic versions (ignoring 'v' prefix)
-version_is_behind() {
-  local version1=${1//v/} # Remove 'v' prefix from version1
-  local version2=${2//v/} # Remove 'v' prefix from version2
+# Function to check whether a release tag exists in a repository's releases.
+tag_exists_in_releases() {
+  local repo=$1
+  local tag=$2
+  local response
 
-  IFS='.' read ver1_1 ver1_2 ver1_3 <<< "$version1"
-  IFS='.' read ver2_1 ver2_2 ver2_3 <<< "$version2"
-
-  ver1_1=${ver1_1:-0}
-  ver1_2=${ver1_2:-0}
-  ver1_3=${ver1_3:-0}
-  ver2_1=${ver2_1:-0}
-  ver2_2=${ver2_2:-0}
-  ver2_3=${ver2_3:-0}
-
-  if ((10#$ver1_1 < 10#$ver2_1)) || ((10#$ver1_1 == 10#$ver2_1 && 10#$ver1_2 < 10#$ver2_2)) || ((10#$ver1_1 == 10#$ver2_1 && 10#$ver1_2 == 10#$ver2_2 && 10#$ver1_3 < 10#$ver2_3)); then
-    return 0
+  if ! response=$(curl --fail --silent --show-error "https://api.github.com/repos/$repo/releases?per_page=100"); then
+    echo "Failed to fetch releases for $repo" >&2
+    return 1
   fi
+
+  # Treat "v1.2.3" and "1.2.3" as equivalent.
+  local normalized_tag=${tag#v}
+  while IFS= read -r release_tag; do
+    local normalized_release_tag=${release_tag#v}
+    if [ "$normalized_release_tag" = "$normalized_tag" ]; then
+      return 0
+    fi
+  done < <(printf '%s\n' "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' || true)
 
   return 1
 }
@@ -59,14 +60,14 @@ patchright_version=$(get_latest_release "$repo")
 echo "Latest release of the Patchright Driver: $patchright_version"
 echo "previous_playwright_version=$patchright_version" >>"$GITHUB_OUTPUT"
 
-# Compare the versions
-if version_is_behind "$patchright_version" "$playwright_version"; then
+# Compare by existence: proceed only if Patchright does not contain the latest Playwright release tag.
+if tag_exists_in_releases "$repo" "$playwright_version"; then
+  echo "$repo is up to date with microsoft/playwright."
+  echo "proceed=false" >>"$GITHUB_OUTPUT"
+  echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
+else
   echo "$repo is behind microsoft/playwright. Building & Patching..."
   echo "proceed=true" >>"$GITHUB_OUTPUT"
   echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
   echo "playwright_version=$playwright_version" >>"$GITHUB_ENV"
-else
-  echo "$repo is up to date with microsoft/playwright."
-  echo "proceed=false" >>"$GITHUB_OUTPUT"
-  echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
 fi
