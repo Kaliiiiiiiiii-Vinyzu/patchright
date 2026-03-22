@@ -15,11 +15,8 @@ RELEASE_RESPONSE=$(curl -sSf --fail-with-body -X POST \
   "https://api.github.com/repos/$REPO/releases")
 
 echo "$RELEASE_RESPONSE"
-
-# Remove line breaks from the response
-RELEASE_RESPONSE=$(echo "$RELEASE_RESPONSE" | tr -d '\n')
 # Extract the upload URL from the release response
-UPLOAD_URL=$(echo "$RELEASE_RESPONSE" | sed 's/$/\\n/' | tr -d '\n' | sed -e 's/“/"/g' -e 's/”/"/g' | sed '$ s/\\n$//' | jq -r .upload_url | sed "s/{?name,label}//")
+UPLOAD_URL=$(jq -r '.upload_url // empty' <<<"$RELEASE_RESPONSE" | sed "s/{?name,label}//")
 
 # Check if upload URL was extracted correctly
 if [ -z "$UPLOAD_URL" ] || [ "$UPLOAD_URL" = "null" ]; then
