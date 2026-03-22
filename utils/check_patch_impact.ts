@@ -587,7 +587,10 @@ function formatUnaffectedTable(unaffectedRows: SymbolImpactRow[], newTag: string
 }
 
 function toPatchSection(playwrightFile: string, patchText: string): string {
-  const body = patchText.trimEnd();
+  const body = patchText
+    .split("\n")
+    .filter((line) => !line.startsWith("@@ "))
+    .join("\n");
 
   return [
     `diff --git a/${playwrightFile} b/${playwrightFile}`,
