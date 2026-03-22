@@ -23,6 +23,7 @@ jobs:
     outputs:
       proceed: ${{ steps.version_check.outputs.proceed }}
       playwright_version: ${{ steps.version_check.outputs.playwright_version }}
+      previous_playwright_version: ${{ steps.version_check.outputs.previous_playwright_version }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
@@ -31,13 +32,29 @@ jobs:
         id: version_check
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
+            response=$(curl --silent "https://api.github.com/repos/${REPO}/releases/latest")
+            previous_playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
             echo "proceed=true" >>$GITHUB_OUTPUT
             echo "playwright_version=${{ github.event.inputs.version }}" >>$GITHUB_OUTPUT
+            echo "previous_playwright_version=${previous_playwright_version:-v0.0.0}" >>$GITHUB_OUTPUT
             echo "playwright_version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
           else
             chmod +x utils/release_version_check.sh
             utils/release_version_check.sh
           fi
+
+  check-patch-impact:
+    name: Check Patch Impact
+    needs: [check-release-version, run-patchright-tests]
+    if: always() && needs.check-release-version.outputs.proceed == 'true'
+    permissions:
+      contents: read
+      issues: write
+    uses: ./.github/workflows/check_patch_impact.yml
+    with:
+      old_version: ${{ needs.check-release-version.outputs.previous_playwright_version }}
+      new_version: ${{ needs.check-release-version.outputs.playwright_version }}
+      create_issue: false
 
   run-patchright-tests:
     name: Run Patchright Tests
@@ -47,10 +64,112 @@ jobs:
     with:
       playwright_version: ${{ needs.check-release-version.outputs.playwright_version }}
 
+  notify-test-failure:
+    name: Open Issue On Test Failure
+    needs: [check-release-version, run-patchright-tests, check-patch-impact]
+    if: always() && needs.check-release-version.outputs.proceed == 'true' && needs.run-patchright-tests.outputs.test_outcome == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Download Patch Impact Report Artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: report.json
+          path: artifacts
+
+      - name: Open Test Failure Issue
+        uses: actions/github-script@v8
+        env:
+          OLD_VERSION: ${{ needs.check-release-version.outputs.previous_playwright_version }}
+          NEW_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const oldVersion = process.env.OLD_VERSION || 'unknown';
+            const rawNewVersion = process.env.NEW_VERSION || 'unknown';
+            const normalizedNewVersion = rawNewVersion.startsWith('v') ? rawNewVersion.slice(1) : rawNewVersion;
+
+            let affectedTable = 'No affected symbols were found in the patch impact report.';
+            try {
+              const reportPath = 'artifacts/report.json';
+              const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              const affected = Array.isArray(report.affected) ? report.affected : [];
+              if (affected.length > 0) {
+                const header = '| Symbol | Kind | Change Type | Playwright File | Patch File |';
+                const divider = '|--------|------|-------------|-----------------|------------|';
+                const rows = affected.map((row) => {
+                  const symbol = row.symbol ?? '';
+                  const kind = row.kind ?? '';
+                  const changeType = row.changeType ?? '';
+                  const playwrightFile = row.playwrightFile ?? '';
+                  const patchFile = row.patchFile ?? '';
+                  return `| ${symbol} | ${kind} | ${changeType} | ${playwrightFile} | ${patchFile} |`;
+                });
+                affectedTable = [header, divider, ...rows].join('\n');
+              }
+            } catch (error) {
+              affectedTable = 'Patch impact report artifact could not be read.';
+            }
+
+            let pageTestsStepLink = 'Unavailable';
+            let libraryTestsStepLink = 'Unavailable';
+            try {
+              const jobsResponse = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId,
+                per_page: 100,
+              });
+
+              const testsJob = jobsResponse.data.jobs.find((job) =>
+                job.name.includes('Run Patchright Tests') ||
+                job.name.toLowerCase().includes('run-patchright-tests')
+              );
+
+              if (testsJob?.html_url) {
+                const pageStep = (testsJob.steps || []).find((step) => step.name === 'Run Page Tests');
+                const libraryStep = (testsJob.steps || []).find((step) => step.name === 'Run Library Tests');
+
+                if (pageStep?.number)
+                  pageTestsStepLink = `[Run Page Tests](${testsJob.html_url}#step:${pageStep.number}:1)`;
+                if (libraryStep?.number)
+                  libraryTestsStepLink = `[Run Library Tests](${testsJob.html_url}#step:${libraryStep.number}:1)`;
+              }
+            } catch (error) {
+              // Keep defaults when job/step links are unavailable.
+            }
+
+            const issueBody = [
+              `## Release Failed: Playwright ${oldVersion} → ${rawNewVersion}`,
+              '',
+              'The automated release workflow failed at the test step.',
+              '',
+              'Test step logs:',
+              `- ${pageTestsStepLink}`,
+              `- ${libraryTestsStepLink}`,
+              '',
+              'The following patched APIs changed between these versions and may be the cause:',
+              '',
+              affectedTable,
+              '',
+              'cc @Vinyzu',
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Release Failed: v${normalizedNewVersion} — Tests Failed`,
+              body: issueBody,
+              labels: ['release-failed', 'upstream-break'],
+            });
+
   patchright-workflow:
     name: "Patchright Release: Install, Patch, Build and Publish Patchright Driver"
-    needs: [check-release-version, run-patchright-tests]
-    if: needs.check-release-version.outputs.proceed == 'true' && needs.run-patchright-tests.result == 'success'
+    needs: [check-release-version, check-patch-impact, run-patchright-tests]
+    if: needs.check-release-version.outputs.proceed == 'true' && needs.run-patchright-tests.outputs.test_outcome == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -76,10 +195,18 @@ jobs:
           cd playwright
           npm ci
 
+      - name: Fetch Client Patches from patchright-nodejs
+        run: |
+          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
+          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
+          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
+          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.ts >> patchright_nodejs_patch.js
+          rm -rf patchright-nodejs
+
       - name: Patch Playwright Driver
         run: |
           cd playwright
-          node "../patchright_driver_patch.js"
+          node "../patchright_nodejs_patch.js"
 
       - name: Generate Playwright Channels
         # Ignore the error exit code, as the script exits 1 when a file is modified.

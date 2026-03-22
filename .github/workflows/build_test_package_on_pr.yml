@@ -48,14 +48,22 @@ jobs:
 
       - name: Install Playwright Driver
         run: |
-          git clone https://github.com/microsoft/playwright --branch ${{ env.playwright_version }}
+          git clone https://github.com/microsoft/playwright --branch ${{ steps.version_check.outputs.playwright_version }}
           cd playwright
           npm ci
+
+      - name: Fetch Client Patches from patchright-nodejs
+        run: |
+          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
+          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
+          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
+          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.ts >> patchright_nodejs_patch.js
+          rm -rf patchright-nodejs
 
       - name: Patch Playwright Driver
         run: |
           cd playwright
-          node "../patchright_driver_patch.js"
+          node "../patchright_nodejs_patch.js"
 
       - name: Generate Playwright Channels
         # Ignore the error exit code, as the script exits 1 when a file is modified.

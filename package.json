@@ -1,6 +1,19 @@
 {
+    "scripts": {
+        "patch": "tsx patchright_driver_patch.ts",
+        "typecheck": "tsc --noEmit",
+        "format:check": "bash -c 'biome check --line-width=320 --formatter-enabled=false --diagnostic-level=error ${@:-patchright_driver_patch.ts driver_patches/}' --",
+        "format:fix": "tsx utils/format-indentation.ts",
+        "format": "bash -c 'npm run format:fix -- ${@} && npm run format:check -- ${@}' --"
+    },
     "devDependencies": {
+        "@biomejs/biome": "^2.4.8",
+        "@types/node": "^25.5.0",
+        "glob": "^10.2.7",
+        "prettier": "^3.0.0",
         "ts-morph": "^23.0.0",
+        "tsx": "^4.21.0",
+        "typescript": "^5.9.3",
         "yaml": "^2.7.0"
     },
     "type": "module"

@@ -25,13 +25,18 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 	let text = sourceFile.getFullText();
 	const original = text;
 
+	const missingReplacements = [];
 	const replaceAll = (from, to) => {
 		if (text.includes(from))
 			text = text.split(from).join(to);
 	};
 	const replaceOnce = (from, to) => {
-		if (text.includes(from))
+		if (text.includes(from)) {
 			text = text.replace(from, to);
+			return true;
+		}
+		missingReplacements.push({ relativePath, from });
+		return false;
 	};
 
 	if (relativePath === 'tests/library/browsercontext-add-init-script.spec.ts') {
@@ -94,9 +99,9 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 		);
 
 		// Ensure tests in this file that now use server have it in fixtures.
-		text = text.replace(/async \(\{([^}]*)\}\) => \{/g, (full, inside) => {
+		text = text.replace(/async \(\{([^}]*)\}\) => \{/g, (match, inside) => {
 			if (!inside.includes('page') || inside.includes('server'))
-				return full;
+				return match;
 			const next = inside.trim().length ? `${inside.trim()}, server` : 'server';
 			return `async ({ ${next} }) => {`;
 		});
@@ -173,6 +178,14 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 			"  await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(async () => {\n      const win = window.open('about:blank');\n      win['add'](9, 4);\n      win.close();\n    }, undefined, false),\n  ]);",
 			"  const [popup] = await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(url => window.open(url), server.EMPTY_PAGE, false),\n  ]);\n  await popup.waitForLoadState();\n  await Promise.all([\n    popup.waitForEvent('close'),\n    popup.evaluate(() => { window['add'](9, 4); window.close(); }, undefined, false),\n  ]);"
 		);
+	}
+
+	if (missingReplacements.length) {
+		console.error(`[modify_tests] Failed to apply expected modifications for ${relativePath}`);
+		for (const { from } of missingReplacements)
+			console.error(`  - Missing replacement: ${from}`);
+		if (!dryRun)
+			console.error(`[modify_tests] Continuing despite ${missingReplacements.length} missing replacement(s) due to upstream test drift.`);
 	}
 
 	if (text !== original) {
@@ -378,16 +391,16 @@ const FIXME_TARGET_LINES = {
 };
 
 function walkFiles(dirPath) {
-	const result = [];
+	const specFiles = [];
 	for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
 		const fullPath = path.join(dirPath, entry.name);
 		if (entry.isDirectory()) {
-			result.push(...walkFiles(fullPath));
+			specFiles.push(...walkFiles(fullPath));
 		} else if (entry.isFile() && entry.name.endsWith('.spec.ts')) {
-			result.push(fullPath);
+			specFiles.push(fullPath);
 		}
 	}
-	return result;
+	return specFiles;
 }
 
 function isFunctionLikeEvaluateExpressionArg(node) {

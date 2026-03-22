@@ -32,11 +32,11 @@ jobs:
         run: |
           AUTHOR=$(git log -1 --pretty=format:'%an')
           COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
-          echo "AUTHOR=$AUTHOR" >> $GITHUB_ENV
-          echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
+          echo "author=$AUTHOR" >> $GITHUB_OUTPUT
+          echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Skip if Commit is from GitHub Actions
-        if: env.AUTHOR == 'github-actions'
+        if: contains(steps.get_commit_info.outputs.author, 'github-actions')
         run: echo "Skipping action as the commit is from github-actions" && exit 0
 
       - name: Install Playwright Driver
@@ -47,24 +47,32 @@ jobs:
           cd playwright
           npm ci
 
+      - name: Fetch Client Patches from patchright-nodejs
+        run: |
+          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
+          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
+          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
+          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.ts >> patchright_nodejs_patch.js
+          rm -rf patchright-nodejs
+
       - name: Create Patched Copy of Playwright Driver
         run: |
           cp -r playwright playwright_not_patched
           cd playwright
-          node "../patchright_driver_patch.js"
+          node "../patchright_nodejs_patch.js"
           cd ..
           mv playwright patchright
           mv playwright_not_patched playwright
 
       - name: Compare Directories and Create Patch File
         run: |
-          echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patchright_workflow.yml)" > patchright.patch
+          echo "# NOTE: This patch file is generated automatically and is not used, it is only for documentation. The driver is actually patched using [patchright_driver_patch](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.ts), see [the workflow](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/.github/workflows/patch_file_updater.yml)" > patchright.patch
           diff -ruN -x protocol.yml --minimal playwright patchright | sed -E 's/^(---|\+\+\+) .*/\1/' >> patchright.patch || true
 
       - name: Commit and Push Patch File
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "[Patch-Comparison] Automatic Commit: ${{ env.COMMIT_MESSAGE }}"
+          commit_message: "[Patch-Comparison] Automatic Commit: ${{ steps.get_commit_info.outputs.commit_message }}"
           branch: "main"
           file_pattern: "patchright.patch"
           skip_fetch: true

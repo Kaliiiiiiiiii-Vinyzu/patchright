@@ -7,6 +7,10 @@ on:
         description: 'Playwright version (tag) to test against. If empty, latest release is used.'
         required: false
         type: string
+    outputs:
+      test_outcome:
+        description: Combined result for page/library test steps
+        value: ${{ jobs.run-patchright-tests.outputs.test_outcome }}
   workflow_dispatch:
     inputs:
       playwright_version:
@@ -21,6 +25,8 @@ on:
 jobs:
   run-patchright-tests:
     runs-on: ubuntu-latest
+    outputs:
+      test_outcome: ${{ steps.set_test_outcome.outputs.test_outcome }}
 
     steps:
       - name: Checkout Repository
@@ -53,8 +59,8 @@ jobs:
         run: |
           git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
           cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
-          # Append driver patches (skip first 12 lines which are imports/setup already in nodejs patch)
-          tail -n +13 patchright_driver_patch.js >> patchright_nodejs_patch.js
+          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
+          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.ts >> patchright_nodejs_patch.js
           rm -rf patchright-nodejs
 
       - name: Patch Playwright Driver
@@ -88,11 +94,25 @@ jobs:
         run: node modify_tests.js
 
       - name: Run Page Tests
+        id: test_page
+        continue-on-error: ${{ github.event_name == 'workflow_call' }}
         run: |
           cd playwright
           PWTEST_MODE=driver xvfb-run -a npx playwright test --config=tests/library/playwright.config.ts --project=chromium-page --max-failures=0 --reporter=github --retries=3
 
       - name: Run Library Tests
+        id: test_library
+        continue-on-error: ${{ github.event_name == 'workflow_call' }}
         run: |
           cd playwright
           PWTEST_MODE=driver xvfb-run -a npx playwright test --config=tests/library/playwright.config.ts --project=chromium-library --max-failures=0 --reporter=github --retries=3
+
+      - name: Set Test Outcome
+        id: set_test_outcome
+        if: always()
+        run: |
+          if [ "${{ steps.test_page.outcome }}" = "failure" ] || [ "${{ steps.test_library.outcome }}" = "failure" ]; then
+            echo "test_outcome=failure" >> "$GITHUB_OUTPUT"
+          else
+            echo "test_outcome=success" >> "$GITHUB_OUTPUT"
+          fi

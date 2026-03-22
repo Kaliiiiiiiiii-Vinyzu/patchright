@@ -190,7 +190,7 @@ If you choose to support our work, please contact [@vinyzu](https://discord.com/
 
 Patchright is licensed [Apache 2.0](https://choosealicense.com/licenses/apache-2.0/)
 
-[Some Parts](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js#L435-L448) of the Codebase are inspired by [Driverless](https://github.com/kaliiiiiiiiii/Selenium-Driverless).
+[Some Parts](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/10c5a090e9a1dcd2107c253d65b3d8b27d0670a9/driver_patches/framesPatch.ts#L156-L171) of the Codebase are inspired by [Driverless](https://github.com/kaliiiiiiiiii/Selenium-Driverless).
 Thanks to [Nick Webson](https://github.com/rebrowser/rebrowser-patches) for the idea of .patch-File Documentation.
 
 ---
