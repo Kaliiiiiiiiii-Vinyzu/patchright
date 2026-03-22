@@ -14,6 +14,7 @@
   "include": [
     "patchright_driver_patch.ts",
     "driver_patches/**/*.ts",
-    "driver_patches/**/*.js"
+    "driver_patches/**/*.js",
+    "utils/**/*.ts"
   ]
 }

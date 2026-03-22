@@ -57,6 +57,7 @@ echo "Latest release of the Playwright Driver: $playwright_version"
 # Get the latest release version of Patchright
 patchright_version=$(get_latest_release "$repo")
 echo "Latest release of the Patchright Driver: $patchright_version"
+echo "previous_playwright_version=$patchright_version" >>"$GITHUB_OUTPUT"
 
 # Compare the versions
 if version_is_behind "$patchright_version" "$playwright_version"; then

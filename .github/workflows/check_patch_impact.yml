@@ -1,0 +1,101 @@
+name: Check Patch Impact
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_version:
+        description: Playwright version to compare from (e.g. 1.43.0 or v1.43.0)
+        required: true
+        type: string
+      new_version:
+        description: Playwright version to compare to (e.g. 1.44.0 or v1.44.0)
+        required: true
+        type: string
+      create_issue:
+        description: Open a GitHub Issue if breaking changes are detected
+        required: false
+        default: false
+        type: boolean
+  workflow_call:
+    inputs:
+      old_version:
+        description: Playwright version to compare from (e.g. 1.43.0 or v1.43.0)
+        required: true
+        type: string
+      new_version:
+        description: Playwright version to compare to (e.g. 1.44.0 or v1.44.0)
+        required: true
+        type: string
+      create_issue:
+        description: Open a GitHub Issue if breaking changes are detected
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-impact:
+    name: Check Patch Impact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node v24
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Analyze Patch Impact
+        id: analyze
+        env:
+          OLD_VERSION: ${{ inputs.old_version || github.event.inputs.old_version }}
+          NEW_VERSION: ${{ inputs.new_version || github.event.inputs.new_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx tsx utils/check_patch_impact.ts \
+            --old-version "$OLD_VERSION" \
+            --new-version "$NEW_VERSION" \
+            --report report.json \
+            --summary step_summary.md \
+            --diff affected_diff.patch
+
+      - name: Write GitHub Step Summary
+        run: cat step_summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Report Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: report.json
+          path: report.json
+
+      - name: Upload Affected Diff Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: affected_diff.patch
+          path: affected_diff.patch
+
+      - name: Open Issue For Breaking Changes
+        if: steps.analyze.outputs.breaking_count > 0 && inputs.create_issue == true
+        uses: actions/github-script@v8
+        env:
+          ISSUE_TITLE: ${{ steps.analyze.outputs.issue_title }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const body = fs.readFileSync('issue_body.md', 'utf8');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: process.env.ISSUE_TITLE,
+              body,
+              labels: ['upstream-break'],
+            });
