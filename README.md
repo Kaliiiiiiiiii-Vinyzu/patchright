@@ -51,23 +51,6 @@
 
 ---
 
-<details open>
-    <summary><h3>Sponsors</h1></summary>
-
-
-<a href="https://www.thordata.com/?ls=github&lk=Vinyzu" target="_blank">
-  <img alt="Thordata Banner" src="https://github.com/user-attachments/assets/58460bff-b057-4191-88da-80e0bd29b745" width="80%" />
-</a>
-
-[Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) - Your First Plan is on Us! 💰Get 100% of your first residential proxy purchase back as wallet balance, up to $900.
-### **⚡ Why Thordata?**
-🌍 190+ real residential & ISP IP locations\
-🔐 Fully encrypted, ultra-secure connections\
-🚀 Optimized for web scraping, ad verification & automation workflows
-
-🔥Don’t wait — this is your **best time to start** with [Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) and experience the safest, fastest proxy network.
-
----
 <img width="500" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
 
 Running Patchright? Your proxy layer can decide whether you scale — or get blocked.
