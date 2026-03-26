@@ -51,6 +51,9 @@
 
 ---
 
+<details open>
+    <summary><h3>Sponsors</h1></summary>
+
 <img width="500" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
 
 Running Patchright? Your proxy layer can decide whether you scale — or get blocked.
