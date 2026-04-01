@@ -32,23 +32,6 @@ export function patchPage(project: Project) {
 		await this.delegate.exposeBinding(binding);
 	`);
 
-	// -- _removeExposedBindings Method --
-	const pageRemoveExposedBindingsMethod = pageClass.getMethodOrThrow("removeExposedBindings");
-	pageRemoveExposedBindingsMethod.setBodyText(`
-		for (const key of this._pageBindings.keys()) {
-			if (!key.startsWith('__pw'))
-				this._pageBindings.delete(key);
-		}
-		await this.delegate.removeExposedBindings();
-	`);
-
-	// -- _removeInitScripts Method --
-	const pageRemoveInitScriptsMethod = pageClass.getMethodOrThrow("removeInitScripts");
-	pageRemoveInitScriptsMethod.setBodyText(`
-		this.initScripts.splice(0, this.initScripts.length);
-		await this.delegate.removeInitScripts();
-	`);
-
 	// -- allInitScripts Method --
 	pageClass.getMethodOrThrow("allInitScripts").remove();
 

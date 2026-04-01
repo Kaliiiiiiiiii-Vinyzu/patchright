@@ -44,23 +44,6 @@ export function patchBrowserContext(project: Project) {
 			statement.remove();
 	});
 
-	// -- _removeExposedBindings Method --
-	const removeExposedBindingsMethod = browserContextClass.getMethodOrThrow("removeExposedBindings");
-	removeExposedBindingsMethod.setBodyText(`
-		for (const key of this._pageBindings.keys()) {
-			if (!key.startsWith('__pw'))
-				this._pageBindings.delete(key);
-		}
-		await this.doRemoveExposedBindings();
-	`);
-
-	// -- _removeInitScripts Method --
-	const removeInitScriptsMethod = browserContextClass.getMethodOrThrow("removeInitScripts");
-	removeInitScriptsMethod.setBodyText(`
-		this.initScripts.splice(0, this.initScripts.length);
-		await this.doRemoveInitScripts();
-	`);
-
 	// -- defaultNewContextParamValues ClassVar --
 	const defaultContextExpression = browserContextSourceFile
 		.getVariableDeclarationOrThrow("defaultNewContextParamValues")
