@@ -24,10 +24,11 @@ export function patchBrowserContext(project: Project) {
 			)
 		)
 	);
+	const initScriptArgument = assertDefined(
+		initializeMethodCall.getArguments()[1] ?? initializeMethodCall.getArguments()[0]
+	);
 	// Replace the service worker registration call with a custom one, which is less obvious
-	initializeMethodCall
-		.getArguments()[1]
-		.replaceWithText("`navigator.serviceWorker.register = async () => { };`");
+	initScriptArgument.replaceWithText("`if (navigator.serviceWorker) navigator.serviceWorker.register = async () => { };`");
 
 	// -- exposeBinding Method --
 	const exposeBindingMethod = browserContextClass.getMethodOrThrow("exposeBinding");
@@ -36,7 +37,10 @@ export function patchBrowserContext(project: Project) {
 		const text = statement.getText();
 		// Check if the statement matches the patterns
 		if (text.includes("this.doAddInitScript(binding.initScript)"))
-			statement.replaceWithText("await this.doExposeBinding(binding);");
+			statement.replaceWithText(`
+				await this.doExposeBinding(binding);
+				return binding;
+			`);
 		else if (
 			text.includes("this.safeNonStallingEvaluateInAllFrames(binding.initScript.source, 'main')") ||
 			text.includes("this.exposePlaywrightBindingIfNeeded()")

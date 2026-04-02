@@ -27,9 +27,10 @@ export function patchPage(project: Project) {
 			throw new Error(\`Function "\${name}" has been already registered\`);
 		if (this.browserContext._pageBindings.has(name))
 			throw new Error(\`Function "\${name}" has been already registered in the browser context\`);
-		const binding = new PageBinding(name, playwrightBinding, needsHandle);
+		const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
 		this._pageBindings.set(name, binding);
 		await this.delegate.exposeBinding(binding);
+		return binding;
 	`);
 
 	// -- allInitScripts Method --
@@ -49,17 +50,22 @@ export function patchPage(project: Project) {
 	const pageBindingClass = pageSourceFile.getClassOrThrow("PageBinding");
 	// Content modified from https://raw.githubusercontent.com/microsoft/playwright/471930b1ceae03c9e66e0eb80c1364a1a788e7db/packages/playwright-core/src/server/page.ts
 	pageBindingClass.replaceWithText(`
-		export class PageBinding {
+		export class PageBinding extends DisposableObject {
 			readonly source: string;
 			readonly name: string;
 			readonly playwrightFunction: frames.FunctionWithSource;
+			readonly initScript: InitScript;
 			readonly needsHandle: boolean;
-			readonly internal: boolean;
+			readonly cleanupScript: string;
+			forClient?: unknown;
 
-			constructor(name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+				super(parent);
 				this.name = name;
 				this.playwrightFunction = playwrightFunction;
-				this.source = createPageBindingScript(name, needsHandle);
+				this.initScript = new InitScript(parent, createPageBindingScript(name, needsHandle));
+				this.source = this.initScript.source;
+				this.cleanupScript = \`delete globalThis[\${JSON.stringify(name)}];\`;
 				this.needsHandle = needsHandle;
 			}
 
@@ -113,6 +119,10 @@ export function patchPage(project: Project) {
 				} catch (error) {
 					await deliver({ name, seq, error });
 				}
+			}
+
+			override async dispose(): Promise<void> {
+				await this.parent.removeExposedBinding(this);
 			}
 		}
 	`);
