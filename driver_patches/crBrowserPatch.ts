@@ -14,7 +14,7 @@ export function patchCRBrowser(project: Project) {
 	const doRemoveInitScriptsMethod = crBrowserContextClass.getMethodOrThrow("doRemoveInitScripts");
 	doRemoveInitScriptsMethod.setBodyText(`
 		for (const page of this.pages())
-			await (page.delegate as CRPage).removeInitScripts();
+			await (page.delegate as CRPage).removeInitScripts(initScripts);
 	`);
 
 	// -- doExposeBinding Method --

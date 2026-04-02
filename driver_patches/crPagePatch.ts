@@ -89,7 +89,7 @@ export function patchCRPage(project: Project) {
 	});
 	frameSessionClass.addProperty({
 		name: "_evaluateOnNewDocumentScripts",
-		type: "string[]",
+		type: "InitScript[]",
 		initializer: "[]",
 	});
 	frameSessionClass.addProperty({
@@ -448,7 +448,10 @@ export function patchCRPage(project: Project) {
 	// -- _removeEvaluatesOnNewDocument Method --
 	frameSessionClass
 		.getMethodOrThrow("_removeEvaluatesOnNewDocument")
-		.setBodyText(`this._evaluateOnNewDocumentScripts = [];		`);
+		.setBodyText(`
+			const toRemove = new Set(initScripts);
+			this._evaluateOnNewDocumentScripts = this._evaluateOnNewDocumentScripts.filter(script => !toRemove.has(script));
+		`);
 
 	// -- _adoptBackendNodeId Method --
 	const adoptBackendNodeIdMethod = frameSessionClass.getMethodOrThrow("_adoptBackendNodeId");
