@@ -89,7 +89,7 @@ export function patchCRPage(project: Project) {
 	});
 	frameSessionClass.addProperty({
 		name: "_evaluateOnNewDocumentScripts",
-		type: "string[]",
+		type: "InitScript[]",
 		initializer: "[]",
 	});
 	frameSessionClass.addProperty({
