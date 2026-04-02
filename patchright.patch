@@ -21,18 +21,10 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -
 -/* eslint-disable no-console */
 -
- import fs from 'fs';
- import os from 'os';
- import path from 'path';
-@@ -131,38 +113,38 @@
-   });
- 
-   for (const version of sortedVersions) {
--    console.log(`\nPlaywright version: ${version}`);
-+    console.log(`\nPatchright version: ${version}`);
-     printInstalledBrowsers(groupedByPlaywrightMinorVersion.get(version)!);
-   }
- }
+ import '../bootstrap';
+ import { gracefullyProcessExitDoNotHang, getPackageManagerExecCommand } from '../utils';
+ import { addTraceCommands } from '../tools/trace/traceCli';
+@@ -69,10 +51,10 @@
  
  program
      .command('install [browser...]')
@@ -45,44 +37,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      .option('--force', 'force reinstall of already installed browsers')
      .option('--only-shell', 'only install headless shell when installing chromium')
      .option('--no-shell', 'do not install chromium headless shell')
-     .action(async function(args: string[], options: { withDeps?: boolean, force?: boolean, dryRun?: boolean, list?: boolean, shell?: boolean, noShell?: boolean, onlyShell?: boolean }) {
-       if (isLikelyNpxGlobal()) {
-         console.error(wrapInASCIIBox([
--          `WARNING: It looks like you are running 'npx playwright install' without first`,
-+          `WARNING: It looks like you are running 'npx patchright install' without first`,
-           `installing your project's dependencies.`,
-           ``,
-           `To avoid unexpected behavior, please install your dependencies first, and`,
--          `then run Playwright's install command:`,
-+          `then run Patchright's install command:`,
-           ``,
-           `    npm install`,
--          `    npx playwright install`,
-+          `    npx patchright install`,
-           ``,
--          `If your project does not yet depend on Playwright, first install the`,
-+          `If your project does not yet depend on Patchright, first install the`,
-           `applicable npm package (most commonly @playwright/test), and`,
--          `then run Playwright's install command to download the browsers:`,
-+          `then run Patchright's install command to download the browsers:`,
-           ``,
--          `    npm install @playwright/test`,
--          `    npx playwright install`,
-+          `    npm install -D patchright`,
-+          `    npx patchright install`,
-           ``,
-         ].join('\n'), 1));
-       }
-@@ -193,7 +175,7 @@
-         } else {
-           await registry.install(executables, { force: options.force });
-           await registry.validateHostRequirementsForExecutablesIfNeeded(executables, process.env.PW_LANG_NAME || 'javascript').catch((e: Error) => {
--            e.name = 'Playwright Host validation warning';
-+            e.name = 'Patchright Host validation warning';
-             console.error(e);
-           });
-         }
-@@ -212,14 +194,14 @@
+@@ -95,8 +77,8 @@
  
  program
      .command('uninstall')
@@ -91,17 +46,9 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    .description('Removes browsers used by this installation of Patchright from the system (chromium, firefox, webkit, ffmpeg). This does not include branded channels.')
 +    .option('--all', 'Removes all browsers used by any Patchright installation from the system.')
      .action(async (options: { all?: boolean }) => {
-       delete process.env.PLAYWRIGHT_SKIP_BROWSER_GC;
-       await registry.uninstall(!!options.all).then(({ numberOfBrowsersLeft }) => {
-         if (!options.all && numberOfBrowsersLeft > 0) {
--          console.log('Successfully uninstalled Playwright browsers for the current Playwright installation.');
--          console.log(`There are still ${numberOfBrowsersLeft} browsers left, used by other Playwright installations.\nTo uninstall Playwright browsers for all installations, re-run with --all flag.`);
-+          console.log('Successfully uninstalled Patchright browsers for the current Patchright installation.');
-+          console.log(`There are still ${numberOfBrowsersLeft} browsers left, used by other Patchright installations.\nTo uninstall Patchright browsers for all installations, re-run with --all flag.`);
-         }
-       }).catch(logErrorAndExit);
-     });
-@@ -722,7 +704,7 @@
+       const { uninstallBrowsers } = await import('./installActions');
+       uninstallBrowsers(options).catch(logErrorAndExit);
+@@ -284,7 +266,7 @@
        .option('--save-har-glob <glob pattern>', 'filter entries in the HAR by matching url against this glob pattern')
        .option('--save-storage <filename>', 'save context storage state at the end, for later use with --load-storage')
        .option('--timezone <time zone>', 'time zone to emulate, for example "Europe/Rome"')
@@ -110,7 +57,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        .option('--user-agent <ua string>', 'specify user agent string')
        .option('--user-data-dir <directory>', 'use the specified user data directory instead of a new context')
        .option('--viewport-size <size>', 'specify browser viewport size in pixels, for example "1280, 720"');
-@@ -731,14 +713,14 @@
+@@ -293,14 +275,14 @@
  function buildBasePlaywrightCLICommand(cliTargetLang: string | undefined): string {
    switch (cliTargetLang) {
      case 'python':
@@ -186,7 +133,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/browserContext.ts patchright/node_modules/playwright-core/src/client/browserContext.ts
 ---
 +++
-@@ -144,9 +144,9 @@
+@@ -146,9 +146,9 @@
          // a) removing "dialog" listener subscription (client->server)
          // b) actual "dialog" event (server->client)
          if (dialogObject.type() === 'beforeunload')
@@ -198,31 +145,31 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
      });
      this._channel.on('request', ({ request, page }) => this._onRequest(network.Request.from(request), Page.fromNullable(page)));
-@@ -350,16 +350,19 @@
+@@ -356,17 +356,20 @@
    }
  
-   async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any): Promise<void> {
+   async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any) {
 +    await this.installInjectRoute();
      const source = await evaluationScript(this._platform, script, arg);
-     await this._channel.addInitScript({ source });
+     return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
  
-   async exposeBinding(name: string, callback: (source: structs.BindingSource, ...args: any[]) => any, options: { handle?: boolean } = {}): Promise<void> {
+   async exposeBinding(name: string, callback: (source: structs.BindingSource, ...args: any[]) => any, options: { handle?: boolean } = {}): Promise<DisposableObject> {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name, needsHandle: options.handle });
+     const result = await this._channel.exposeBinding({ name, needsHandle: options.handle });
      this._bindings.set(name, callback);
+     return DisposableObject.from(result.disposable);
    }
  
-   async exposeFunction(name: string, callback: Function): Promise<void> {
+   async exposeFunction(name: string, callback: Function): Promise<DisposableObject> {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name });
+     const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
-@@ -580,6 +583,26 @@
-       return;
-     throw new Error(`File access denied: ${filePath} is outside allowed roots. Allowed roots: ${this._allowedDirectories.length ? this._allowedDirectories.join(', ') : 'none'}`);
+@@ -560,6 +563,25 @@
+     await this._channel.exposeConsoleApi();
    }
-+
+ 
 +  routeInjecting: boolean = false;
 +
 +  async installInjectRoute() {
@@ -269,7 +216,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/frame.ts patchright/node_modules/playwright-core/src/client/frame.ts
 ---
 +++
-@@ -178,25 +178,33 @@
+@@ -177,25 +177,33 @@
    }
  
    async waitForURL(url: URLMatch, options: { waitUntil?: LifecycleEvent, timeout?: number } = {}): Promise<void> {
@@ -312,7 +259,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return parseResult(result.value);
    }
  
-@@ -237,9 +245,9 @@
+@@ -231,9 +239,9 @@
      return parseResult(result.value);
    }
  
@@ -328,7 +275,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/jsHandle.ts patchright/node_modules/playwright-core/src/client/jsHandle.ts
 ---
 +++
-@@ -36,9 +36,10 @@
+@@ -36,14 +36,16 @@
      this._channel.on('previewUpdated', ({ preview }) => this._preview = preview);
    }
  
@@ -339,11 +286,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +      const result = await this._channel.evaluateExpression({ expression: String(pageFunction), isFunction: typeof pageFunction === 'function', arg: serializeArgument(arg), isolatedContext: isolatedContext });
 +      return parseResult(result.value);
-   }
- 
-   async _evaluateFunction(functionDeclaration: string) {
-@@ -46,9 +47,10 @@
-     return parseResult(result.value);
    }
  
 -  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg): Promise<structs.SmartHandle<R>> {
@@ -365,7 +307,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  /**
   * Copyright (c) Microsoft Corporation.
   *
-@@ -124,20 +126,56 @@
+@@ -124,16 +126,52 @@
      });
    }
  
@@ -391,10 +333,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +          ),
 +        { title: "Evaluate", timeout: options?.timeout }
 +      );
-   }
- 
-   async _evaluateFunction(functionDeclaration: string, options?: TimeoutOptions) {
-     return await this._withElement(h => h._evaluateFunction(functionDeclaration), { title: 'Evaluate', timeout: options?.timeout });
    }
  
 -  async evaluateAll<R, Arg>(pageFunction: structs.PageFunctionOn<Element[], Arg, R>, arg?: Arg): Promise<R> {
@@ -440,7 +378,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  import { Events } from './events';
  import { APIResponse } from './fetch';
  import { Frame } from './frame';
-@@ -185,7 +185,12 @@
+@@ -183,7 +183,12 @@
    }
  
    async allHeaders(): Promise<Headers> {
@@ -457,7 +395,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/page.ts patchright/node_modules/playwright-core/src/client/page.ts
 ---
 +++
-@@ -311,9 +311,9 @@
+@@ -313,9 +313,9 @@
      return await this._mainFrame.dispatchEvent(selector, type, eventInit, options);
    }
  
@@ -470,22 +408,23 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async $eval<R, Arg>(selector: string, pageFunction: structs.PageFunctionOn<Element, Arg, R>, arg?: Arg): Promise<R> {
-@@ -339,12 +339,14 @@
+@@ -341,6 +341,7 @@
    }
  
    async exposeFunction(name: string, callback: Function) {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name });
+     const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
+@@ -348,6 +349,7 @@
    }
  
    async exposeBinding(name: string, callback: (source: structs.BindingSource, ...args: any[]) => any, options: { handle?: boolean } = {}) {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name, needsHandle: options.handle });
+     const result = await this._channel.exposeBinding({ name, needsHandle: options.handle });
      this._bindings.set(name, callback);
-   }
-@@ -503,9 +505,9 @@
+     return DisposableObject.from(result.disposable);
+@@ -507,12 +509,13 @@
      return this._viewportSize || null;
    }
  
@@ -497,18 +436,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    return await this._mainFrame.evaluate(pageFunction, arg, isolatedContext);
    }
  
-   async _evaluateFunction(functionDeclaration: string) {
-@@ -513,6 +515,7 @@
-   }
- 
    async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any) {
 +    await this.installInjectRoute();
      const source = await evaluationScript(this._platform, script, arg);
-     await this._channel.addInitScript({ source });
+     return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
-@@ -875,6 +878,26 @@
-   async _snapshotForAI(options: TimeoutOptions & { track?: string } = {}): Promise<{ full: string, incremental?: string }> {
-     return await this._channel.snapshotForAI({ timeout: this._timeoutSettings.timeout(options), track: options.track });
+@@ -864,6 +867,26 @@
+   async _setDockTile(image: Buffer) {
+     await this._channel.setDockTile({ image });
    }
 +
 +  routeInjecting: boolean = false;
@@ -536,14 +471,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/tracing.ts patchright/node_modules/playwright-core/src/client/tracing.ts
 ---
 +++
-@@ -36,6 +36,7 @@
+@@ -38,6 +38,7 @@
    }
  
-   async start(options: { name?: string, title?: string, snapshots?: boolean, screenshots?: boolean, sources?: boolean, _live?: boolean } = {}) {
+   async start(options: { name?: string, title?: string, snapshots?: boolean, screenshots?: boolean, sources?: boolean, live?: boolean } = {}) {
 +    if (typeof this._parent.installInjectRoute === 'function') await this._parent.installInjectRoute();
      await this._wrapApiCall(async () => {
        this._includeSources = !!options.sources;
-       this._isLive = !!options._live;
+       this._isLive = !!options.live;
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/worker.ts patchright/node_modules/playwright-core/src/client/worker.ts
 ---
 +++
@@ -604,21 +539,21 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/browserContext.ts patchright/node_modules/playwright-core/src/server/browserContext.ts
 ---
 +++
-@@ -164,7 +164,7 @@
+@@ -167,7 +167,7 @@
        await this.exposeConsoleApi();
  
      if (this._options.serviceWorkers === 'block')
--      await this.addInitScript(undefined, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
-+      await this.addInitScript(undefined, `navigator.serviceWorker.register = async () => { };`);
+-      await this.addInitScript(`\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
++      await this.addInitScript(`if (navigator.serviceWorker) navigator.serviceWorker.register = async () => { };`);
  
      if (this._options.permissions)
        await this.grantPermissions(this._options.permissions);
-@@ -354,27 +354,20 @@
+@@ -352,18 +352,13 @@
        if (page.getBinding(name))
          throw new Error(`Function "${name}" has been already registered in one of the pages`);
      }
 -    await progress.race(this.exposePlaywrightBindingIfNeeded());
-     const binding = new PageBinding(name, playwrightBinding, needsHandle);
+     const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
      binding.forClient = forClient;
      this._pageBindings.set(name, binding);
 -    try {
@@ -629,41 +564,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      this._pageBindings.delete(name);
 -      throw error;
 -    }
-+    await this.doExposeBinding(binding);
++    
++    				await this.doExposeBinding(binding);
++    				return binding;
++    			
    }
  
-   async removeExposedBindings(bindings: PageBinding[]) {
--    bindings = bindings.filter(binding => this._pageBindings.get(binding.name) === binding);
--    for (const binding of bindings)
--      this._pageBindings.delete(binding.name);
--    await this.doRemoveInitScripts(bindings.map(binding => binding.initScript));
--    const cleanup = bindings.map(binding => `{ ${binding.cleanupScript} };\n`).join('');
--    await this.safeNonStallingEvaluateInAllFrames(cleanup, 'main');
-+
-+    		for (const key of this._pageBindings.keys()) {
-+    			if (!key.startsWith('__pw'))
-+    				this._pageBindings.delete(key);
-+    		}
-+    		await this.doRemoveExposedBindings();
-+    	
-   }
- 
-   async grantPermissions(permissions: string[], origin?: string) {
-@@ -491,9 +484,10 @@
-   }
- 
-   async removeInitScripts(initScripts: InitScript[]) {
--    const set = new Set(initScripts);
--    this.initScripts = this.initScripts.filter(script => !set.has(script));
--    await this.doRemoveInitScripts(initScripts);
-+
-+    		this.initScripts.splice(0, this.initScripts.length);
-+    		await this.doRemoveInitScripts();
-+    	
-   }
- 
-   async addRequestInterceptor(progress: Progress, handler: network.RouteHandler): Promise<void> {
-@@ -843,4 +837,5 @@
+   async removeExposedBinding(binding: PageBinding) {
+@@ -881,4 +876,5 @@
    strictSelectors: false,
    serviceWorkers: 'allow',
    locale: 'en-US',
@@ -672,14 +580,15 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/chromium.ts patchright/node_modules/playwright-core/src/server/chromium/chromium.ts
 ---
 +++
-@@ -315,7 +315,6 @@
+@@ -320,8 +320,6 @@
+     const chromeArguments = [...chromiumSwitches(options.assistantMode, options.channel)];
  
-     if (os.platform() !== 'darwin' || !hasGpuMac()) {
-       // See https://issues.chromium.org/issues/40277080
--      chromeArguments.push('--enable-unsafe-swiftshader');
-     }
- 
+     // See https://issues.chromium.org/issues/40277080
+-    chromeArguments.push('--enable-unsafe-swiftshader');
+-
      if (options.headless) {
+       chromeArguments.push('--headless');
+ 
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/chromiumSwitches.ts patchright/node_modules/playwright-core/src/server/chromium/chromiumSwitches.ts
 ---
 +++
@@ -733,7 +642,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crBrowser.ts patchright/node_modules/playwright-core/src/server/chromium/crBrowser.ts
 ---
 +++
-@@ -519,8 +519,10 @@
+@@ -522,8 +522,10 @@
    }
  
    async doRemoveInitScripts(initScripts: InitScript[]) {
@@ -741,12 +650,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      await (page.delegate as CRPage).removeInitScripts(initScripts);
 +
 +    		for (const page of this.pages())
-+    			await (page.delegate as CRPage).removeInitScripts();
++    			await (page.delegate as CRPage).removeInitScripts(initScripts);
 +    	
    }
  
    async doUpdateRequestInterception(): Promise<void> {
-@@ -613,4 +615,18 @@
+@@ -611,6 +613,20 @@
      const rootSession = await this._browser._clientRootSession();
      return rootSession.attachToTarget(targetId);
    }
@@ -765,6 +674,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    	
 +  }
  }
+ 
+ export function shouldProxyLoopback(bypass: string | undefined) {
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crCoverage.ts patchright/node_modules/playwright-core/src/server/chromium/crCoverage.ts
 ---
 +++
@@ -931,7 +842,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
      }
      const isNavigationRequest = requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && requestWillBeSentEvent.type === 'Document';
-@@ -557,6 +577,8 @@
+@@ -558,6 +578,8 @@
      if (request.session !== sessionInfo.session && !sessionInfo.isMain && (request._documentId === request._requestId || sessionInfo.workerFrame))
        request.session = sessionInfo.session;
    }
@@ -940,7 +851,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class InterceptableRequest {
-@@ -615,38 +637,148 @@
+@@ -614,38 +636,148 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -1112,7 +1023,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -659,6 +791,211 @@
+@@ -658,6 +790,211 @@
        });
      });
    }
@@ -1327,7 +1238,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crPage.ts patchright/node_modules/playwright-core/src/server/chromium/crPage.ts
 ---
 +++
-@@ -43,7 +43,7 @@
+@@ -45,7 +45,7 @@
  import type { Progress } from '../progress';
  import type * as types from '../types';
  import type * as channels from '@protocol/channels';
@@ -1336,7 +1247,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
  export type WindowBounds = { top?: number, left?: number, width?: number, height?: number };
  
-@@ -94,7 +94,10 @@
+@@ -96,7 +96,10 @@
      this.updateOffline();
      this.updateExtraHTTPHeaders();
      this.updateHttpCredentials();
@@ -1348,7 +1259,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._mainFrameSession = new FrameSession(this, client, targetId, null);
      this._sessions.set(targetId, this._mainFrameSession);
      if (opener && !browserContext._options.noDefaultViewport) {
-@@ -124,15 +127,15 @@
+@@ -126,15 +129,15 @@
    }
  
    _sessionForFrame(frame: frames.Frame): FrameSession {
@@ -1372,7 +1283,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
    private _sessionForHandle(handle: dom.ElementHandle): FrameSession {
      const frame = handle._context.frame;
-@@ -223,6 +226,7 @@
+@@ -225,6 +228,7 @@
    }
  
    async addInitScript(initScript: InitScript, world: types.World = 'main'): Promise<void> {
@@ -1380,9 +1291,9 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      await this._forAllFrameSessions(frame => frame._evaluateOnNewDocument(initScript, world));
    }
  
-@@ -356,6 +360,19 @@
-   shouldToggleStyleSheetToSyncAnimations(): boolean {
-     return false;
+@@ -364,6 +368,19 @@
+   async setDockTile(image: Buffer): Promise<void> {
+     await this._mainFrameSession._client.send('Browser.setDockTile', { image: image.toString('base64') });
    }
 +
 +  async exposeBinding(binding: PageBinding) {
@@ -1400,7 +1311,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class FrameSession {
-@@ -430,6 +447,7 @@
+@@ -438,6 +455,7 @@
    }
  
    async _initialize(hasUIWindow: boolean) {
@@ -1408,7 +1319,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (!this._page.isStorageStatePage && hasUIWindow &&
        !this._crPage._browserContext._browser.isClank() &&
        !this._crPage._browserContext._options.noDefaultViewport) {
-@@ -444,6 +462,11 @@
+@@ -451,6 +469,11 @@
      let lifecycleEventsEnabled: Promise<any>;
      if (!this._isMainFrame())
        this._addRendererListeners();
@@ -1420,7 +1331,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._addBrowserListeners();
  
      // Buffer attachedToTarget events until we receive the frame tree.
-@@ -453,11 +476,18 @@
+@@ -460,11 +483,18 @@
      this._bufferedAttachedToTargetEvents = [];
  
      const promises: Promise<any>[] = [
@@ -1440,7 +1351,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          }
  
          // Now that we have the frame tree, it is possible to insert oopif targets at the right place.
-@@ -465,17 +495,6 @@
+@@ -472,17 +502,6 @@
          this._bufferedAttachedToTargetEvents = undefined;
          for (const event of attachedToTargetEvents)
            this._onAttachedToTarget(event);
@@ -1458,7 +1369,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          const isInitialEmptyPage = this._isMainFrame() && this._page.mainFrame().url() === ':';
          if (isInitialEmptyPage) {
            // Ignore lifecycle events, worlds and bindings for the initial empty page. It is never the final page
-@@ -485,13 +504,24 @@
+@@ -492,13 +511,24 @@
              this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.lifecycleEvent', event => this._onLifecycleEvent(event)));
            });
          } else {
@@ -1484,7 +1395,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -502,8 +532,10 @@
+@@ -509,8 +539,10 @@
      if (!this._page.isStorageStatePage) {
        if (this._crPage._browserContext.needsPlaywrightBinding())
          promises.push(this.exposePlaywrightBinding());
@@ -1497,7 +1408,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const options = this._crPage._browserContext._options;
        if (options.bypassCSP)
          promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
-@@ -526,14 +558,24 @@
+@@ -533,12 +565,22 @@
        promises.push(this._updateGeolocation(true));
        promises.push(this._updateEmulateMedia());
        promises.push(this._updateFileChooserInterception(true));
@@ -1508,8 +1419,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +      					  for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +      					  for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +      				
-       if (videoOptions)
-         promises.push(this._crPage._page.screencast.startVideoRecording(videoOptions));
      }
 -    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
 +    
@@ -1525,7 +1434,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    dispose() {
-@@ -557,13 +599,33 @@
+@@ -562,13 +604,33 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -1560,7 +1469,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -610,12 +672,33 @@
+@@ -615,12 +677,33 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -1595,7 +1504,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -652,19 +735,33 @@
+@@ -657,19 +740,33 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -1636,7 +1545,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -680,7 +777,7 @@
+@@ -685,7 +782,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -1645,7 +1554,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -722,12 +819,22 @@
+@@ -727,12 +824,22 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -1669,7 +1578,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -806,8 +913,10 @@
+@@ -811,8 +918,10 @@
      const pageOrError = await this._crPage._page.waitForInitializedOrError();
      if (!(pageOrError instanceof Error)) {
        const context = this._contextIdToContext.get(event.executionContextId);
@@ -1682,7 +1591,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      }
    }
  
-@@ -1002,20 +1111,11 @@
+@@ -1008,20 +1117,14 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -1701,11 +1610,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      this._initScriptIds.delete(script);
 -    }
 -    await Promise.all(ids.map(identifier => this._client.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {}))); // target can be closed
-+    this._evaluateOnNewDocumentScripts = [];		
++
++    			const toRemove = new Set(initScripts);
++    			this._evaluateOnNewDocumentScripts = this._evaluateOnNewDocumentScripts.filter(script => !toRemove.has(script));
++    		
    }
  
    async exposePlaywrightBinding() {
-@@ -1120,12 +1220,53 @@
+@@ -1126,12 +1229,53 @@
    async _adoptBackendNodeId(backendNodeId: Protocol.DOM.BackendNodeId, to: dom.FrameExecutionContext): Promise<dom.ElementHandle> {
      const result = await this._client._sendMayFail('DOM.resolveNode', {
        backendNodeId,
@@ -1718,7 +1630,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
 +
 +  _exposedBindingNames: string[] = [];
-+  _evaluateOnNewDocumentScripts: string[] = [];
++  _evaluateOnNewDocumentScripts: InitScript[] = [];
 +  _parsedExecutionContextIds: number[] = [];
 +  _exposedBindingScripts: string[] = [];
 +
@@ -1763,13 +1675,13 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crServiceWorker.ts patchright/node_modules/playwright-core/src/server/chromium/crServiceWorker.ts
 ---
 +++
-@@ -58,13 +58,23 @@
-       const message = new ConsoleMessage(null, this, event.type, undefined, args, toConsoleMessageLocation(event.stackTrace));
+@@ -63,13 +63,23 @@
+       const message = new ConsoleMessage(null, this, event.type, undefined, args, toConsoleMessageLocation(event.stackTrace), event.timestamp);
        this.browserContext.emit(BrowserContext.Events.Console, message);
      });
 -
--    session.send('Runtime.enable', {}).catch(e => { });
-     session.send('Runtime.runIfWaitingForDebugger').catch(e => { });
+-    session.send('Runtime.enable', {}).catch(e => {});
+     session.send('Runtime.runIfWaitingForDebugger').catch(e => {});
      session.on('Inspector.targetReloadedAfterCrash', () => {
        // Resume service worker after restart.
        session._sendMayFail('Runtime.runIfWaitingForDebugger', {});
@@ -1811,7 +1723,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/dispatchers/browserContextDispatcher.ts patchright/node_modules/playwright-core/src/server/dispatchers/browserContextDispatcher.ts
 ---
 +++
-@@ -131,12 +131,12 @@
+@@ -124,12 +124,12 @@
          });
        }
      });
@@ -2309,7 +2221,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async querySelector(selector: string, options: types.StrictOptions): Promise<dom.ElementHandle<Element> | null> {
--    debugLogger.log('api', `    finding element using the selector "${selector}"`);
+-    this.apiLog(`    finding element using the selector "${selector}"`);
 -    return this.selectors.query(selector, options);
 +
 +    		return this.querySelectorAll(selector, options).then((handles) => {
@@ -2771,7 +2683,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1443,47 +1577,96 @@
+@@ -1439,47 +1573,96 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: any, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -2906,7 +2818,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1542,7 +1725,7 @@
+@@ -1538,7 +1721,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -2915,7 +2827,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1586,42 +1769,129 @@
+@@ -1591,42 +1774,129 @@
    }
  
    _onDetached() {
@@ -3078,7 +2990,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1688,6 +1958,325 @@
+@@ -1722,6 +1992,325 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -3487,16 +3399,16 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/page.ts patchright/node_modules/playwright-core/src/server/page.ts
 ---
 +++
-@@ -47,6 +47,8 @@
- import type { ImageComparatorOptions } from './utils/comparators';
+@@ -51,6 +51,8 @@
  import type * as channels from '@protocol/channels';
  import type { BindingPayload } from '@injected/bindingsController';
+ import type { SelectorInfo } from './frameSelectors';
 +import * as domValue from "./dom";
 +import { createPageBindingScript, deliverBindingResult, takeBindingHandle } from "./pageBinding";
  
  export interface PageDelegate {
    readonly rawMouse: input.RawMouse;
-@@ -324,30 +326,25 @@
+@@ -332,21 +334,16 @@
    }
  
    async exposeBinding(progress: Progress, name: string, needsHandle: boolean, playwrightBinding: frames.FunctionWithSource): Promise<PageBinding> {
@@ -3505,7 +3417,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    if (this.browserContext._pageBindings.has(name))
 -      throw new Error(`Function "${name}" has been already registered in the browser context`);
 -    await progress.race(this.browserContext.exposePlaywrightBindingIfNeeded());
--    const binding = new PageBinding(name, playwrightBinding, needsHandle);
+-    const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
 -    this._pageBindings.set(name, binding);
 -    try {
 -      await progress.race(this.delegate.addInitScript(binding.initScript));
@@ -3520,45 +3432,16 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    			throw new Error(`Function "${name}" has been already registered`);
 +    		if (this.browserContext._pageBindings.has(name))
 +    			throw new Error(`Function "${name}" has been already registered in the browser context`);
-+    		const binding = new PageBinding(name, playwrightBinding, needsHandle);
++    		const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
 +    		this._pageBindings.set(name, binding);
 +    		await this.delegate.exposeBinding(binding);
++    		return binding;
 +    	
    }
  
-   async removeExposedBindings(bindings: PageBinding[]) {
--    bindings = bindings.filter(binding => this._pageBindings.get(binding.name) === binding);
--    for (const binding of bindings)
--      this._pageBindings.delete(binding.name);
--    await this.delegate.removeInitScripts(bindings.map(binding => binding.initScript));
--    const cleanup = bindings.map(binding => `{ ${binding.cleanupScript} };\n`).join('');
--    await this.safeNonStallingEvaluateInAllFrames(cleanup, 'main');
-+
-+    		for (const key of this._pageBindings.keys()) {
-+    			if (!key.startsWith('__pw'))
-+    				this._pageBindings.delete(key);
-+    		}
-+    		await this.delegate.removeExposedBindings();
-+    	
-   }
- 
-   async setExtraHTTPHeaders(progress: Progress, headers: types.HeadersArray) {
-@@ -633,9 +630,10 @@
-   }
- 
-   async removeInitScripts(initScripts: InitScript[]) {
--    const set = new Set(initScripts);
--    this.initScripts = this.initScripts.filter(script => !set.has(script));
--    await this.delegate.removeInitScripts(initScripts);
-+
-+    		this.initScripts.splice(0, this.initScripts.length);
-+    		await this.delegate.removeInitScripts();
-+    	
-   }
- 
-   needsRequestInterception(): boolean {
-@@ -837,13 +835,6 @@
-       this.browserContext.addVisitedOrigin(origin);
+   async removeExposedBinding(binding: PageBinding) {
+@@ -870,13 +867,6 @@
+     }
    }
  
 -  allInitScripts() {
@@ -3571,9 +3454,9 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    getBinding(name: string) {
      return this._pageBindings.get(name) || this.browserContext._pageBindings.get(name);
    }
-@@ -867,6 +858,12 @@
-     const snapshot = await snapshotFrameForAI(progress, this.mainFrame(), options);
-     return { full: snapshot.full.join('\n'), incremental: snapshot.incremental?.join('\n') };
+@@ -899,6 +889,12 @@
+   async setDockTile(image: Buffer) {
+     await this.delegate.setDockTile(image);
    }
 +
 +  allBindings() {
@@ -3584,7 +3467,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  export const WorkerEvent = {
-@@ -911,77 +908,109 @@
+@@ -953,83 +949,119 @@
      this.openScope.close(new Error('Worker closed'));
    }
  
@@ -3623,12 +3506,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    }
  }
  
--export class PageBinding {
+-export class PageBinding extends DisposableObject {
 -  private static kController = '__playwright__binding__controller__';
 -  static kBindingName = '__playwright__binding__';
  
--  static createInitScript() {
--    return new InitScript(`
+-  static createInitScript(browserContext: BrowserContext): InitScript {
+-    return new InitScript(browserContext, `
 -      (() => {
 -        const module = {};
 -        ${rawBindingsControllerSource.source}
@@ -3638,12 +3521,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      })();
 -    `);
 -  }
-+		export class PageBinding {
++		export class PageBinding extends DisposableObject {
 +			readonly source: string;
 +			readonly name: string;
 +			readonly playwrightFunction: frames.FunctionWithSource;
++			readonly initScript: InitScript;
 +			readonly needsHandle: boolean;
-+			readonly internal: boolean;
++			readonly cleanupScript: string;
++			forClient?: unknown;
  
 -  readonly name: string;
 -  readonly playwrightFunction: frames.FunctionWithSource;
@@ -3651,17 +3536,21 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -  readonly needsHandle: boolean;
 -  readonly cleanupScript: string;
 -  forClient?: unknown;
-+			constructor(name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
++			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
++				super(parent);
 +				this.name = name;
 +				this.playwrightFunction = playwrightFunction;
-+				this.source = createPageBindingScript(name, needsHandle);
++				this.initScript = new InitScript(parent, createPageBindingScript(name, needsHandle));
++				this.source = this.initScript.source;
++				this.cleanupScript = `delete globalThis[${JSON.stringify(name)}];`;
 +				this.needsHandle = needsHandle;
 +			}
  
--  constructor(name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+-  constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+-    super(parent);
 -    this.name = name;
 -    this.playwrightFunction = playwrightFunction;
--    this.initScript = new InitScript(`globalThis['${PageBinding.kController}'].addBinding(${JSON.stringify(name)}, ${needsHandle})`);
+-    this.initScript = new InitScript(parent, `globalThis['${PageBinding.kController}'].addBinding(${JSON.stringify(name)}, ${needsHandle})`);
 -    this.needsHandle = needsHandle;
 -    this.cleanupScript = `globalThis['${PageBinding.kController}'].removeBinding(${JSON.stringify(name)})`;
 -  }
@@ -3690,7 +3579,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      context.evaluateExpressionHandle(`arg => globalThis['${PageBinding.kController}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, error }).catch(e => debugLogger.log('error', e));
 -    }
 -  }
--}
 +				const deliver = async (deliverPayload: any) => {
 +					let deliveryError: any;
 +					try {
@@ -3717,7 +3605,11 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +					}
 +					debugLogger.log('error', deliveryError);
 +				};
-+
+ 
+-  override async dispose(): Promise<void> {
+-    await this.parent.removeExposedBinding(this);
+-  }
+-}
 +				try {
 +					assert(context.world);
 +					const binding = page.getBinding(name);
@@ -3739,20 +3631,25 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +					await deliver({ name, seq, error });
 +				}
 +			}
++
++			override async dispose(): Promise<void> {
++				await this.parent.removeExposedBinding(this);
++			}
 +		}
 +	
  
- export class InitScript {
+ export class InitScript extends DisposableObject {
    readonly source: string;
  
-   constructor(source: string) {
+   constructor(owner: BrowserContext | Page, source: string) {
+     super(owner);
 -    this.source = `(() => {
 -      ${source}
 -    })();`;
 +    this.source = `(() => { ${source} })();`;
    }
- }
  
+   async dispose() {
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/pageBinding.ts patchright/node_modules/playwright-core/src/server/pageBinding.ts
 ---
 +++
@@ -3873,40 +3770,43 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  import fs from 'fs';
  import os from 'os';
  import path from 'path';
-@@ -590,19 +573,19 @@
-         const preferredDockerVersion = currentDockerVersion ? dockerVersion(currentDockerVersion.dockerImageNameTemplate) : null;
-         const isOutdatedDockerImage = currentDockerVersion && preferredDockerVersion && currentDockerVersion.dockerImageName !== preferredDockerVersion.dockerImageName;
-         const prettyMessage = isOutdatedDockerImage ? [
--          `Looks like ${sdkLanguage === 'javascript' ? 'Playwright Test or ' : ''}Playwright was just updated to ${preferredDockerVersion.driverVersion}.`,
-+          `Looks like ${sdkLanguage === 'javascript' ? 'Patchright Test or ' : ''}Patchright was just updated to ${preferredDockerVersion.driverVersion}.`,
-           `Please update docker image as well.`,
-           `-  current: ${currentDockerVersion.dockerImageName}`,
-           `- required: ${preferredDockerVersion.dockerImageName}`,
-           ``,
--          `<3 Playwright Team`,
-+          `<3 Patchright Team`,
-         ].join('\n') : [
--          `Looks like ${sdkLanguage === 'javascript' ? 'Playwright Test or ' : ''}Playwright was just installed or updated.`,
-+          `Looks like ${sdkLanguage === 'javascript' ? 'Patchright Test or ' : ''}Patchright was just installed or updated.`,
-           `Please run the following command to download new browser${installByDefault ? 's' : ''}:`,
-           ``,
-           `    ${installCommand}`,
-           ``,
--          `<3 Playwright Team`,
-+          `<3 Patchright Team`,
-         ].join('\n');
+@@ -600,7 +583,7 @@
+             `-  current: ${currentDockerVersion.dockerImageName}`,
+             `- required: ${preferredDockerVersion.dockerImageName}`,
+             ``,
+-            `<3 Playwright Team`,
++            `<3 Patchright Team`,
+           ].join('\n');
+         } else if (isFfmpeg) {
+           prettyMessage = [
+@@ -610,7 +593,7 @@
+             ``,
+             `    ${buildPlaywrightCLICommand(sdkLanguage, 'install ffmpeg')}`,
+             ``,
+-            `<3 Playwright Team`,
++            `<3 Patchright Team`,
+           ].join('\n');
+         } else {
+           prettyMessage = [
+@@ -619,7 +602,7 @@
+             ``,
+             `    ${installCommand}`,
+             ``,
+-            `<3 Playwright Team`,
++            `<3 Patchright Team`,
+           ].join('\n');
+         }
          throw new Error(`Executable doesn't exist at ${e}\n${wrapInASCIIBox(prettyMessage, 1)}`);
-       }
-@@ -1116,7 +1099,7 @@
+@@ -1083,7 +1066,7 @@
        // Install browsers for this package.
        for (const executable of executables) {
          if (!executable._install)
 -          throw new Error(`ERROR: Playwright does not support installing ${executable.name}`);
 +          throw new Error(`ERROR: Patchright does not support installing ${executable.name}`);
  
-         const { embedderName } = getEmbedderName();
-         if (!getAsBooleanFromENV('CI') && !executable._isHermeticInstallation && !options?.force && executable.executablePath(embedderName)) {
-@@ -1135,7 +1118,7 @@
+         if (!getAsBooleanFromENV('CI') && !executable._isHermeticInstallation && !options?.force && executable.executablePath()) {
+           const { embedderName } = getEmbedderName();
+@@ -1102,7 +1085,7 @@
              ``,
              `    ${command}`,
              ``,
@@ -3915,7 +3815,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
            ].join('\n'), 1) + '\n\n');
            return;
          }
-@@ -1150,12 +1133,12 @@
+@@ -1117,12 +1100,12 @@
            `  ${lockfilePath}`,
            ``,
            `Either:`,
@@ -3930,7 +3830,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          ].join('\n'), 1));
        } else {
          throw e;
-@@ -1250,13 +1233,13 @@
+@@ -1217,13 +1200,13 @@
    private async _downloadExecutable(descriptor: BrowsersJSONDescriptor, force: boolean, executablePath?: string) {
      const downloadURLs = this._downloadURLs(descriptor);
      if (!downloadURLs.length)
@@ -3947,7 +3847,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        else
          logPolitely(message);
      }
-@@ -1477,7 +1460,7 @@
+@@ -1444,7 +1427,7 @@
  export function buildPlaywrightCLICommand(sdkLanguage: string, parameters: string): string {
    switch (sdkLanguage) {
      case 'python':
@@ -3956,7 +3856,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      case 'java':
        return `mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="${parameters}"`;
      case 'csharp':
-@@ -1530,7 +1513,7 @@
+@@ -1497,7 +1480,7 @@
        ``,
        `    ${installCommand}`,
        ``,
@@ -4016,7 +3916,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    // Next time we start recording, we will call addInitScript again.
 -    if (this._initScript) {
 -      eventsHelper.removeEventListeners(this._eventListeners);
--      await this._context.removeInitScripts([this._initScript]);
+-      await this._initScript.dispose();
 -      this._initScript = undefined;
 -    }
 +
@@ -4037,7 +3937,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
 -    const { javaScriptEnabled } = this._context._options;
 -    const initScriptSource = `(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
--    this._initScript = await this._context.addInitScript(undefined, initScriptSource);
+-    this._initScript = await this._context.addInitScript(initScriptSource);
 -    await this._context.safeNonStallingEvaluateInAllFrames(initScriptSource, 'main');
 +    		const { javaScriptEnabled } = this._context._options;
 +    		this._initScriptSource = `(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
@@ -4311,7 +4211,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/trace/recorder/tracing.ts patchright/node_modules/playwright-core/src/server/trace/recorder/tracing.ts
 ---
 +++
-@@ -660,6 +660,11 @@
+@@ -670,6 +670,11 @@
  }
  
  function createBeforeActionTraceEvent(metadata: CallMetadata, parentId?: string): trace.BeforeActionTraceEvent | null {
@@ -4323,7 +4223,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    const event: trace.BeforeActionTraceEvent = {
-@@ -679,6 +684,11 @@
+@@ -689,6 +694,11 @@
  }
  
  function createInputActionTraceEvent(metadata: CallMetadata): trace.InputActionTraceEvent | null {
@@ -4335,7 +4235,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -689,6 +699,11 @@
+@@ -699,6 +709,11 @@
  }
  
  function createActionLogTraceEvent(metadata: CallMetadata, message: string): trace.LogTraceEvent | null {
@@ -4347,7 +4247,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -700,6 +715,11 @@
+@@ -710,6 +725,11 @@
  }
  
  function createAfterActionTraceEvent(metadata: CallMetadata): trace.AfterActionTraceEvent | null {
@@ -4750,18 +4650,10 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/cli/
 -
 -/* eslint-disable no-console */
 -
- import fs from 'fs';
- import os from 'os';
- import path from 'path';
-@@ -131,38 +113,38 @@
-   });
- 
-   for (const version of sortedVersions) {
--    console.log(`\nPlaywright version: ${version}`);
-+    console.log(`\nPatchright version: ${version}`);
-     printInstalledBrowsers(groupedByPlaywrightMinorVersion.get(version)!);
-   }
- }
+ import '../bootstrap';
+ import { gracefullyProcessExitDoNotHang, getPackageManagerExecCommand } from '../utils';
+ import { addTraceCommands } from '../tools/trace/traceCli';
+@@ -69,10 +51,10 @@
  
  program
      .command('install [browser...]')
@@ -4774,44 +4666,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/cli/
      .option('--force', 'force reinstall of already installed browsers')
      .option('--only-shell', 'only install headless shell when installing chromium')
      .option('--no-shell', 'do not install chromium headless shell')
-     .action(async function(args: string[], options: { withDeps?: boolean, force?: boolean, dryRun?: boolean, list?: boolean, shell?: boolean, noShell?: boolean, onlyShell?: boolean }) {
-       if (isLikelyNpxGlobal()) {
-         console.error(wrapInASCIIBox([
--          `WARNING: It looks like you are running 'npx playwright install' without first`,
-+          `WARNING: It looks like you are running 'npx patchright install' without first`,
-           `installing your project's dependencies.`,
-           ``,
-           `To avoid unexpected behavior, please install your dependencies first, and`,
--          `then run Playwright's install command:`,
-+          `then run Patchright's install command:`,
-           ``,
-           `    npm install`,
--          `    npx playwright install`,
-+          `    npx patchright install`,
-           ``,
--          `If your project does not yet depend on Playwright, first install the`,
-+          `If your project does not yet depend on Patchright, first install the`,
-           `applicable npm package (most commonly @playwright/test), and`,
--          `then run Playwright's install command to download the browsers:`,
-+          `then run Patchright's install command to download the browsers:`,
-           ``,
--          `    npm install @playwright/test`,
--          `    npx playwright install`,
-+          `    npm install -D patchright`,
-+          `    npx patchright install`,
-           ``,
-         ].join('\n'), 1));
-       }
-@@ -193,7 +175,7 @@
-         } else {
-           await registry.install(executables, { force: options.force });
-           await registry.validateHostRequirementsForExecutablesIfNeeded(executables, process.env.PW_LANG_NAME || 'javascript').catch((e: Error) => {
--            e.name = 'Playwright Host validation warning';
-+            e.name = 'Patchright Host validation warning';
-             console.error(e);
-           });
-         }
-@@ -212,14 +194,14 @@
+@@ -95,8 +77,8 @@
  
  program
      .command('uninstall')
@@ -4820,17 +4675,9 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/cli/
 +    .description('Removes browsers used by this installation of Patchright from the system (chromium, firefox, webkit, ffmpeg). This does not include branded channels.')
 +    .option('--all', 'Removes all browsers used by any Patchright installation from the system.')
      .action(async (options: { all?: boolean }) => {
-       delete process.env.PLAYWRIGHT_SKIP_BROWSER_GC;
-       await registry.uninstall(!!options.all).then(({ numberOfBrowsersLeft }) => {
-         if (!options.all && numberOfBrowsersLeft > 0) {
--          console.log('Successfully uninstalled Playwright browsers for the current Playwright installation.');
--          console.log(`There are still ${numberOfBrowsersLeft} browsers left, used by other Playwright installations.\nTo uninstall Playwright browsers for all installations, re-run with --all flag.`);
-+          console.log('Successfully uninstalled Patchright browsers for the current Patchright installation.');
-+          console.log(`There are still ${numberOfBrowsersLeft} browsers left, used by other Patchright installations.\nTo uninstall Patchright browsers for all installations, re-run with --all flag.`);
-         }
-       }).catch(logErrorAndExit);
-     });
-@@ -722,7 +704,7 @@
+       const { uninstallBrowsers } = await import('./installActions');
+       uninstallBrowsers(options).catch(logErrorAndExit);
+@@ -284,7 +266,7 @@
        .option('--save-har-glob <glob pattern>', 'filter entries in the HAR by matching url against this glob pattern')
        .option('--save-storage <filename>', 'save context storage state at the end, for later use with --load-storage')
        .option('--timezone <time zone>', 'time zone to emulate, for example "Europe/Rome"')
@@ -4839,7 +4686,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/cli/
        .option('--user-agent <ua string>', 'specify user agent string')
        .option('--user-data-dir <directory>', 'use the specified user data directory instead of a new context')
        .option('--viewport-size <size>', 'specify browser viewport size in pixels, for example "1280, 720"');
-@@ -731,14 +713,14 @@
+@@ -293,14 +275,14 @@
  function buildBasePlaywrightCLICommand(cliTargetLang: string | undefined): string {
    switch (cliTargetLang) {
      case 'python':
@@ -4915,7 +4762,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/cli/
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/browserContext.ts patchright/packages/playwright-core/src/client/browserContext.ts
 ---
 +++
-@@ -144,9 +144,9 @@
+@@ -146,9 +146,9 @@
          // a) removing "dialog" listener subscription (client->server)
          // b) actual "dialog" event (server->client)
          if (dialogObject.type() === 'beforeunload')
@@ -4927,31 +4774,31 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
        }
      });
      this._channel.on('request', ({ request, page }) => this._onRequest(network.Request.from(request), Page.fromNullable(page)));
-@@ -350,16 +350,19 @@
+@@ -356,17 +356,20 @@
    }
  
-   async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any): Promise<void> {
+   async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any) {
 +    await this.installInjectRoute();
      const source = await evaluationScript(this._platform, script, arg);
-     await this._channel.addInitScript({ source });
+     return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
  
-   async exposeBinding(name: string, callback: (source: structs.BindingSource, ...args: any[]) => any, options: { handle?: boolean } = {}): Promise<void> {
+   async exposeBinding(name: string, callback: (source: structs.BindingSource, ...args: any[]) => any, options: { handle?: boolean } = {}): Promise<DisposableObject> {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name, needsHandle: options.handle });
+     const result = await this._channel.exposeBinding({ name, needsHandle: options.handle });
      this._bindings.set(name, callback);
+     return DisposableObject.from(result.disposable);
    }
  
-   async exposeFunction(name: string, callback: Function): Promise<void> {
+   async exposeFunction(name: string, callback: Function): Promise<DisposableObject> {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name });
+     const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
-@@ -580,6 +583,26 @@
-       return;
-     throw new Error(`File access denied: ${filePath} is outside allowed roots. Allowed roots: ${this._allowedDirectories.length ? this._allowedDirectories.join(', ') : 'none'}`);
+@@ -560,6 +563,25 @@
+     await this._channel.exposeConsoleApi();
    }
-+
+ 
 +  routeInjecting: boolean = false;
 +
 +  async installInjectRoute() {
@@ -4998,7 +4845,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/frame.ts patchright/packages/playwright-core/src/client/frame.ts
 ---
 +++
-@@ -178,25 +178,33 @@
+@@ -177,25 +177,33 @@
    }
  
    async waitForURL(url: URLMatch, options: { waitUntil?: LifecycleEvent, timeout?: number } = {}): Promise<void> {
@@ -5041,7 +4888,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
      return parseResult(result.value);
    }
  
-@@ -237,9 +245,9 @@
+@@ -231,9 +239,9 @@
      return parseResult(result.value);
    }
  
@@ -5057,7 +4904,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/jsHandle.ts patchright/packages/playwright-core/src/client/jsHandle.ts
 ---
 +++
-@@ -36,9 +36,10 @@
+@@ -36,14 +36,16 @@
      this._channel.on('previewUpdated', ({ preview }) => this._preview = preview);
    }
  
@@ -5068,11 +4915,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +
 +      const result = await this._channel.evaluateExpression({ expression: String(pageFunction), isFunction: typeof pageFunction === 'function', arg: serializeArgument(arg), isolatedContext: isolatedContext });
 +      return parseResult(result.value);
-   }
- 
-   async _evaluateFunction(functionDeclaration: string) {
-@@ -46,9 +47,10 @@
-     return parseResult(result.value);
    }
  
 -  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg): Promise<structs.SmartHandle<R>> {
@@ -5094,7 +4936,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
  /**
   * Copyright (c) Microsoft Corporation.
   *
-@@ -124,20 +126,56 @@
+@@ -124,16 +126,52 @@
      });
    }
  
@@ -5120,10 +4962,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +          ),
 +        { title: "Evaluate", timeout: options?.timeout }
 +      );
-   }
- 
-   async _evaluateFunction(functionDeclaration: string, options?: TimeoutOptions) {
-     return await this._withElement(h => h._evaluateFunction(functionDeclaration), { title: 'Evaluate', timeout: options?.timeout });
    }
  
 -  async evaluateAll<R, Arg>(pageFunction: structs.PageFunctionOn<Element[], Arg, R>, arg?: Arg): Promise<R> {
@@ -5169,7 +5007,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
  import { Events } from './events';
  import { APIResponse } from './fetch';
  import { Frame } from './frame';
-@@ -185,7 +185,12 @@
+@@ -183,7 +183,12 @@
    }
  
    async allHeaders(): Promise<Headers> {
@@ -5186,7 +5024,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/page.ts patchright/packages/playwright-core/src/client/page.ts
 ---
 +++
-@@ -311,9 +311,9 @@
+@@ -313,9 +313,9 @@
      return await this._mainFrame.dispatchEvent(selector, type, eventInit, options);
    }
  
@@ -5199,22 +5037,23 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
    }
  
    async $eval<R, Arg>(selector: string, pageFunction: structs.PageFunctionOn<Element, Arg, R>, arg?: Arg): Promise<R> {
-@@ -339,12 +339,14 @@
+@@ -341,6 +341,7 @@
    }
  
    async exposeFunction(name: string, callback: Function) {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name });
+     const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
+@@ -348,6 +349,7 @@
    }
  
    async exposeBinding(name: string, callback: (source: structs.BindingSource, ...args: any[]) => any, options: { handle?: boolean } = {}) {
 +    await this.installInjectRoute();
-     await this._channel.exposeBinding({ name, needsHandle: options.handle });
+     const result = await this._channel.exposeBinding({ name, needsHandle: options.handle });
      this._bindings.set(name, callback);
-   }
-@@ -503,9 +505,9 @@
+     return DisposableObject.from(result.disposable);
+@@ -507,12 +509,13 @@
      return this._viewportSize || null;
    }
  
@@ -5226,18 +5065,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +    return await this._mainFrame.evaluate(pageFunction, arg, isolatedContext);
    }
  
-   async _evaluateFunction(functionDeclaration: string) {
-@@ -513,6 +515,7 @@
-   }
- 
    async addInitScript(script: Function | string | { path?: string, content?: string }, arg?: any) {
 +    await this.installInjectRoute();
      const source = await evaluationScript(this._platform, script, arg);
-     await this._channel.addInitScript({ source });
+     return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
-@@ -875,6 +878,26 @@
-   async _snapshotForAI(options: TimeoutOptions & { track?: string } = {}): Promise<{ full: string, incremental?: string }> {
-     return await this._channel.snapshotForAI({ timeout: this._timeoutSettings.timeout(options), track: options.track });
+@@ -864,6 +867,26 @@
+   async _setDockTile(image: Buffer) {
+     await this._channel.setDockTile({ image });
    }
 +
 +  routeInjecting: boolean = false;
@@ -5265,14 +5100,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/tracing.ts patchright/packages/playwright-core/src/client/tracing.ts
 ---
 +++
-@@ -36,6 +36,7 @@
+@@ -38,6 +38,7 @@
    }
  
-   async start(options: { name?: string, title?: string, snapshots?: boolean, screenshots?: boolean, sources?: boolean, _live?: boolean } = {}) {
+   async start(options: { name?: string, title?: string, snapshots?: boolean, screenshots?: boolean, sources?: boolean, live?: boolean } = {}) {
 +    if (typeof this._parent.installInjectRoute === 'function') await this._parent.installInjectRoute();
      await this._wrapApiCall(async () => {
        this._includeSources = !!options.sources;
-       this._isLive = !!options._live;
+       this._isLive = !!options.live;
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/worker.ts patchright/packages/playwright-core/src/client/worker.ts
 ---
 +++
@@ -5333,21 +5168,21 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/browserContext.ts patchright/packages/playwright-core/src/server/browserContext.ts
 ---
 +++
-@@ -164,7 +164,7 @@
+@@ -167,7 +167,7 @@
        await this.exposeConsoleApi();
  
      if (this._options.serviceWorkers === 'block')
--      await this.addInitScript(undefined, `\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
-+      await this.addInitScript(undefined, `navigator.serviceWorker.register = async () => { };`);
+-      await this.addInitScript(`\nif (navigator.serviceWorker) navigator.serviceWorker.register = async () => { console.warn('Service Worker registration blocked by Playwright'); };\n`);
++      await this.addInitScript(`if (navigator.serviceWorker) navigator.serviceWorker.register = async () => { };`);
  
      if (this._options.permissions)
        await this.grantPermissions(this._options.permissions);
-@@ -354,27 +354,20 @@
+@@ -352,18 +352,13 @@
        if (page.getBinding(name))
          throw new Error(`Function "${name}" has been already registered in one of the pages`);
      }
 -    await progress.race(this.exposePlaywrightBindingIfNeeded());
-     const binding = new PageBinding(name, playwrightBinding, needsHandle);
+     const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
      binding.forClient = forClient;
      this._pageBindings.set(name, binding);
 -    try {
@@ -5358,41 +5193,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      this._pageBindings.delete(name);
 -      throw error;
 -    }
-+    await this.doExposeBinding(binding);
++    
++    				await this.doExposeBinding(binding);
++    				return binding;
++    			
    }
  
-   async removeExposedBindings(bindings: PageBinding[]) {
--    bindings = bindings.filter(binding => this._pageBindings.get(binding.name) === binding);
--    for (const binding of bindings)
--      this._pageBindings.delete(binding.name);
--    await this.doRemoveInitScripts(bindings.map(binding => binding.initScript));
--    const cleanup = bindings.map(binding => `{ ${binding.cleanupScript} };\n`).join('');
--    await this.safeNonStallingEvaluateInAllFrames(cleanup, 'main');
-+
-+    		for (const key of this._pageBindings.keys()) {
-+    			if (!key.startsWith('__pw'))
-+    				this._pageBindings.delete(key);
-+    		}
-+    		await this.doRemoveExposedBindings();
-+    	
-   }
- 
-   async grantPermissions(permissions: string[], origin?: string) {
-@@ -491,9 +484,10 @@
-   }
- 
-   async removeInitScripts(initScripts: InitScript[]) {
--    const set = new Set(initScripts);
--    this.initScripts = this.initScripts.filter(script => !set.has(script));
--    await this.doRemoveInitScripts(initScripts);
-+
-+    		this.initScripts.splice(0, this.initScripts.length);
-+    		await this.doRemoveInitScripts();
-+    	
-   }
- 
-   async addRequestInterceptor(progress: Progress, handler: network.RouteHandler): Promise<void> {
-@@ -843,4 +837,5 @@
+   async removeExposedBinding(binding: PageBinding) {
+@@ -881,4 +876,5 @@
    strictSelectors: false,
    serviceWorkers: 'allow',
    locale: 'en-US',
@@ -5401,14 +5209,15 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/chromium.ts patchright/packages/playwright-core/src/server/chromium/chromium.ts
 ---
 +++
-@@ -315,7 +315,6 @@
+@@ -320,8 +320,6 @@
+     const chromeArguments = [...chromiumSwitches(options.assistantMode, options.channel)];
  
-     if (os.platform() !== 'darwin' || !hasGpuMac()) {
-       // See https://issues.chromium.org/issues/40277080
--      chromeArguments.push('--enable-unsafe-swiftshader');
-     }
- 
+     // See https://issues.chromium.org/issues/40277080
+-    chromeArguments.push('--enable-unsafe-swiftshader');
+-
      if (options.headless) {
+       chromeArguments.push('--headless');
+ 
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/chromiumSwitches.ts patchright/packages/playwright-core/src/server/chromium/chromiumSwitches.ts
 ---
 +++
@@ -5462,7 +5271,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crBrowser.ts patchright/packages/playwright-core/src/server/chromium/crBrowser.ts
 ---
 +++
-@@ -519,8 +519,10 @@
+@@ -522,8 +522,10 @@
    }
  
    async doRemoveInitScripts(initScripts: InitScript[]) {
@@ -5470,12 +5279,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      await (page.delegate as CRPage).removeInitScripts(initScripts);
 +
 +    		for (const page of this.pages())
-+    			await (page.delegate as CRPage).removeInitScripts();
++    			await (page.delegate as CRPage).removeInitScripts(initScripts);
 +    	
    }
  
    async doUpdateRequestInterception(): Promise<void> {
-@@ -613,4 +615,18 @@
+@@ -611,6 +613,20 @@
      const rootSession = await this._browser._clientRootSession();
      return rootSession.attachToTarget(targetId);
    }
@@ -5494,6 +5303,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    	
 +  }
  }
+ 
+ export function shouldProxyLoopback(bypass: string | undefined) {
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crCoverage.ts patchright/packages/playwright-core/src/server/chromium/crCoverage.ts
 ---
 +++
@@ -5660,7 +5471,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        }
      }
      const isNavigationRequest = requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && requestWillBeSentEvent.type === 'Document';
-@@ -557,6 +577,8 @@
+@@ -558,6 +578,8 @@
      if (request.session !== sessionInfo.session && !sessionInfo.isMain && (request._documentId === request._requestId || sessionInfo.workerFrame))
        request.session = sessionInfo.session;
    }
@@ -5669,7 +5480,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class InterceptableRequest {
-@@ -615,38 +637,148 @@
+@@ -614,38 +636,148 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -5841,7 +5652,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -659,6 +791,211 @@
+@@ -658,6 +790,211 @@
        });
      });
    }
@@ -6056,7 +5867,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crPage.ts patchright/packages/playwright-core/src/server/chromium/crPage.ts
 ---
 +++
-@@ -43,7 +43,7 @@
+@@ -45,7 +45,7 @@
  import type { Progress } from '../progress';
  import type * as types from '../types';
  import type * as channels from '@protocol/channels';
@@ -6065,7 +5876,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
  export type WindowBounds = { top?: number, left?: number, width?: number, height?: number };
  
-@@ -94,7 +94,10 @@
+@@ -96,7 +96,10 @@
      this.updateOffline();
      this.updateExtraHTTPHeaders();
      this.updateHttpCredentials();
@@ -6077,7 +5888,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._mainFrameSession = new FrameSession(this, client, targetId, null);
      this._sessions.set(targetId, this._mainFrameSession);
      if (opener && !browserContext._options.noDefaultViewport) {
-@@ -124,15 +127,15 @@
+@@ -126,15 +129,15 @@
    }
  
    _sessionForFrame(frame: frames.Frame): FrameSession {
@@ -6101,7 +5912,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
    private _sessionForHandle(handle: dom.ElementHandle): FrameSession {
      const frame = handle._context.frame;
-@@ -223,6 +226,7 @@
+@@ -225,6 +228,7 @@
    }
  
    async addInitScript(initScript: InitScript, world: types.World = 'main'): Promise<void> {
@@ -6109,9 +5920,9 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      await this._forAllFrameSessions(frame => frame._evaluateOnNewDocument(initScript, world));
    }
  
-@@ -356,6 +360,19 @@
-   shouldToggleStyleSheetToSyncAnimations(): boolean {
-     return false;
+@@ -364,6 +368,19 @@
+   async setDockTile(image: Buffer): Promise<void> {
+     await this._mainFrameSession._client.send('Browser.setDockTile', { image: image.toString('base64') });
    }
 +
 +  async exposeBinding(binding: PageBinding) {
@@ -6129,7 +5940,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class FrameSession {
-@@ -430,6 +447,7 @@
+@@ -438,6 +455,7 @@
    }
  
    async _initialize(hasUIWindow: boolean) {
@@ -6137,7 +5948,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (!this._page.isStorageStatePage && hasUIWindow &&
        !this._crPage._browserContext._browser.isClank() &&
        !this._crPage._browserContext._options.noDefaultViewport) {
-@@ -444,6 +462,11 @@
+@@ -451,6 +469,11 @@
      let lifecycleEventsEnabled: Promise<any>;
      if (!this._isMainFrame())
        this._addRendererListeners();
@@ -6149,7 +5960,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._addBrowserListeners();
  
      // Buffer attachedToTarget events until we receive the frame tree.
-@@ -453,11 +476,18 @@
+@@ -460,11 +483,18 @@
      this._bufferedAttachedToTargetEvents = [];
  
      const promises: Promise<any>[] = [
@@ -6169,7 +5980,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          }
  
          // Now that we have the frame tree, it is possible to insert oopif targets at the right place.
-@@ -465,17 +495,6 @@
+@@ -472,17 +502,6 @@
          this._bufferedAttachedToTargetEvents = undefined;
          for (const event of attachedToTargetEvents)
            this._onAttachedToTarget(event);
@@ -6187,7 +5998,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          const isInitialEmptyPage = this._isMainFrame() && this._page.mainFrame().url() === ':';
          if (isInitialEmptyPage) {
            // Ignore lifecycle events, worlds and bindings for the initial empty page. It is never the final page
-@@ -485,13 +504,24 @@
+@@ -492,13 +511,24 @@
              this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.lifecycleEvent', event => this._onLifecycleEvent(event)));
            });
          } else {
@@ -6213,7 +6024,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -502,8 +532,10 @@
+@@ -509,8 +539,10 @@
      if (!this._page.isStorageStatePage) {
        if (this._crPage._browserContext.needsPlaywrightBinding())
          promises.push(this.exposePlaywrightBinding());
@@ -6226,7 +6037,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const options = this._crPage._browserContext._options;
        if (options.bypassCSP)
          promises.push(this._client.send('Page.setBypassCSP', { enabled: true }));
-@@ -526,14 +558,24 @@
+@@ -533,12 +565,22 @@
        promises.push(this._updateGeolocation(true));
        promises.push(this._updateEmulateMedia());
        promises.push(this._updateFileChooserInterception(true));
@@ -6237,8 +6048,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +      					  for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +      					  for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 +      				
-       if (videoOptions)
-         promises.push(this._crPage._page.screencast.startVideoRecording(videoOptions));
      }
 -    promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
 +    
@@ -6254,7 +6063,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    dispose() {
-@@ -557,13 +599,33 @@
+@@ -562,13 +604,33 @@
      return { newDocumentId: response.loaderId };
    }
  
@@ -6289,7 +6098,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _handleFrameTree(frameTree: Protocol.Page.FrameTree) {
-@@ -610,12 +672,33 @@
+@@ -615,12 +677,33 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -6324,7 +6133,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onFrameRequestedNavigation(payload: Protocol.Page.frameRequestedNavigationPayload) {
-@@ -652,19 +735,33 @@
+@@ -657,19 +740,33 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -6365,7 +6174,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onExecutionContextDestroyed(executionContextId: number) {
-@@ -680,7 +777,7 @@
+@@ -685,7 +782,7 @@
        this._onExecutionContextDestroyed(contextId);
    }
  
@@ -6374,7 +6183,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -722,12 +819,22 @@
+@@ -727,12 +824,22 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -6398,7 +6207,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -806,8 +913,10 @@
+@@ -811,8 +918,10 @@
      const pageOrError = await this._crPage._page.waitForInitializedOrError();
      if (!(pageOrError instanceof Error)) {
        const context = this._contextIdToContext.get(event.executionContextId);
@@ -6411,7 +6220,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      }
    }
  
-@@ -1002,20 +1111,11 @@
+@@ -1008,20 +1117,14 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -6430,11 +6239,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      this._initScriptIds.delete(script);
 -    }
 -    await Promise.all(ids.map(identifier => this._client.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {}))); // target can be closed
-+    this._evaluateOnNewDocumentScripts = [];		
++
++    			const toRemove = new Set(initScripts);
++    			this._evaluateOnNewDocumentScripts = this._evaluateOnNewDocumentScripts.filter(script => !toRemove.has(script));
++    		
    }
  
    async exposePlaywrightBinding() {
-@@ -1120,12 +1220,53 @@
+@@ -1126,12 +1229,53 @@
    async _adoptBackendNodeId(backendNodeId: Protocol.DOM.BackendNodeId, to: dom.FrameExecutionContext): Promise<dom.ElementHandle> {
      const result = await this._client._sendMayFail('DOM.resolveNode', {
        backendNodeId,
@@ -6447,7 +6259,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
 +
 +  _exposedBindingNames: string[] = [];
-+  _evaluateOnNewDocumentScripts: string[] = [];
++  _evaluateOnNewDocumentScripts: InitScript[] = [];
 +  _parsedExecutionContextIds: number[] = [];
 +  _exposedBindingScripts: string[] = [];
 +
@@ -6492,13 +6304,13 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crServiceWorker.ts patchright/packages/playwright-core/src/server/chromium/crServiceWorker.ts
 ---
 +++
-@@ -58,13 +58,23 @@
-       const message = new ConsoleMessage(null, this, event.type, undefined, args, toConsoleMessageLocation(event.stackTrace));
+@@ -63,13 +63,23 @@
+       const message = new ConsoleMessage(null, this, event.type, undefined, args, toConsoleMessageLocation(event.stackTrace), event.timestamp);
        this.browserContext.emit(BrowserContext.Events.Console, message);
      });
 -
--    session.send('Runtime.enable', {}).catch(e => { });
-     session.send('Runtime.runIfWaitingForDebugger').catch(e => { });
+-    session.send('Runtime.enable', {}).catch(e => {});
+     session.send('Runtime.runIfWaitingForDebugger').catch(e => {});
      session.on('Inspector.targetReloadedAfterCrash', () => {
        // Resume service worker after restart.
        session._sendMayFail('Runtime.runIfWaitingForDebugger', {});
@@ -6540,7 +6352,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/dispatchers/browserContextDispatcher.ts patchright/packages/playwright-core/src/server/dispatchers/browserContextDispatcher.ts
 ---
 +++
-@@ -131,12 +131,12 @@
+@@ -124,12 +124,12 @@
          });
        }
      });
@@ -7038,7 +6850,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async querySelector(selector: string, options: types.StrictOptions): Promise<dom.ElementHandle<Element> | null> {
--    debugLogger.log('api', `    finding element using the selector "${selector}"`);
+-    this.apiLog(`    finding element using the selector "${selector}"`);
 -    return this.selectors.query(selector, options);
 +
 +    		return this.querySelectorAll(selector, options).then((handles) => {
@@ -7500,7 +7312,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1443,47 +1577,96 @@
+@@ -1439,47 +1573,96 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: any, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -7635,7 +7447,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1542,7 +1725,7 @@
+@@ -1538,7 +1721,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -7644,7 +7456,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1586,42 +1769,129 @@
+@@ -1591,42 +1774,129 @@
    }
  
    _onDetached() {
@@ -7807,7 +7619,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1688,6 +1958,325 @@
+@@ -1722,6 +1992,325 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -8216,16 +8028,16 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/page.ts patchright/packages/playwright-core/src/server/page.ts
 ---
 +++
-@@ -47,6 +47,8 @@
- import type { ImageComparatorOptions } from './utils/comparators';
+@@ -51,6 +51,8 @@
  import type * as channels from '@protocol/channels';
  import type { BindingPayload } from '@injected/bindingsController';
+ import type { SelectorInfo } from './frameSelectors';
 +import * as domValue from "./dom";
 +import { createPageBindingScript, deliverBindingResult, takeBindingHandle } from "./pageBinding";
  
  export interface PageDelegate {
    readonly rawMouse: input.RawMouse;
-@@ -324,30 +326,25 @@
+@@ -332,21 +334,16 @@
    }
  
    async exposeBinding(progress: Progress, name: string, needsHandle: boolean, playwrightBinding: frames.FunctionWithSource): Promise<PageBinding> {
@@ -8234,7 +8046,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -    if (this.browserContext._pageBindings.has(name))
 -      throw new Error(`Function "${name}" has been already registered in the browser context`);
 -    await progress.race(this.browserContext.exposePlaywrightBindingIfNeeded());
--    const binding = new PageBinding(name, playwrightBinding, needsHandle);
+-    const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
 -    this._pageBindings.set(name, binding);
 -    try {
 -      await progress.race(this.delegate.addInitScript(binding.initScript));
@@ -8249,45 +8061,16 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    			throw new Error(`Function "${name}" has been already registered`);
 +    		if (this.browserContext._pageBindings.has(name))
 +    			throw new Error(`Function "${name}" has been already registered in the browser context`);
-+    		const binding = new PageBinding(name, playwrightBinding, needsHandle);
++    		const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
 +    		this._pageBindings.set(name, binding);
 +    		await this.delegate.exposeBinding(binding);
++    		return binding;
 +    	
    }
  
-   async removeExposedBindings(bindings: PageBinding[]) {
--    bindings = bindings.filter(binding => this._pageBindings.get(binding.name) === binding);
--    for (const binding of bindings)
--      this._pageBindings.delete(binding.name);
--    await this.delegate.removeInitScripts(bindings.map(binding => binding.initScript));
--    const cleanup = bindings.map(binding => `{ ${binding.cleanupScript} };\n`).join('');
--    await this.safeNonStallingEvaluateInAllFrames(cleanup, 'main');
-+
-+    		for (const key of this._pageBindings.keys()) {
-+    			if (!key.startsWith('__pw'))
-+    				this._pageBindings.delete(key);
-+    		}
-+    		await this.delegate.removeExposedBindings();
-+    	
-   }
- 
-   async setExtraHTTPHeaders(progress: Progress, headers: types.HeadersArray) {
-@@ -633,9 +630,10 @@
-   }
- 
-   async removeInitScripts(initScripts: InitScript[]) {
--    const set = new Set(initScripts);
--    this.initScripts = this.initScripts.filter(script => !set.has(script));
--    await this.delegate.removeInitScripts(initScripts);
-+
-+    		this.initScripts.splice(0, this.initScripts.length);
-+    		await this.delegate.removeInitScripts();
-+    	
-   }
- 
-   needsRequestInterception(): boolean {
-@@ -837,13 +835,6 @@
-       this.browserContext.addVisitedOrigin(origin);
+   async removeExposedBinding(binding: PageBinding) {
+@@ -870,13 +867,6 @@
+     }
    }
  
 -  allInitScripts() {
@@ -8300,9 +8083,9 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    getBinding(name: string) {
      return this._pageBindings.get(name) || this.browserContext._pageBindings.get(name);
    }
-@@ -867,6 +858,12 @@
-     const snapshot = await snapshotFrameForAI(progress, this.mainFrame(), options);
-     return { full: snapshot.full.join('\n'), incremental: snapshot.incremental?.join('\n') };
+@@ -899,6 +889,12 @@
+   async setDockTile(image: Buffer) {
+     await this.delegate.setDockTile(image);
    }
 +
 +  allBindings() {
@@ -8313,7 +8096,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  export const WorkerEvent = {
-@@ -911,77 +908,109 @@
+@@ -953,83 +949,119 @@
      this.openScope.close(new Error('Worker closed'));
    }
  
@@ -8352,12 +8135,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    }
  }
  
--export class PageBinding {
+-export class PageBinding extends DisposableObject {
 -  private static kController = '__playwright__binding__controller__';
 -  static kBindingName = '__playwright__binding__';
  
--  static createInitScript() {
--    return new InitScript(`
+-  static createInitScript(browserContext: BrowserContext): InitScript {
+-    return new InitScript(browserContext, `
 -      (() => {
 -        const module = {};
 -        ${rawBindingsControllerSource.source}
@@ -8367,12 +8150,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      })();
 -    `);
 -  }
-+		export class PageBinding {
++		export class PageBinding extends DisposableObject {
 +			readonly source: string;
 +			readonly name: string;
 +			readonly playwrightFunction: frames.FunctionWithSource;
++			readonly initScript: InitScript;
 +			readonly needsHandle: boolean;
-+			readonly internal: boolean;
++			readonly cleanupScript: string;
++			forClient?: unknown;
  
 -  readonly name: string;
 -  readonly playwrightFunction: frames.FunctionWithSource;
@@ -8380,17 +8165,21 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -  readonly needsHandle: boolean;
 -  readonly cleanupScript: string;
 -  forClient?: unknown;
-+			constructor(name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
++			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
++				super(parent);
 +				this.name = name;
 +				this.playwrightFunction = playwrightFunction;
-+				this.source = createPageBindingScript(name, needsHandle);
++				this.initScript = new InitScript(parent, createPageBindingScript(name, needsHandle));
++				this.source = this.initScript.source;
++				this.cleanupScript = `delete globalThis[${JSON.stringify(name)}];`;
 +				this.needsHandle = needsHandle;
 +			}
  
--  constructor(name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+-  constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+-    super(parent);
 -    this.name = name;
 -    this.playwrightFunction = playwrightFunction;
--    this.initScript = new InitScript(`globalThis['${PageBinding.kController}'].addBinding(${JSON.stringify(name)}, ${needsHandle})`);
+-    this.initScript = new InitScript(parent, `globalThis['${PageBinding.kController}'].addBinding(${JSON.stringify(name)}, ${needsHandle})`);
 -    this.needsHandle = needsHandle;
 -    this.cleanupScript = `globalThis['${PageBinding.kController}'].removeBinding(${JSON.stringify(name)})`;
 -  }
@@ -8419,7 +8208,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      context.evaluateExpressionHandle(`arg => globalThis['${PageBinding.kController}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, error }).catch(e => debugLogger.log('error', e));
 -    }
 -  }
--}
 +				const deliver = async (deliverPayload: any) => {
 +					let deliveryError: any;
 +					try {
@@ -8446,7 +8234,11 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +					}
 +					debugLogger.log('error', deliveryError);
 +				};
-+
+ 
+-  override async dispose(): Promise<void> {
+-    await this.parent.removeExposedBinding(this);
+-  }
+-}
 +				try {
 +					assert(context.world);
 +					const binding = page.getBinding(name);
@@ -8468,20 +8260,25 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +					await deliver({ name, seq, error });
 +				}
 +			}
++
++			override async dispose(): Promise<void> {
++				await this.parent.removeExposedBinding(this);
++			}
 +		}
 +	
  
- export class InitScript {
+ export class InitScript extends DisposableObject {
    readonly source: string;
  
-   constructor(source: string) {
+   constructor(owner: BrowserContext | Page, source: string) {
+     super(owner);
 -    this.source = `(() => {
 -      ${source}
 -    })();`;
 +    this.source = `(() => { ${source} })();`;
    }
- }
  
+   async dispose() {
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/pageBinding.ts patchright/packages/playwright-core/src/server/pageBinding.ts
 ---
 +++
@@ -8602,40 +8399,43 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  import fs from 'fs';
  import os from 'os';
  import path from 'path';
-@@ -590,19 +573,19 @@
-         const preferredDockerVersion = currentDockerVersion ? dockerVersion(currentDockerVersion.dockerImageNameTemplate) : null;
-         const isOutdatedDockerImage = currentDockerVersion && preferredDockerVersion && currentDockerVersion.dockerImageName !== preferredDockerVersion.dockerImageName;
-         const prettyMessage = isOutdatedDockerImage ? [
--          `Looks like ${sdkLanguage === 'javascript' ? 'Playwright Test or ' : ''}Playwright was just updated to ${preferredDockerVersion.driverVersion}.`,
-+          `Looks like ${sdkLanguage === 'javascript' ? 'Patchright Test or ' : ''}Patchright was just updated to ${preferredDockerVersion.driverVersion}.`,
-           `Please update docker image as well.`,
-           `-  current: ${currentDockerVersion.dockerImageName}`,
-           `- required: ${preferredDockerVersion.dockerImageName}`,
-           ``,
--          `<3 Playwright Team`,
-+          `<3 Patchright Team`,
-         ].join('\n') : [
--          `Looks like ${sdkLanguage === 'javascript' ? 'Playwright Test or ' : ''}Playwright was just installed or updated.`,
-+          `Looks like ${sdkLanguage === 'javascript' ? 'Patchright Test or ' : ''}Patchright was just installed or updated.`,
-           `Please run the following command to download new browser${installByDefault ? 's' : ''}:`,
-           ``,
-           `    ${installCommand}`,
-           ``,
--          `<3 Playwright Team`,
-+          `<3 Patchright Team`,
-         ].join('\n');
+@@ -600,7 +583,7 @@
+             `-  current: ${currentDockerVersion.dockerImageName}`,
+             `- required: ${preferredDockerVersion.dockerImageName}`,
+             ``,
+-            `<3 Playwright Team`,
++            `<3 Patchright Team`,
+           ].join('\n');
+         } else if (isFfmpeg) {
+           prettyMessage = [
+@@ -610,7 +593,7 @@
+             ``,
+             `    ${buildPlaywrightCLICommand(sdkLanguage, 'install ffmpeg')}`,
+             ``,
+-            `<3 Playwright Team`,
++            `<3 Patchright Team`,
+           ].join('\n');
+         } else {
+           prettyMessage = [
+@@ -619,7 +602,7 @@
+             ``,
+             `    ${installCommand}`,
+             ``,
+-            `<3 Playwright Team`,
++            `<3 Patchright Team`,
+           ].join('\n');
+         }
          throw new Error(`Executable doesn't exist at ${e}\n${wrapInASCIIBox(prettyMessage, 1)}`);
-       }
-@@ -1116,7 +1099,7 @@
+@@ -1083,7 +1066,7 @@
        // Install browsers for this package.
        for (const executable of executables) {
          if (!executable._install)
 -          throw new Error(`ERROR: Playwright does not support installing ${executable.name}`);
 +          throw new Error(`ERROR: Patchright does not support installing ${executable.name}`);
  
-         const { embedderName } = getEmbedderName();
-         if (!getAsBooleanFromENV('CI') && !executable._isHermeticInstallation && !options?.force && executable.executablePath(embedderName)) {
-@@ -1135,7 +1118,7 @@
+         if (!getAsBooleanFromENV('CI') && !executable._isHermeticInstallation && !options?.force && executable.executablePath()) {
+           const { embedderName } = getEmbedderName();
+@@ -1102,7 +1085,7 @@
              ``,
              `    ${command}`,
              ``,
@@ -8644,7 +8444,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
            ].join('\n'), 1) + '\n\n');
            return;
          }
-@@ -1150,12 +1133,12 @@
+@@ -1117,12 +1100,12 @@
            `  ${lockfilePath}`,
            ``,
            `Either:`,
@@ -8659,7 +8459,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          ].join('\n'), 1));
        } else {
          throw e;
-@@ -1250,13 +1233,13 @@
+@@ -1217,13 +1200,13 @@
    private async _downloadExecutable(descriptor: BrowsersJSONDescriptor, force: boolean, executablePath?: string) {
      const downloadURLs = this._downloadURLs(descriptor);
      if (!downloadURLs.length)
@@ -8676,7 +8476,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        else
          logPolitely(message);
      }
-@@ -1477,7 +1460,7 @@
+@@ -1444,7 +1427,7 @@
  export function buildPlaywrightCLICommand(sdkLanguage: string, parameters: string): string {
    switch (sdkLanguage) {
      case 'python':
@@ -8685,7 +8485,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      case 'java':
        return `mvn exec:java -e -D exec.mainClass=com.microsoft.playwright.CLI -D exec.args="${parameters}"`;
      case 'csharp':
-@@ -1530,7 +1513,7 @@
+@@ -1497,7 +1480,7 @@
        ``,
        `    ${installCommand}`,
        ``,
@@ -8745,7 +8545,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -    // Next time we start recording, we will call addInitScript again.
 -    if (this._initScript) {
 -      eventsHelper.removeEventListeners(this._eventListeners);
--      await this._context.removeInitScripts([this._initScript]);
+-      await this._initScript.dispose();
 -      this._initScript = undefined;
 -    }
 +
@@ -8766,7 +8566,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
 -    const { javaScriptEnabled } = this._context._options;
 -    const initScriptSource = `(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
--    this._initScript = await this._context.addInitScript(undefined, initScriptSource);
+-    this._initScript = await this._context.addInitScript(initScriptSource);
 -    await this._context.safeNonStallingEvaluateInAllFrames(initScriptSource, 'main');
 +    		const { javaScriptEnabled } = this._context._options;
 +    		this._initScriptSource = `(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
@@ -9040,7 +8840,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/trace/recorder/tracing.ts patchright/packages/playwright-core/src/server/trace/recorder/tracing.ts
 ---
 +++
-@@ -660,6 +660,11 @@
+@@ -670,6 +670,11 @@
  }
  
  function createBeforeActionTraceEvent(metadata: CallMetadata, parentId?: string): trace.BeforeActionTraceEvent | null {
@@ -9052,7 +8852,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    const event: trace.BeforeActionTraceEvent = {
-@@ -679,6 +684,11 @@
+@@ -689,6 +694,11 @@
  }
  
  function createInputActionTraceEvent(metadata: CallMetadata): trace.InputActionTraceEvent | null {
@@ -9064,7 +8864,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -689,6 +699,11 @@
+@@ -699,6 +709,11 @@
  }
  
  function createActionLogTraceEvent(metadata: CallMetadata, message: string): trace.LogTraceEvent | null {
@@ -9076,7 +8876,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -700,6 +715,11 @@
+@@ -710,6 +725,11 @@
  }
  
  function createAfterActionTraceEvent(metadata: CallMetadata): trace.AfterActionTraceEvent | null {
