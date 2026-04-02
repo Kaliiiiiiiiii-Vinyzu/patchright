@@ -8,7 +8,7 @@ VERSION_NUMBER="${PLAYWRIGHT_VERSION#v}"
 RELEASE_DESCRIPTION="This is an automatic deployment in response to a new release of [microsoft/playwright](https://github.com/microsoft/playwright).\nThe original Release can be seen [here](https://github.com/microsoft/playwright/releases/tag/$PLAYWRIGHT_VERSION)."
 
 # Step 1: Create a new GitHub release and get the upload URL
-RELEASE_RESPONSE=$(curl -sSf --fail-with-body -X POST \
+RELEASE_RESPONSE=$(curl -fsS -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"tag_name\": \"$PLAYWRIGHT_VERSION\", \"name\": \"$PLAYWRIGHT_VERSION\", \"body\": \"$RELEASE_DESCRIPTION\", \"draft\": false, \"prerelease\": false}" \
@@ -35,7 +35,7 @@ for zipFile in \
   fileName=$(basename "$zipFile")
   echo "Uploading $fileName..."
 
-  curl -sSf --fail-with-body -X POST \
+  curl -fsS -X POST \
     -H "Authorization: token $GITHUB_TOKEN" \
     -H "Content-Type: application/zip" \
     --data-binary @"./playwright/utils/build/output/$zipFile" \
