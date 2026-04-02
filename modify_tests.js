@@ -290,6 +290,12 @@ const FIXME_TARGETS = {
 		['console event should work in immediately closed popup', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 		['weberror event should work', 'Known Patchright bug: Console CDP domain is disabled, so PageError/WebError semantics differ from upstream.'],
 	]),
+	'tests/library/browsercontext-locale.spec.ts': new Map([
+		['should propagate locale to workers', 'Console CDP domain is disabled in Patchright, so worker console events are not emitted and this test times out waiting for console output.'],
+	]),
+	'tests/library/browsercontext-timezone-id.spec.ts': new Map([
+		['should propagate timezone to workers', 'Console CDP domain is disabled in Patchright, so worker console events are not emitted and this test times out waiting for console output.'],
+	]),
 	'tests/library/browsercontext-expose-function.spec.ts': new Map([
 		['should be callable from-inside addInitScript', 'Patchright inject-route bootstrap can alter init-script timing/order.']
 	]),
@@ -319,6 +325,9 @@ const FIXME_TARGETS = {
 		['should not flush console events', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should flush console events on tracing stop', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should not emit after w/o before', 'Console CDP domain is disabled in Patchright, so console.log never fires and the evaluate promise never resolves.'],
+	]),
+	'tests/library/inspector/recorder-api.spec.ts': new Map([
+		['page.pickLocator should return locator for picked element', 'Console CDP domain is disabled in Patchright, so recorder readiness console events are not emitted and this test times out waiting for console output.'],
 	]),
 	'tests/library/selectors-register.spec.ts': new Map([
 		['should work in main and isolated world', '$eval is deprecated by Playwright and not supported by Patchright.'],
