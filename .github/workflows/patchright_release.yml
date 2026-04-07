@@ -42,6 +42,17 @@ jobs:
             echo "playwright_version=${{ github.event.inputs.version }}" >>$GITHUB_OUTPUT
             echo "previous_playwright_version=${previous_playwright_version:-v0.0.0}" >>$GITHUB_OUTPUT
             echo "playwright_version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+          elif [ -n "${{ github.event.inputs.patchright_release }}" ]; then
+            response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
+            playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+
+            response=$(curl --silent "https://api.github.com/repos/${REPO}/releases/latest")
+            previous_playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+
+            echo "proceed=true" >>$GITHUB_OUTPUT
+            echo "playwright_version=${playwright_version}" >>$GITHUB_OUTPUT
+            echo "previous_playwright_version=${previous_playwright_version:-v0.0.0}" >>$GITHUB_OUTPUT
+            echo "playwright_version=${playwright_version}" >> $GITHUB_ENV
           else
             chmod +x utils/release_version_check.sh
             utils/release_version_check.sh
@@ -360,6 +371,7 @@ jobs:
           npm publish --access=public --provenance
 
       - name: Publish Patchright Driver
+        if: env.patchright_release == ''
         env:
           PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
