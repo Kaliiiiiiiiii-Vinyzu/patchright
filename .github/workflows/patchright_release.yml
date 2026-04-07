@@ -358,7 +358,7 @@ jobs:
       - name: Rebrand Patchright Package
         run: |
           cd playwright
-          tsx ../patchright-nodejs/patchright_rebranding.ts
+          npx tsx ../patchright-nodejs/patchright_rebranding.ts
 
       - name: Publish Patchright-Core Package
         run: |
