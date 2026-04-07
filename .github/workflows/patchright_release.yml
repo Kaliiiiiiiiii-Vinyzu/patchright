@@ -5,10 +5,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Playwright Version (e.g. v1.58.0)'
+        description: 'Playwright Version (e.g. v1.58.0 or 1.58.0)'
         default: ''
       patchright_release:
-        description: 'Patchright Release Version (e.g. 1.58.0) on npm'
+        description: 'Patchright Release Version (e.g. v1.58.0 or 1.58.0) on npm'
         default: ''
   # running every hour
   schedule:
@@ -36,13 +36,17 @@ jobs:
         id: version_check
         run: |
           if [ -n "${{ github.event.inputs.version }}" ]; then
+            raw_version="${{ github.event.inputs.version }}"
+            normalized_version="v${raw_version#v}"
             response=$(curl --silent "https://api.github.com/repos/${REPO}/releases/latest")
             previous_playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
             echo "proceed=true" >>$GITHUB_OUTPUT
-            echo "playwright_version=${{ github.event.inputs.version }}" >>$GITHUB_OUTPUT
+            echo "playwright_version=${normalized_version}" >>$GITHUB_OUTPUT
             echo "previous_playwright_version=${previous_playwright_version:-v0.0.0}" >>$GITHUB_OUTPUT
-            echo "playwright_version=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "playwright_version=${normalized_version}" >> $GITHUB_ENV
           elif [ -n "${{ github.event.inputs.patchright_release }}" ]; then
+            raw_patchright_release="${{ github.event.inputs.patchright_release }}"
+            normalized_patchright_release="${raw_patchright_release#v}"
             response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
             playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
 
@@ -53,6 +57,7 @@ jobs:
             echo "playwright_version=${playwright_version}" >>$GITHUB_OUTPUT
             echo "previous_playwright_version=${previous_playwright_version:-v0.0.0}" >>$GITHUB_OUTPUT
             echo "playwright_version=${playwright_version}" >> $GITHUB_ENV
+            echo "patchright_release=${normalized_patchright_release}" >> $GITHUB_ENV
           else
             chmod +x utils/release_version_check.sh
             utils/release_version_check.sh

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       playwright_version:
-        description: 'Playwright version (tag) to test against. If empty, latest release is used.'
+        description: 'Playwright version (tag) to test against, e.g. v1.58.0 or 1.58.0. If empty, latest release is used.'
         required: false
         type: string
     outputs:
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       playwright_version:
-        description: 'Playwright version (tag) to test against. If empty, latest release is used.'
+        description: 'Playwright version (tag) to test against, e.g. v1.58.0 or 1.58.0. If empty, latest release is used.'
         required: false
         type: string
   push:
@@ -50,6 +50,8 @@ jobs:
           if [ -z "$branch_version" ]; then
             response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
             branch_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          else
+            branch_version="v${branch_version#v}"
           fi
           git clone https://github.com/microsoft/playwright --branch "$branch_version"
           cd playwright

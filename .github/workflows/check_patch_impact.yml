@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       old_version:
-        description: Playwright version to compare from (e.g. 1.43.0 or v1.43.0)
+        description: Playwright version to compare from (e.g. v1.43.0 or 1.43.0)
         required: true
         type: string
       new_version:
-        description: Playwright version to compare to (e.g. 1.44.0 or v1.44.0)
+        description: Playwright version to compare to (e.g. v1.44.0 or 1.44.0)
         required: true
         type: string
       create_issue:
@@ -19,11 +19,11 @@ on:
   workflow_call:
     inputs:
       old_version:
-        description: Playwright version to compare from (e.g. 1.43.0 or v1.43.0)
+        description: Playwright version to compare from (e.g. v1.43.0 or 1.43.0)
         required: true
         type: string
       new_version:
-        description: Playwright version to compare to (e.g. 1.44.0 or v1.44.0)
+        description: Playwright version to compare to (e.g. v1.44.0 or 1.44.0)
         required: true
         type: string
       create_issue:
