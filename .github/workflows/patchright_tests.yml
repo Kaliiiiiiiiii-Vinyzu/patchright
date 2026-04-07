@@ -84,7 +84,7 @@ jobs:
           npx playwright install chromium
 
       - name: Modify Tests for Patchright
-        run: node modify_tests.js
+        run: npx tsx utils/modify_tests.ts
 
       - name: Run Page Tests
         id: test_page

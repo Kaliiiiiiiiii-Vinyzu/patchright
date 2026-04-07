@@ -1,6 +1,41 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { Project, Node, SyntaxKind } from 'ts-morph';
+import {
+	Project,
+	Node,
+	SyntaxKind,
+	type ArrowFunction,
+	type CallExpression,
+	type FunctionExpression,
+	type SourceFile,
+} from 'ts-morph';
+
+type MissingReplacement = {
+	relativePath: string;
+	from: string;
+};
+
+type FixmeReasonByTitle = Map<string, string>;
+type FixmeReasonByLine = Map<number, string>;
+
+type ChangedFileReport = {
+	file: string;
+	isolatedContextInsertions: number;
+	isolatedContextNormalizations: number;
+	fixmeInsertions: number;
+	patchrightWorkaround: number;
+};
+
+type ModifyTestsReport = {
+	filesVisited: number;
+	filesChanged: number;
+	isolatedContextInsertions: number;
+	isolatedContextNormalizations: number;
+	fixmeInsertions: number;
+	patchrightWorkaroundFiles: number;
+	skippedUnsafeEvaluateCalls: number;
+	changedFiles: ChangedFileReport[];
+};
 
 const repoRoot = process.cwd();
 const playwrightRoot = path.join(repoRoot, 'playwright');
@@ -8,29 +43,32 @@ const testsRoot = path.join(playwrightRoot, 'tests');
 const tsConfigPath = path.join(testsRoot, 'tsconfig.json');
 const dryRun = process.env.MODIFY_TESTS_DRY_RUN === '1';
 
-if (!fs.existsSync(playwrightRoot)) {
-	console.error('[modify_tests] Missing playwright directory at', playwrightRoot);
-	process.exit(1);
-}
-if (!fs.existsSync(tsConfigPath)) {
-	console.error('[modify_tests] Missing tests tsconfig at', tsConfigPath);
-	process.exit(1);
-}
-
 const TARGET_METHODS = new Set(['evaluate', 'evaluateHandle', 'evaluateAll']);
+const TEST_BASE_NAMES = new Set(['it', 'test', 'playwrightTest']);
+
+function assertPrerequisites(): void {
+	if (!fs.existsSync(playwrightRoot)) {
+		console.error('[modify_tests] Missing playwright directory at', playwrightRoot);
+		process.exit(1);
+	}
+	if (!fs.existsSync(tsConfigPath)) {
+		console.error('[modify_tests] Missing tests tsconfig at', tsConfigPath);
+		process.exit(1);
+	}
+}
 
 // Patchright limitation: init scripts don't run on about:blank/data: URLs.
 // Keep this surgical and simple: rewrite only the known failing upstream tests.
-function applyPatchrightWorkarounds(sourceFile, relativePath) {
+function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string): boolean {
 	let text = sourceFile.getFullText();
 	const original = text;
 
-	const missingReplacements = [];
-	const replaceAll = (from, to) => {
+	const missingReplacements: MissingReplacement[] = [];
+	const replaceAll = (from: string, to: string): void => {
 		if (text.includes(from))
 			text = text.split(from).join(to);
 	};
-	const replaceOnce = (from, to) => {
+	const replaceOnce = (from: string, to: string): boolean => {
 		if (text.includes(from)) {
 			text = text.replace(from, to);
 			return true;
@@ -99,7 +137,7 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 		);
 
 		// Ensure tests in this file that now use server have it in fixtures.
-		text = text.replace(/async \(\{([^}]*)\}\) => \{/g, (match, inside) => {
+		text = text.replace(/async \(\{([^}]*)\}\) => \{/g, (match: string, inside: string) => {
 			if (!inside.includes('page') || inside.includes('server'))
 				return match;
 			const next = inside.trim().length ? `${inside.trim()}, server` : 'server';
@@ -117,7 +155,7 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 	}
 
 	if (relativePath === 'tests/library/emulation-focus.spec.ts') {
-		// Patchright's modify_tests.js only adds isolatedContext=false to evaluate calls with
+		// Patchright's modify_tests.ts only adds isolatedContext=false to evaluate calls with
 		// inline arrow/function expressions. These tests pass function references (identifiers)
 		// like evaluate(clickCounter) which are skipped by the safety check. Add the main-world
 		// flag so window/self properties are visible to subsequent reads.
@@ -195,7 +233,7 @@ function applyPatchrightWorkarounds(sourceFile, relativePath) {
 	return false;
 }
 
-const FIXME_TARGETS = {
+const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 	'tests/page/page-basic.spec.ts': new Map([
 		['has navigator.webdriver set to true', 'Patchright intentionally disables automation fingerprinting.'],
 		['page.press should work for Enter', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
@@ -337,7 +375,7 @@ const FIXME_TARGETS = {
 	])
 };
 
-const FIXME_TARGET_FILES = {
+const FIXME_TARGET_FILES: Record<string, string> = {
 	'tests/page/page-event-console.spec.ts': 'Known Patchright bug: Console CDP domain is disabled, so ConsoleMessage semantics differ from upstream.',
 	'tests/page/page-event-pageerror.spec.ts': 'Known Patchright bug: Console CDP domain is disabled, so PageError/WebError semantics differ from upstream.',
 	'tests/page/workers.spec.ts': 'Known Patchright bug: Console CDP domain is disabled, so worker console/error propagation semantics differ from upstream.',
@@ -348,7 +386,7 @@ const FIXME_TARGET_FILES = {
 	'tests/library/trace-viewer.spec.ts': 'I just gave up at this point. Im sorry.'
 };
 
-const FIXME_TARGET_LINES = {
+const FIXME_TARGET_LINES: Record<string, FixmeReasonByLine> = {
 	'tests/page/expect-boolean.spec.ts': new Map([
 		[79, 'Patchright matcher error-message formatting differs from upstream expectations.'],
 		[93, 'Patchright matcher error-message formatting differs from upstream expectations.'],
@@ -399,8 +437,8 @@ const FIXME_TARGET_LINES = {
 	]),
 };
 
-function walkFiles(dirPath) {
-	const specFiles = [];
+function walkFiles(dirPath: string): string[] {
+	const specFiles: string[] = [];
 	for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
 		const fullPath = path.join(dirPath, entry.name);
 		if (entry.isDirectory()) {
@@ -412,15 +450,15 @@ function walkFiles(dirPath) {
 	return specFiles;
 }
 
-function isFunctionLikeEvaluateExpressionArg(node) {
+function isFunctionLikeEvaluateExpressionArg(node: Node): boolean {
 	return Node.isArrowFunction(node) || Node.isFunctionExpression(node);
 }
 
-function isStringLikeEvaluateExpressionArg(node) {
+function isStringLikeEvaluateExpressionArg(node: Node): boolean {
 	return Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node) || Node.isTemplateExpression(node);
 }
 
-function shouldSkipForSafety(callExpression) {
+function shouldSkipForSafety(callExpression: CallExpression): boolean {
 	const expression = callExpression.getExpression();
 	if (!Node.isPropertyAccessExpression(expression))
 		return true;
@@ -440,7 +478,7 @@ function shouldSkipForSafety(callExpression) {
 	return false;
 }
 
-function insertIsolatedContextArgument(callExpression) {
+function insertIsolatedContextArgument(callExpression: CallExpression): boolean {
 	const args = callExpression.getArguments();
 	if (args.length === 1) {
 		callExpression.addArgument('undefined');
@@ -454,7 +492,7 @@ function insertIsolatedContextArgument(callExpression) {
 	return false;
 }
 
-function normalizeIsolatedContextArgument(callExpression) {
+function normalizeIsolatedContextArgument(callExpression: CallExpression): boolean {
 	const expression = callExpression.getExpression();
 	if (!Node.isPropertyAccessExpression(expression) || !TARGET_METHODS.has(expression.getName()))
 		return false;
@@ -479,13 +517,13 @@ function normalizeIsolatedContextArgument(callExpression) {
 	return true;
 }
 
-function asStringLiteralValue(node) {
+function asStringLiteralValue(node: Node): string | null {
 	if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node))
 		return node.getLiteralText();
 	return null;
 }
 
-function getTestBlockFunction(callExpression) {
+function getTestBlockFunction(callExpression: CallExpression): ArrowFunction | FunctionExpression | null {
 	for (const arg of callExpression.getArguments()) {
 		if (Node.isArrowFunction(arg) || Node.isFunctionExpression(arg))
 			return arg;
@@ -493,7 +531,7 @@ function getTestBlockFunction(callExpression) {
 	return null;
 }
 
-function insertFixmeInTest(callExpression, reason, testBaseName) {
+function insertFixmeInTest(callExpression: CallExpression, reason: string, testBaseName: string): boolean {
 	const fn = getTestBlockFunction(callExpression);
 	if (!fn)
 		return false;
@@ -509,16 +547,16 @@ function insertFixmeInTest(callExpression, reason, testBaseName) {
 	return true;
 }
 
-function isTestInvocation(callExpression) {
+function isTestInvocation(callExpression: CallExpression): boolean {
 	const expr = callExpression.getExpression();
 	if (Node.isIdentifier(expr))
-		return ['it', 'test', 'playwrightTest'].includes(expr.getText());
+		return TEST_BASE_NAMES.has(expr.getText());
 	if (Node.isPropertyAccessExpression(expr) && Node.isIdentifier(expr.getExpression()))
-		return ['it', 'test', 'playwrightTest'].includes(expr.getExpression().getText());
+		return TEST_BASE_NAMES.has(expr.getExpression().getText());
 	return false;
 }
 
-function getTestBaseName(callExpression) {
+function getTestBaseName(callExpression: CallExpression): string {
 	const expr = callExpression.getExpression();
 	if (Node.isIdentifier(expr))
 		return expr.getText();
@@ -527,152 +565,163 @@ function getTestBaseName(callExpression) {
 	return 'it';
 }
 
-const targetSpecFiles = [
-	...walkFiles(path.join(testsRoot, 'page')),
-	...walkFiles(path.join(testsRoot, 'library')),
-].sort();
+function logReport(report: ModifyTestsReport): void {
+	console.log(`[modify_tests] mode=${dryRun ? 'dry-run' : 'write'}`);
+	console.log(`[modify_tests] filesVisited=${report.filesVisited} filesChanged=${report.filesChanged}`);
+	console.log(`[modify_tests] isolatedContextInsertions=${report.isolatedContextInsertions} fixmeInsertions=${report.fixmeInsertions}`);
+	console.log(`[modify_tests] isolatedContextNormalizations=${report.isolatedContextNormalizations}`);
+	console.log(`[modify_tests] patchrightWorkaroundFiles=${report.patchrightWorkaroundFiles}`);
+	console.log(`[modify_tests] skippedUnsafeEvaluateCalls=${report.skippedUnsafeEvaluateCalls}`);
 
-const project = new Project({
-	tsConfigFilePath: tsConfigPath,
-	skipAddingFilesFromTsConfig: true,
+	for (const changed of report.changedFiles) {
+		console.log(`[modify_tests] changed ${changed.file} (+isolated=${changed.isolatedContextInsertions}, ~isolated=${changed.isolatedContextNormalizations}, +fixme=${changed.fixmeInsertions}, +patchrightWorkaround=${changed.patchrightWorkaround})`);
+	}
+}
+
+async function main(): Promise<void> {
+	assertPrerequisites();
+
+	const targetSpecFiles = [
+		...walkFiles(path.join(testsRoot, 'page')),
+		...walkFiles(path.join(testsRoot, 'library')),
+	].sort();
+
+	const project = new Project({
+		tsConfigFilePath: tsConfigPath,
+		skipAddingFilesFromTsConfig: true,
+	});
+
+	const report: ModifyTestsReport = {
+		filesVisited: 0,
+		filesChanged: 0,
+		isolatedContextInsertions: 0,
+		isolatedContextNormalizations: 0,
+		fixmeInsertions: 0,
+		patchrightWorkaroundFiles: 0,
+		skippedUnsafeEvaluateCalls: 0,
+		changedFiles: [],
+	};
+
+	for (const filePath of targetSpecFiles) {
+		const sourceFile = project.addSourceFileAtPathIfExists(filePath);
+		if (!sourceFile)
+			continue;
+		report.filesVisited += 1;
+
+		const relativePath = path.relative(playwrightRoot, filePath).replaceAll(path.sep, '/');
+		const fixmeMap = FIXME_TARGETS[relativePath] ?? null;
+		const fileLevelFixmeReason = FIXME_TARGET_FILES[relativePath] ?? null;
+		const fixmeLineMap = FIXME_TARGET_LINES[relativePath] ?? null;
+
+		let isolatedInFile = 0;
+		let normalizedInFile = 0;
+		let fixmesInFile = 0;
+		let workaroundInFile = 0;
+
+		for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+			if (normalizeIsolatedContextArgument(callExpr)) {
+				normalizedInFile += 1;
+				report.isolatedContextNormalizations += 1;
+			}
+		}
+
+		for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+			if (shouldSkipForSafety(callExpr)) {
+				const expr = callExpr.getExpression();
+				if (Node.isPropertyAccessExpression(expr) && TARGET_METHODS.has(expr.getName()))
+					report.skippedUnsafeEvaluateCalls += 1;
+				continue;
+			}
+			if (insertIsolatedContextArgument(callExpr)) {
+				isolatedInFile += 1;
+				report.isolatedContextInsertions += 1;
+			}
+		}
+
+		if (fileLevelFixmeReason) {
+			for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+				if (!isTestInvocation(callExpr))
+					continue;
+
+				const testBaseName = getTestBaseName(callExpr);
+				if (insertFixmeInTest(callExpr, fileLevelFixmeReason, testBaseName)) {
+					fixmesInFile += 1;
+					report.fixmeInsertions += 1;
+				}
+			}
+		}
+
+		if (!fileLevelFixmeReason && fixmeMap) {
+			for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+				if (!isTestInvocation(callExpr))
+					continue;
+				const args = callExpr.getArguments();
+				if (args.length === 0)
+					continue;
+				const title = asStringLiteralValue(args[0]);
+				if (!title)
+					continue;
+				const reason = fixmeMap.get(title);
+				if (!reason)
+					continue;
+
+				const testBaseName = getTestBaseName(callExpr);
+				if (insertFixmeInTest(callExpr, reason, testBaseName)) {
+					fixmesInFile += 1;
+					report.fixmeInsertions += 1;
+				}
+			}
+		}
+
+		if (!fileLevelFixmeReason && fixmeLineMap) {
+			const targets = [...fixmeLineMap.entries()].sort((a, b) => b[0] - a[0]);
+			for (const [targetLine, reason] of targets) {
+				const candidates = sourceFile
+					.getDescendantsOfKind(SyntaxKind.CallExpression)
+					.filter(isTestInvocation)
+					.map(callExpr => ({
+						callExpr,
+						lineDistance: Math.abs(callExpr.getStartLineNumber() - targetLine),
+					}))
+					.filter(candidate => candidate.lineDistance <= 6)
+					.sort((a, b) => a.lineDistance - b.lineDistance || b.callExpr.getStartLineNumber() - a.callExpr.getStartLineNumber());
+
+				if (candidates.length === 0)
+					continue;
+
+				const matchedCall = candidates[0].callExpr;
+				const testBaseName = getTestBaseName(matchedCall);
+				if (insertFixmeInTest(matchedCall, reason, testBaseName)) {
+					fixmesInFile += 1;
+					report.fixmeInsertions += 1;
+				}
+			}
+		}
+
+		if (applyPatchrightWorkarounds(sourceFile, relativePath)) {
+			workaroundInFile = 1;
+			report.patchrightWorkaroundFiles += 1;
+		}
+
+		if (isolatedInFile > 0 || normalizedInFile > 0 || fixmesInFile > 0 || workaroundInFile > 0) {
+			report.filesChanged += 1;
+			report.changedFiles.push({
+				file: relativePath,
+				isolatedContextInsertions: isolatedInFile,
+				isolatedContextNormalizations: normalizedInFile,
+				fixmeInsertions: fixmesInFile,
+				patchrightWorkaround: workaroundInFile,
+			});
+		}
+	}
+
+	if (!dryRun)
+		await project.save();
+
+	logReport(report);
+}
+
+void main().catch((error: unknown) => {
+	console.error('[modify_tests] Unexpected failure:', error);
+	process.exit(1);
 });
-
-const report = {
-	filesVisited: 0,
-	filesChanged: 0,
-	isolatedContextInsertions: 0,
-	isolatedContextNormalizations: 0,
-	fixmeInsertions: 0,
-	patchrightWorkaroundFiles: 0,
-	skippedUnsafeEvaluateCalls: 0,
-	changedFiles: [],
-};
-
-for (const filePath of targetSpecFiles) {
-	const sourceFile = project.addSourceFileAtPath(filePath);
-	if (!sourceFile)
-		continue;
-	report.filesVisited += 1;
-
-	const relativePath = path.relative(playwrightRoot, filePath).replaceAll(path.sep, '/');
-	const fixmeMap = FIXME_TARGETS[relativePath] || null;
-	const fileLevelFixmeReason = FIXME_TARGET_FILES[relativePath] || null;
-	const fixmeLineMap = FIXME_TARGET_LINES[relativePath] || null;
-
-	let isolatedInFile = 0;
-	let normalizedInFile = 0;
-	let fixmesInFile = 0;
-	let workaroundInFile = 0;
-
-	for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-		if (normalizeIsolatedContextArgument(callExpr)) {
-			normalizedInFile += 1;
-			report.isolatedContextNormalizations += 1;
-			continue;
-		}
-	}
-
-	for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-		if (shouldSkipForSafety(callExpr)) {
-			const expr = callExpr.getExpression();
-			if (Node.isPropertyAccessExpression(expr) && TARGET_METHODS.has(expr.getName()))
-				report.skippedUnsafeEvaluateCalls += 1;
-			continue;
-		}
-		if (insertIsolatedContextArgument(callExpr)) {
-			isolatedInFile += 1;
-			report.isolatedContextInsertions += 1;
-		}
-	}
-
-	if (fileLevelFixmeReason) {
-		for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-			if (!isTestInvocation(callExpr))
-				continue;
-
-			const testBaseName = getTestBaseName(callExpr);
-			if (insertFixmeInTest(callExpr, fileLevelFixmeReason, testBaseName)) {
-				fixmesInFile += 1;
-				report.fixmeInsertions += 1;
-			}
-		}
-	}
-
-	if (!fileLevelFixmeReason && fixmeMap) {
-		for (const callExpr of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-			if (!isTestInvocation(callExpr))
-				continue;
-			const args = callExpr.getArguments();
-			if (args.length === 0)
-				continue;
-			const title = asStringLiteralValue(args[0]);
-			if (!title)
-				continue;
-			const reason = fixmeMap.get(title);
-			if (!reason)
-				continue;
-
-			const testBaseName = getTestBaseName(callExpr);
-			if (insertFixmeInTest(callExpr, reason, testBaseName)) {
-				fixmesInFile += 1;
-				report.fixmeInsertions += 1;
-			}
-		}
-	}
-
-	if (!fileLevelFixmeReason && fixmeLineMap) {
-		const targets = [...fixmeLineMap.entries()].sort((a, b) => b[0] - a[0]);
-		for (const [targetLine, reason] of targets) {
-			const candidates = sourceFile
-				.getDescendantsOfKind(SyntaxKind.CallExpression)
-				.filter(isTestInvocation)
-				.map(callExpr => ({
-					callExpr,
-					lineDistance: Math.abs(callExpr.getStartLineNumber() - targetLine),
-				}))
-				.filter(candidate => candidate.lineDistance <= 6)
-				.sort((a, b) => a.lineDistance - b.lineDistance || b.callExpr.getStartLineNumber() - a.callExpr.getStartLineNumber());
-
-			if (candidates.length === 0)
-				continue;
-
-			const matchedCall = candidates[0].callExpr;
-			const testBaseName = getTestBaseName(matchedCall);
-			if (insertFixmeInTest(matchedCall, reason, testBaseName)) {
-				fixmesInFile += 1;
-				report.fixmeInsertions += 1;
-			}
-		}
-	}
-
-	if (applyPatchrightWorkarounds(sourceFile, relativePath)) {
-		workaroundInFile = 1;
-		report.patchrightWorkaroundFiles += 1;
-	}
-
-	if (isolatedInFile > 0 || normalizedInFile > 0 || fixmesInFile > 0 || workaroundInFile > 0) {
-		report.filesChanged += 1;
-		report.changedFiles.push({
-			file: relativePath,
-			isolatedContextInsertions: isolatedInFile,
-			isolatedContextNormalizations: normalizedInFile,
-			fixmeInsertions: fixmesInFile,
-			patchrightWorkaround: workaroundInFile,
-		});
-	}
-}
-
-if (!dryRun) {
-	await project.save();
-}
-
-console.log(`[modify_tests] mode=${dryRun ? 'dry-run' : 'write'}`);
-console.log(`[modify_tests] filesVisited=${report.filesVisited} filesChanged=${report.filesChanged}`);
-console.log(`[modify_tests] isolatedContextInsertions=${report.isolatedContextInsertions} fixmeInsertions=${report.fixmeInsertions}`);
-console.log(`[modify_tests] isolatedContextNormalizations=${report.isolatedContextNormalizations}`);
-console.log(`[modify_tests] patchrightWorkaroundFiles=${report.patchrightWorkaroundFiles}`);
-console.log(`[modify_tests] skippedUnsafeEvaluateCalls=${report.skippedUnsafeEvaluateCalls}`);
-
-for (const changed of report.changedFiles) {
-	console.log(`[modify_tests] changed ${changed.file} (+isolated=${changed.isolatedContextInsertions}, ~isolated=${changed.isolatedContextNormalizations}, +fixme=${changed.fixmeInsertions}, +patchrightWorkaround=${changed.patchrightWorkaround})`);
-}
