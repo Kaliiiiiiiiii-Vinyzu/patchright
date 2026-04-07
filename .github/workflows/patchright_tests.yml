@@ -55,18 +55,11 @@ jobs:
           cd playwright
           npm ci
 
-      - name: Fetch Client Patches from patchright-nodejs
-        run: |
-          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
-          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
-          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
-          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.ts >> patchright_nodejs_patch.js
-          rm -rf patchright-nodejs
-
       - name: Patch Playwright Driver
         run: |
           cd playwright
-          node "../patchright_nodejs_patch.js"
+          git -C .. submodule update --init --recursive --remote patchright-nodejs
+          cd .. && npm run patch
 
       - name: Generate Channels
         # Script exits 1 when files are modified, which is expected

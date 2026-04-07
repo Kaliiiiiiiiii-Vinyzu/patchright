@@ -1,6 +1,7 @@
 {
     "scripts": {
-        "patch": "tsx patchright_driver_patch.ts",
+        "patch": "cd playwright && tsx ../patchright_driver_patch.ts",
+        "patchright-nodejs:update": "git -C \"$(git rev-parse --show-toplevel)\" submodule update --init --recursive --remote patchright-nodejs",
         "typecheck": "tsc --noEmit",
         "format:check": "bash -c 'biome check --line-width=320 --formatter-enabled=false --diagnostic-level=error ${@:-patchright_driver_patch.ts driver_patches/}' --",
         "format:fix": "tsx utils/format-indentation.ts",

@@ -3,6 +3,7 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "allowJs": true,
     "checkJs": false,
@@ -13,8 +14,7 @@
   },
   "include": [
     "patchright_driver_patch.ts",
-    "driver_patches/**/*.ts",
-    "driver_patches/**/*.js",
-    "utils/**/*.ts"
+    "driver_patches/*.ts",
+    "utils/*.ts"
   ]
 }
