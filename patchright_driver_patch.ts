@@ -226,5 +226,3 @@ await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol
 
 // Save the changes without reformatting
 await project.save();
-
-await import("./patchright-nodejs/patchright_rebranding.ts");

@@ -344,15 +344,20 @@ jobs:
           chmod +x utils/build/build-playwright-driver.sh
           utils/build/build-playwright-driver.sh
 
+      - name: Rebrand Patchright Package
+        run: |
+          cd playwright
+          tsx ../patchright-nodejs/patchright_rebranding.ts
+
       - name: Publish Patchright-Core Package
         run: |
           cd playwright/packages/patchright-core/
-          npm publish --access=public
+          npm publish --access=public --provenance
 
       - name: Publish Patchright Package
         run: |
           cd playwright/packages/patchright/
-          npm publish --access=public
+          npm publish --access=public --provenance
 
       - name: Publish Patchright Driver
         env:
