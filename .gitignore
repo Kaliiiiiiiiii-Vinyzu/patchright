@@ -166,4 +166,3 @@ cython_debug/
 node_modules/
 package-lock.json
 playwright/
-patchright_nodejs_patch.js

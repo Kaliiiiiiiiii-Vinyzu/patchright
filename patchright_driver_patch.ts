@@ -3,6 +3,7 @@ import { IndentationText, Project } from "ts-morph";
 import YAML from "yaml";
 
 import * as patches from "./driver_patches/index.ts";
+import * as clientPatches from "./patchright-nodejs/index.ts";
 
 const project = new Project({
 	manipulationSettings: {
@@ -10,8 +11,55 @@ const project = new Project({
 	},
 });
 
-// patchright-driver-patch: start
-// NOTE: Workflows append everything after this marker into patchright-nodejs patch script.
+// ------------------------
+// client/browserContext.ts
+// ------------------------
+clientPatches.patchBrowserContext(project);
+
+// ----------------------
+// client/clientHelper.ts
+// ----------------------
+clientPatches.patchClientHelper(project);
+
+// ---------------
+// client/clock.ts
+// ---------------
+clientPatches.patchClock(project);
+
+// ---------------
+// client/frame.ts
+// ---------------
+clientPatches.patchFrame(project);
+
+// ------------------
+// client/jsHandle.ts
+// ------------------
+clientPatches.patchJsHandle(project);
+
+// -----------------
+// client/locator.ts
+// -----------------
+clientPatches.patchLocator(project);
+
+// -----------------
+// client/network.ts
+// -----------------
+clientPatches.patchNetwork(project);
+
+// --------------
+// client/page.ts
+// --------------
+clientPatches.patchPage(project);
+
+// ----------------------
+// client/tracing.ts
+// ----------------------
+clientPatches.patchTracing(project);
+
+// ----------------
+// client/worker.ts
+// ----------------
+clientPatches.patchWorker(project);
 
 // ------------------------
 // server/browserContext.ts
@@ -177,4 +225,4 @@ protocol.ContextOptions.properties.focusControl = "boolean?";
 await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
 
 // Save the changes without reformatting
-project.saveSync();
+await project.save();

@@ -7,6 +7,9 @@ on:
       version:
         description: 'Playwright Version (e.g. v1.58.0)'
         default: ''
+      patchright_release:
+        description: 'Patchright Release Version (e.g. 1.58.0) on npm'
+        default: ''
   # running every hour
   schedule:
     - cron: '0 * * * *'
@@ -15,6 +18,7 @@ on:
 env:
   REPO: ${{ github.repository }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  patchright_release: ${{ github.event.inputs.patchright_release || '' }}
 
 jobs:
   check-release-version:
@@ -296,6 +300,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
@@ -318,18 +323,11 @@ jobs:
           cd playwright
           npm ci
 
-      - name: Fetch Client Patches from patchright-nodejs
-        run: |
-          git clone https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
-          cp patchright-nodejs/patchright_nodejs_patch.js ./patchright_nodejs_patch.js
-          # Append driver patches starting after the marker line; this avoids relying on fixed line offsets.
-          awk '/^\/\/ patchright-driver-patch: start$/ {p=1; next} p' patchright_driver_patch.ts >> patchright_nodejs_patch.js
-          rm -rf patchright-nodejs
-
       - name: Patch Playwright Driver
         run: |
           cd playwright
-          node "../patchright_nodejs_patch.js"
+          git -C .. submodule update --init --recursive --remote patchright-nodejs
+          cd .. && npm run patch
 
       - name: Generate Playwright Channels
         # Ignore the error exit code, as the script exits 1 when a file is modified.
@@ -345,6 +343,21 @@ jobs:
           npx playwright install-deps
           chmod +x utils/build/build-playwright-driver.sh
           utils/build/build-playwright-driver.sh
+
+      - name: Rebrand Patchright Package
+        run: |
+          cd playwright
+          tsx ../patchright-nodejs/patchright_rebranding.ts
+
+      - name: Publish Patchright-Core Package
+        run: |
+          cd playwright/packages/patchright-core/
+          npm publish --access=public --provenance
+
+      - name: Publish Patchright Package
+        run: |
+          cd playwright/packages/patchright/
+          npm publish --access=public --provenance
 
       - name: Publish Patchright Driver
         env:
