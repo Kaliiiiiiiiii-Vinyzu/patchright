@@ -166,7 +166,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
-@@ -560,6 +563,25 @@
+@@ -560,6 +563,26 @@
      await this._channel.exposeConsoleApi();
    }
  
@@ -174,20 +174,21 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +  async installInjectRoute() {
 +
-+      if (this.routeInjecting) return;
-+        await this.route('**/*', async route => {
-+        try {
-+            if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+                const protocol = route.request().url().split(':')[0];
-+                await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
-+            } else {
-+                await route.fallback();
-+            }
-+        } catch (error) {
-+            await route.fallback();
-+        }
-+      });
-+      this.routeInjecting = true;
++    		if (this.routeInjecting) return;
++    			await this.route('**/*', async route => {
++    			try {
++    					if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
++    							const protocol = route.request().url().split(':')[0];
++    							await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    					} else {
++    							await route.fallback();
++    					}
++    			} catch (error) {
++    					await route.fallback();
++    			}
++    		});
++    		this.routeInjecting = true;
++    	
 +  }
  }
  
@@ -216,7 +217,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/frame.ts patchright/node_modules/playwright-core/src/client/frame.ts
 ---
 +++
-@@ -177,25 +177,33 @@
+@@ -177,25 +177,34 @@
    }
  
    async waitForURL(url: URLMatch, options: { waitUntil?: LifecycleEvent, timeout?: number } = {}): Promise<void> {
@@ -224,17 +225,18 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      return await this.waitForLoadState(options.waitUntil, options);
  
 -    await this.waitForNavigation({ url, ...options });
-+      if (urlMatches(this._page?.context()._options.baseURL, this.url(), url))
-+        return await this.waitForLoadState(options.waitUntil, options);
-+      try {
-+        await this.waitForNavigation({ url, ...options });
-+      } catch (error) {
-+        if (urlMatches(this._page?.context()._options.baseURL, this.url(), url)) {
-+          await this.waitForLoadState(options.waitUntil, options);
-+          return;
-+        }
-+        throw error;
-+      }
++    	  if (urlMatches(this._page?.context()._options.baseURL, this.url(), url))
++    	    return await this.waitForLoadState(options.waitUntil, options);
++    	  try {
++    	    await this.waitForNavigation({ url, ...options });
++    	  } catch (error) {
++    	    if (urlMatches(this._page?.context()._options.baseURL, this.url(), url)) {
++    	      await this.waitForLoadState(options.waitUntil, options);
++    	      return;
++    	    }
++    	    throw error;
++    	  }
++    	
    }
  
    async frameElement(): Promise<ElementHandle> {
@@ -259,7 +261,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return parseResult(result.value);
    }
  
-@@ -231,9 +239,9 @@
+@@ -231,9 +240,9 @@
      return parseResult(result.value);
    }
  
@@ -275,7 +277,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/jsHandle.ts patchright/node_modules/playwright-core/src/client/jsHandle.ts
 ---
 +++
-@@ -36,14 +36,16 @@
+@@ -36,14 +36,28 @@
      this._channel.on('previewUpdated', ({ preview }) => this._preview = preview);
    }
  
@@ -284,8 +286,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    return parseResult(result.value);
 +  async evaluate<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg, isolatedContext: boolean = true): Promise<R> {
 +
-+      const result = await this._channel.evaluateExpression({ expression: String(pageFunction), isFunction: typeof pageFunction === 'function', arg: serializeArgument(arg), isolatedContext: isolatedContext });
-+      return parseResult(result.value);
++        const result = await this._channel.evaluateExpression({
++          expression: String(pageFunction),
++          isFunction: typeof pageFunction === 'function',
++          arg: serializeArgument(arg),
++          isolatedContext: isolatedContext,
++        });
++        return parseResult(result.value);
++      
    }
  
 -  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg): Promise<structs.SmartHandle<R>> {
@@ -293,21 +301,30 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    return JSHandle.from(result.handle) as any as structs.SmartHandle<R>;
 +  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg, isolatedContext: boolean = true): Promise<structs.SmartHandle<R>> {
 +
-+      const result = await this._channel.evaluateExpressionHandle({ expression: String(pageFunction), isFunction: typeof pageFunction === 'function', arg: serializeArgument(arg), isolatedContext: isolatedContext });
-+      return JSHandle.from(result.handle) as any as structs.SmartHandle<R>;
++        const result = await this._channel.evaluateExpressionHandle({
++          expression: String(pageFunction),
++          isFunction: typeof pageFunction === 'function',
++          arg: serializeArgument(arg),
++          isolatedContext: isolatedContext,
++        });
++        return JSHandle.from(result.handle) as any as structs.SmartHandle<R>;
++      
    }
  
    async getProperty(propertyName: string): Promise<JSHandle> {
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/locator.ts patchright/node_modules/playwright-core/src/client/locator.ts
 ---
 +++
-@@ -1,3 +1,5 @@
-+// undetected-undetected_playwright-patch - custom imports
-+import { JSHandle, parseResult, serializeArgument } from './jsHandle';
- /**
-  * Copyright (c) Microsoft Corporation.
-  *
-@@ -124,16 +126,52 @@
+@@ -27,7 +27,7 @@
+ import type * as api from '../../types/types';
+ import type { ByRoleOptions } from '../utils/isomorphic/locatorUtils';
+ import type * as channels from '@protocol/channels';
+-
++import { JSHandle, parseResult, serializeArgument } from "./jsHandle";
+ 
+ export type LocatorOptions = {
+   hasText?: string | RegExp;
+@@ -124,16 +124,56 @@
      });
    }
  
@@ -315,54 +332,58 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    return await this._withElement(h => h.evaluate(pageFunction, arg), { title: 'Evaluate', timeout: options?.timeout });
 +  async evaluate<R, Arg>(pageFunction: structs.PageFunctionOn<SVGElement | HTMLElement, Arg, R>, arg?: Arg, options?: TimeoutOptions, isolatedContext: boolean = true): Promise<R> {
 +
-+      if (typeof options === 'boolean') {
-+        isolatedContext = options;
-+        options = undefined;
-+      }
-+      return await this._withElement(
-+        async (h) =>
-+          parseResult(
-+            (
-+              await h._channel.evaluateExpression({
-+                expression: String(pageFunction),
-+                isFunction: typeof pageFunction === "function",
-+                arg: serializeArgument(arg),
-+                isolatedContext: isolatedContext,
-+              })
-+            ).value
-+          ),
-+        { title: "Evaluate", timeout: options?.timeout }
-+      );
++    		if (typeof options === 'boolean') {
++    			isolatedContext = options;
++    			options = undefined;
++    		}
++    		return await this._withElement(
++    			async (h) =>
++    				parseResult(
++    					(
++    						await h._channel.evaluateExpression({
++    							expression: String(pageFunction),
++    							isFunction: typeof pageFunction === "function",
++    							arg: serializeArgument(arg),
++    							isolatedContext: isolatedContext,
++    						})
++    					).value
++    				),
++    			{ title: "Evaluate", timeout: options?.timeout }
++    		);
++    	
    }
  
 -  async evaluateAll<R, Arg>(pageFunction: structs.PageFunctionOn<Element[], Arg, R>, arg?: Arg): Promise<R> {
 -    return await this._frame.$$eval(this._selector, pageFunction, arg);
 +  async evaluateAll<R, Arg>(pageFunction: structs.PageFunctionOn<Element[], Arg, R>, arg?: Arg, isolatedContext: boolean = true): Promise<R> {
-+    return await this._frame.$$eval(this._selector, pageFunction, arg, isolatedContext);
++
++    		return await this._frame.$$eval(this._selector, pageFunction, arg, isolatedContext);
++    	
    }
  
 -  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<any, Arg, R>, arg?: Arg, options?: TimeoutOptions): Promise<structs.SmartHandle<R>> {
 -    return await this._withElement(h => h.evaluateHandle(pageFunction, arg), { title: 'Evaluate', timeout: options?.timeout });
 +  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<any, Arg, R>, arg?: Arg, options?: TimeoutOptions, isolatedContext: boolean = true): Promise<structs.SmartHandle<R>> {
 +
-+      if (typeof options === 'boolean') {
-+        isolatedContext = options;
-+        options = undefined;
-+      }
-+      return await this._withElement(
-+        async (h) =>
-+          JSHandle.from(
-+            (
-+              await h._channel.evaluateExpressionHandle({
-+                expression: String(pageFunction),
-+                isFunction: typeof pageFunction === "function",
-+                arg: serializeArgument(arg),
-+                isolatedContext: isolatedContext,
-+              })
-+            ).handle
-+          ) as any as structs.SmartHandle<R>,
-+        { title: "Evaluate", timeout: options?.timeout }
-+      );
++    		if (typeof options === 'boolean') {
++    			isolatedContext = options;
++    			options = undefined;
++    		}
++    		return await this._withElement(
++    			async (h) =>
++    				JSHandle.from(
++    					(
++    						await h._channel.evaluateExpressionHandle({
++    							expression: String(pageFunction),
++    							isFunction: typeof pageFunction === "function",
++    							arg: serializeArgument(arg),
++    							isolatedContext: isolatedContext,
++    						})
++    					).handle
++    				) as any as structs.SmartHandle<R>,
++    			{ title: "Evaluate", timeout: options?.timeout }
++    		);
++    	
    }
  
    async fill(value: string, options: channels.ElementHandleFillOptions & TimeoutOptions = {}): Promise<void> {
@@ -378,17 +399,18 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  import { Events } from './events';
  import { APIResponse } from './fetch';
  import { Frame } from './frame';
-@@ -183,7 +183,12 @@
+@@ -183,7 +183,13 @@
    }
  
    async allHeaders(): Promise<Headers> {
 -    return (await this._actualHeaders()).headers();
 +
-+      const headers = await this._actualHeaders();
-+      const page = this._safePage();
-+      if (page?._closeWasCalled)
-+        throw new TargetClosedError();
-+      return headers.headers();
++    		const headers = await this._actualHeaders();
++    		const page = this._safePage();
++    		if (page?._closeWasCalled)
++    			throw new TargetClosedError();
++    		return headers.headers();
++    	
    }
  
    async headersArray(): Promise<HeadersArray> {
@@ -441,7 +463,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const source = await evaluationScript(this._platform, script, arg);
      return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
-@@ -864,6 +867,26 @@
+@@ -864,6 +867,27 @@
    async _setDockTile(image: Buffer) {
      await this._channel.setDockTile({ image });
    }
@@ -450,20 +472,21 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +  async installInjectRoute() {
 +
-+      if (this.routeInjecting || this.context().routeInjecting) return;
-+      await this.route('**/*', async route => {
-+        try {
-+          if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+              const protocol = route.request().url().split(':')[0];
-+              await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
-+          } else {
-+              await route.fallback();
-+          }
-+      } catch (error) {
-+          await route.fallback();
-+        }
-+      });
-+      this.routeInjecting = true;
++    		if (this.routeInjecting || this.context().routeInjecting) return;
++    		await this.route('**/*', async route => {
++    			try {
++    				if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
++    						const protocol = route.request().url().split(':')[0];
++    						await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    				} else {
++    						await route.fallback();
++    				}
++    		} catch (error) {
++    				await route.fallback();
++    			}
++    		});
++    		this.routeInjecting = true;
++    	
 +  }
  }
  
@@ -4795,7 +4818,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
      const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
-@@ -560,6 +563,25 @@
+@@ -560,6 +563,26 @@
      await this._channel.exposeConsoleApi();
    }
  
@@ -4803,20 +4826,21 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +
 +  async installInjectRoute() {
 +
-+      if (this.routeInjecting) return;
-+        await this.route('**/*', async route => {
-+        try {
-+            if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+                const protocol = route.request().url().split(':')[0];
-+                await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
-+            } else {
-+                await route.fallback();
-+            }
-+        } catch (error) {
-+            await route.fallback();
-+        }
-+      });
-+      this.routeInjecting = true;
++    		if (this.routeInjecting) return;
++    			await this.route('**/*', async route => {
++    			try {
++    					if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
++    							const protocol = route.request().url().split(':')[0];
++    							await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    					} else {
++    							await route.fallback();
++    					}
++    			} catch (error) {
++    					await route.fallback();
++    			}
++    		});
++    		this.routeInjecting = true;
++    	
 +  }
  }
  
@@ -4845,7 +4869,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/frame.ts patchright/packages/playwright-core/src/client/frame.ts
 ---
 +++
-@@ -177,25 +177,33 @@
+@@ -177,25 +177,34 @@
    }
  
    async waitForURL(url: URLMatch, options: { waitUntil?: LifecycleEvent, timeout?: number } = {}): Promise<void> {
@@ -4853,17 +4877,18 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 -      return await this.waitForLoadState(options.waitUntil, options);
  
 -    await this.waitForNavigation({ url, ...options });
-+      if (urlMatches(this._page?.context()._options.baseURL, this.url(), url))
-+        return await this.waitForLoadState(options.waitUntil, options);
-+      try {
-+        await this.waitForNavigation({ url, ...options });
-+      } catch (error) {
-+        if (urlMatches(this._page?.context()._options.baseURL, this.url(), url)) {
-+          await this.waitForLoadState(options.waitUntil, options);
-+          return;
-+        }
-+        throw error;
-+      }
++    	  if (urlMatches(this._page?.context()._options.baseURL, this.url(), url))
++    	    return await this.waitForLoadState(options.waitUntil, options);
++    	  try {
++    	    await this.waitForNavigation({ url, ...options });
++    	  } catch (error) {
++    	    if (urlMatches(this._page?.context()._options.baseURL, this.url(), url)) {
++    	      await this.waitForLoadState(options.waitUntil, options);
++    	      return;
++    	    }
++    	    throw error;
++    	  }
++    	
    }
  
    async frameElement(): Promise<ElementHandle> {
@@ -4888,7 +4913,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
      return parseResult(result.value);
    }
  
-@@ -231,9 +239,9 @@
+@@ -231,9 +240,9 @@
      return parseResult(result.value);
    }
  
@@ -4904,7 +4929,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/jsHandle.ts patchright/packages/playwright-core/src/client/jsHandle.ts
 ---
 +++
-@@ -36,14 +36,16 @@
+@@ -36,14 +36,28 @@
      this._channel.on('previewUpdated', ({ preview }) => this._preview = preview);
    }
  
@@ -4913,8 +4938,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 -    return parseResult(result.value);
 +  async evaluate<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg, isolatedContext: boolean = true): Promise<R> {
 +
-+      const result = await this._channel.evaluateExpression({ expression: String(pageFunction), isFunction: typeof pageFunction === 'function', arg: serializeArgument(arg), isolatedContext: isolatedContext });
-+      return parseResult(result.value);
++        const result = await this._channel.evaluateExpression({
++          expression: String(pageFunction),
++          isFunction: typeof pageFunction === 'function',
++          arg: serializeArgument(arg),
++          isolatedContext: isolatedContext,
++        });
++        return parseResult(result.value);
++      
    }
  
 -  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg): Promise<structs.SmartHandle<R>> {
@@ -4922,21 +4953,30 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 -    return JSHandle.from(result.handle) as any as structs.SmartHandle<R>;
 +  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<T, Arg, R>, arg?: Arg, isolatedContext: boolean = true): Promise<structs.SmartHandle<R>> {
 +
-+      const result = await this._channel.evaluateExpressionHandle({ expression: String(pageFunction), isFunction: typeof pageFunction === 'function', arg: serializeArgument(arg), isolatedContext: isolatedContext });
-+      return JSHandle.from(result.handle) as any as structs.SmartHandle<R>;
++        const result = await this._channel.evaluateExpressionHandle({
++          expression: String(pageFunction),
++          isFunction: typeof pageFunction === 'function',
++          arg: serializeArgument(arg),
++          isolatedContext: isolatedContext,
++        });
++        return JSHandle.from(result.handle) as any as structs.SmartHandle<R>;
++      
    }
  
    async getProperty(propertyName: string): Promise<JSHandle> {
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/locator.ts patchright/packages/playwright-core/src/client/locator.ts
 ---
 +++
-@@ -1,3 +1,5 @@
-+// undetected-undetected_playwright-patch - custom imports
-+import { JSHandle, parseResult, serializeArgument } from './jsHandle';
- /**
-  * Copyright (c) Microsoft Corporation.
-  *
-@@ -124,16 +126,52 @@
+@@ -27,7 +27,7 @@
+ import type * as api from '../../types/types';
+ import type { ByRoleOptions } from '../utils/isomorphic/locatorUtils';
+ import type * as channels from '@protocol/channels';
+-
++import { JSHandle, parseResult, serializeArgument } from "./jsHandle";
+ 
+ export type LocatorOptions = {
+   hasText?: string | RegExp;
+@@ -124,16 +124,56 @@
      });
    }
  
@@ -4944,54 +4984,58 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 -    return await this._withElement(h => h.evaluate(pageFunction, arg), { title: 'Evaluate', timeout: options?.timeout });
 +  async evaluate<R, Arg>(pageFunction: structs.PageFunctionOn<SVGElement | HTMLElement, Arg, R>, arg?: Arg, options?: TimeoutOptions, isolatedContext: boolean = true): Promise<R> {
 +
-+      if (typeof options === 'boolean') {
-+        isolatedContext = options;
-+        options = undefined;
-+      }
-+      return await this._withElement(
-+        async (h) =>
-+          parseResult(
-+            (
-+              await h._channel.evaluateExpression({
-+                expression: String(pageFunction),
-+                isFunction: typeof pageFunction === "function",
-+                arg: serializeArgument(arg),
-+                isolatedContext: isolatedContext,
-+              })
-+            ).value
-+          ),
-+        { title: "Evaluate", timeout: options?.timeout }
-+      );
++    		if (typeof options === 'boolean') {
++    			isolatedContext = options;
++    			options = undefined;
++    		}
++    		return await this._withElement(
++    			async (h) =>
++    				parseResult(
++    					(
++    						await h._channel.evaluateExpression({
++    							expression: String(pageFunction),
++    							isFunction: typeof pageFunction === "function",
++    							arg: serializeArgument(arg),
++    							isolatedContext: isolatedContext,
++    						})
++    					).value
++    				),
++    			{ title: "Evaluate", timeout: options?.timeout }
++    		);
++    	
    }
  
 -  async evaluateAll<R, Arg>(pageFunction: structs.PageFunctionOn<Element[], Arg, R>, arg?: Arg): Promise<R> {
 -    return await this._frame.$$eval(this._selector, pageFunction, arg);
 +  async evaluateAll<R, Arg>(pageFunction: structs.PageFunctionOn<Element[], Arg, R>, arg?: Arg, isolatedContext: boolean = true): Promise<R> {
-+    return await this._frame.$$eval(this._selector, pageFunction, arg, isolatedContext);
++
++    		return await this._frame.$$eval(this._selector, pageFunction, arg, isolatedContext);
++    	
    }
  
 -  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<any, Arg, R>, arg?: Arg, options?: TimeoutOptions): Promise<structs.SmartHandle<R>> {
 -    return await this._withElement(h => h.evaluateHandle(pageFunction, arg), { title: 'Evaluate', timeout: options?.timeout });
 +  async evaluateHandle<R, Arg>(pageFunction: structs.PageFunctionOn<any, Arg, R>, arg?: Arg, options?: TimeoutOptions, isolatedContext: boolean = true): Promise<structs.SmartHandle<R>> {
 +
-+      if (typeof options === 'boolean') {
-+        isolatedContext = options;
-+        options = undefined;
-+      }
-+      return await this._withElement(
-+        async (h) =>
-+          JSHandle.from(
-+            (
-+              await h._channel.evaluateExpressionHandle({
-+                expression: String(pageFunction),
-+                isFunction: typeof pageFunction === "function",
-+                arg: serializeArgument(arg),
-+                isolatedContext: isolatedContext,
-+              })
-+            ).handle
-+          ) as any as structs.SmartHandle<R>,
-+        { title: "Evaluate", timeout: options?.timeout }
-+      );
++    		if (typeof options === 'boolean') {
++    			isolatedContext = options;
++    			options = undefined;
++    		}
++    		return await this._withElement(
++    			async (h) =>
++    				JSHandle.from(
++    					(
++    						await h._channel.evaluateExpressionHandle({
++    							expression: String(pageFunction),
++    							isFunction: typeof pageFunction === "function",
++    							arg: serializeArgument(arg),
++    							isolatedContext: isolatedContext,
++    						})
++    					).handle
++    				) as any as structs.SmartHandle<R>,
++    			{ title: "Evaluate", timeout: options?.timeout }
++    		);
++    	
    }
  
    async fill(value: string, options: channels.ElementHandleFillOptions & TimeoutOptions = {}): Promise<void> {
@@ -5007,17 +5051,18 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
  import { Events } from './events';
  import { APIResponse } from './fetch';
  import { Frame } from './frame';
-@@ -183,7 +183,12 @@
+@@ -183,7 +183,13 @@
    }
  
    async allHeaders(): Promise<Headers> {
 -    return (await this._actualHeaders()).headers();
 +
-+      const headers = await this._actualHeaders();
-+      const page = this._safePage();
-+      if (page?._closeWasCalled)
-+        throw new TargetClosedError();
-+      return headers.headers();
++    		const headers = await this._actualHeaders();
++    		const page = this._safePage();
++    		if (page?._closeWasCalled)
++    			throw new TargetClosedError();
++    		return headers.headers();
++    	
    }
  
    async headersArray(): Promise<HeadersArray> {
@@ -5070,7 +5115,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
      const source = await evaluationScript(this._platform, script, arg);
      return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
-@@ -864,6 +867,26 @@
+@@ -864,6 +867,27 @@
    async _setDockTile(image: Buffer) {
      await this._channel.setDockTile({ image });
    }
@@ -5079,20 +5124,21 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +
 +  async installInjectRoute() {
 +
-+      if (this.routeInjecting || this.context().routeInjecting) return;
-+      await this.route('**/*', async route => {
-+        try {
-+          if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+              const protocol = route.request().url().split(':')[0];
-+              await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
-+          } else {
-+              await route.fallback();
-+          }
-+      } catch (error) {
-+          await route.fallback();
-+        }
-+      });
-+      this.routeInjecting = true;
++    		if (this.routeInjecting || this.context().routeInjecting) return;
++    		await this.route('**/*', async route => {
++    			try {
++    				if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
++    						const protocol = route.request().url().split(':')[0];
++    						await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    				} else {
++    						await route.fallback();
++    				}
++    		} catch (error) {
++    				await route.fallback();
++    			}
++    		});
++    		this.routeInjecting = true;
++    	
 +  }
  }
  
