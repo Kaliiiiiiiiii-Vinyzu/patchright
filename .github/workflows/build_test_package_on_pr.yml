@@ -46,6 +46,12 @@ jobs:
           chmod +x utils/release_version_check.sh
           utils/release_version_check.sh
 
+      - name: Stop When Playwright Version Is Unavailable
+        if: steps.version_check.outputs.playwright_version == 'v0.0.0'
+        run: |
+          echo "GitHub API did not return a valid Playwright release tag."
+          exit 1
+
       - name: Install Playwright Driver
         run: |
           git clone https://github.com/microsoft/playwright --branch ${{ steps.version_check.outputs.playwright_version }}

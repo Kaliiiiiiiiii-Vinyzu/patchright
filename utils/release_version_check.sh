@@ -36,7 +36,7 @@ tag_exists_in_releases() {
 
   if ! response=$(curl --fail --silent --show-error "https://api.github.com/repos/$repo/releases?per_page=100"); then
     echo "Failed to fetch releases for $repo" >&2
-    return 1
+    return 2
   fi
 
   # Treat "v1.2.3" and "1.2.3" as equivalent.
@@ -60,14 +60,30 @@ patchright_version=$(get_latest_release "$repo")
 echo "Latest release of the Patchright Driver: $patchright_version"
 echo "previous_playwright_version=$patchright_version" >>"$GITHUB_OUTPUT"
 
+if [ "$playwright_version" = "v0.0.0" ] || [ "$patchright_version" = "v0.0.0" ]; then
+  echo "GitHub API is unavailable; stopping the release version check." >&2
+  echo "proceed=false" >>"$GITHUB_OUTPUT"
+  echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
+  echo "playwright_version=$playwright_version" >>"$GITHUB_ENV"
+  exit 0
+fi
+
 # Compare by existence: proceed only if Patchright does not contain the latest Playwright release tag.
 if tag_exists_in_releases "$repo" "$playwright_version"; then
   echo "$repo is up to date with microsoft/playwright."
   echo "proceed=false" >>"$GITHUB_OUTPUT"
   echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
 else
-  echo "$repo is behind microsoft/playwright. Building & Patching..."
-  echo "proceed=true" >>"$GITHUB_OUTPUT"
-  echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
-  echo "playwright_version=$playwright_version" >>"$GITHUB_ENV"
+  tag_status=$?
+  if [ "$tag_status" -eq 2 ]; then
+    echo "GitHub API is unavailable while checking existing releases; stopping the release version check." >&2
+    echo "proceed=false" >>"$GITHUB_OUTPUT"
+    echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
+    echo "playwright_version=$playwright_version" >>"$GITHUB_ENV"
+  else
+    echo "$repo is behind microsoft/playwright. Building & Patching..."
+    echo "proceed=true" >>"$GITHUB_OUTPUT"
+    echo "playwright_version=$playwright_version" >>"$GITHUB_OUTPUT"
+    echo "playwright_version=$playwright_version" >>"$GITHUB_ENV"
+  fi
 fi
