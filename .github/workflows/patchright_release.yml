@@ -376,7 +376,7 @@ jobs:
           npm publish --access=public --provenance
 
       - name: Publish Patchright Driver
-        if: env.patchright_release == ''
+        if: env.patchright_release == '' || needs.check-release-version.outputs.previous_playwright_version != needs.check-release-version.outputs.playwright_version
         env:
           PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
