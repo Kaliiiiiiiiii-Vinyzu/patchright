@@ -166,6 +166,11 @@ patches.patchFrameDispatcher(project);
 // ----------------------------------------------
 patches.patchBrowserContextDispatcher(project);
 
+// ---------------------------------------------
+// server/dispatchers/networkDispatchers.ts
+// ---------------------------------------------
+patches.patchNetworkDispatchers(project);
+
 // ----------------------------------------
 // server/dispatchers/jsHandleDispatcher.ts
 // ----------------------------------------
@@ -221,6 +226,9 @@ protocol.Frame.commands.evalOnSelectorAll.parameters.isolatedContext = "boolean?
 
 // focusControl parameter
 protocol.ContextOptions.properties.focusControl = "boolean?";
+
+// Internal init-script route marker
+protocol.Route.commands.continue.parameters.patchrightInitScript = "boolean?";
 
 await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
 
