@@ -166,7 +166,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
-@@ -560,6 +563,26 @@
+@@ -560,6 +563,25 @@
      await this._channel.exposeConsoleApi();
    }
  
@@ -178,8 +178,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    			await this.route('**/*', async route => {
 +    			try {
 +    					if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+    							const protocol = route.request().url().split(':')[0];
-+    							await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    							await route.fallback({ patchrightInitScript: true } as any);
 +    					} else {
 +    							await route.fallback();
 +    					}
@@ -414,6 +413,49 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async headersArray(): Promise<HeadersArray> {
+@@ -272,19 +278,22 @@
+   }
+ 
+   _applyFallbackOverrides(overrides: FallbackOverrides) {
+-    if (overrides.url)
+-      this._fallbackOverrides.url = overrides.url;
+-    if (overrides.method)
+-      this._fallbackOverrides.method = overrides.method;
+-    if (overrides.headers)
+-      this._fallbackOverrides.headers = overrides.headers;
+ 
+-    if (isString(overrides.postData))
+-      this._fallbackOverrides.postDataBuffer = Buffer.from(overrides.postData, 'utf-8');
+-    else if (overrides.postData instanceof Buffer)
+-      this._fallbackOverrides.postDataBuffer = overrides.postData;
+-    else if (overrides.postData)
+-      this._fallbackOverrides.postDataBuffer = Buffer.from(JSON.stringify(overrides.postData), 'utf-8');
++    		if (overrides.url)
++    			this._fallbackOverrides.url = overrides.url;
++    		if (overrides.method)
++    			this._fallbackOverrides.method = overrides.method;
++    		if (overrides.headers)
++    			this._fallbackOverrides.headers = overrides.headers;
++    		if ((overrides as any).patchrightInitScript)
++    			(this._fallbackOverrides as any).patchrightInitScript = true;
++    		if (isString(overrides.postData))
++    			this._fallbackOverrides.postDataBuffer = Buffer.from(overrides.postData, "utf-8");
++    		else if (overrides.postData instanceof Buffer)
++    			this._fallbackOverrides.postDataBuffer = overrides.postData;
++    		else if (overrides.postData)
++    			this._fallbackOverrides.postDataBuffer = Buffer.from(JSON.stringify(overrides.postData), "utf-8");
++    	
+   }
+ 
+   _fallbackOverridesForContinue() {
+@@ -449,6 +458,7 @@
+       headers: options.headers ? headersObjectToArray(options.headers) : undefined,
+       postData: options.postDataBuffer,
+       isFallback,
++      patchrightInitScript: (options as any).patchrightInitScript
+     }));
+   }
+ }
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/client/page.ts patchright/node_modules/playwright-core/src/client/page.ts
 ---
 +++
@@ -463,7 +505,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const source = await evaluationScript(this._platform, script, arg);
      return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
-@@ -864,6 +867,27 @@
+@@ -864,6 +867,26 @@
    async _setDockTile(image: Buffer) {
      await this._channel.setDockTile({ image });
    }
@@ -476,8 +518,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    		await this.route('**/*', async route => {
 +    			try {
 +    				if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+    						const protocol = route.request().url().split(':')[0];
-+    						await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    						await route.fallback({ patchrightInitScript: true } as any);
 +    				} else {
 +    						await route.fallback();
 +    				}
@@ -874,7 +915,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class InterceptableRequest {
-@@ -614,38 +636,148 @@
+@@ -614,38 +636,149 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -903,6 +944,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -      await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
 -    });
 +    		;
++    		const patchrightInitScript = !!(overrides as any).patchrightInitScript;
 +    		this._alreadyContinuedParams = {
 +    			requestId: this._interceptionId,
 +    			url: overrides.url,
@@ -910,11 +952,11 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    			method: overrides.method,
 +    			postData: overrides.postData?.toString('base64'),
 +    		};
-+    		if (overrides.url && (overrides.url === 'http://patchright-init-script-inject.internal/' || overrides.url === 'https://patchright-init-script-inject.internal/')) {
++    		if (patchrightInitScript) {
 +    			await catchDisallowedErrors(async () => {
 +    				this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
 +    				try {
-+    					await this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
++    					await this._session.send('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
 +    				} catch (e) {
 +    					this._sessionManager._alreadyTrackedNetworkIds.delete(this._networkId);
 +    					throw e;
@@ -922,7 +964,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    			});
 +    		} else {
 +    			await catchDisallowedErrors(async () => {
-+    				await this._session._sendMayFail('Fetch.continueRequest', this._alreadyContinuedParams);
++    				await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
 +    			});
 +    		}
 +    	
@@ -1046,7 +1088,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -658,6 +790,211 @@
+@@ -658,6 +791,211 @@
        });
      });
    }
@@ -1847,6 +1889,17 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // If "jsHandle" is an ElementHandle, it belongs to the same frame as "this".
      return { handle: ElementHandleDispatcher.fromJSOrElementHandle(this.parentScope() as FrameDispatcher, jsHandle) };
    }
+diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/dispatchers/networkDispatchers.ts patchright/node_modules/playwright-core/src/server/dispatchers/networkDispatchers.ts
+---
++++
+@@ -153,6 +153,7 @@
+       headers: params.headers,
+       postData: params.postData,
+       isFallback: params.isFallback,
++      patchrightInitScript: (params as any).patchrightInitScript
+     });
+   }
+ 
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/frameSelectors.ts patchright/node_modules/playwright-core/src/server/frameSelectors.ts
 ---
 +++
@@ -4818,7 +4871,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
      const result = await this._channel.exposeBinding({ name });
      const binding = (source: structs.BindingSource, ...args: any[]) => callback(...args);
      this._bindings.set(name, binding);
-@@ -560,6 +563,26 @@
+@@ -560,6 +563,25 @@
      await this._channel.exposeConsoleApi();
    }
  
@@ -4830,8 +4883,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +    			await this.route('**/*', async route => {
 +    			try {
 +    					if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+    							const protocol = route.request().url().split(':')[0];
-+    							await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    							await route.fallback({ patchrightInitScript: true } as any);
 +    					} else {
 +    							await route.fallback();
 +    					}
@@ -5066,6 +5118,49 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
    }
  
    async headersArray(): Promise<HeadersArray> {
+@@ -272,19 +278,22 @@
+   }
+ 
+   _applyFallbackOverrides(overrides: FallbackOverrides) {
+-    if (overrides.url)
+-      this._fallbackOverrides.url = overrides.url;
+-    if (overrides.method)
+-      this._fallbackOverrides.method = overrides.method;
+-    if (overrides.headers)
+-      this._fallbackOverrides.headers = overrides.headers;
+ 
+-    if (isString(overrides.postData))
+-      this._fallbackOverrides.postDataBuffer = Buffer.from(overrides.postData, 'utf-8');
+-    else if (overrides.postData instanceof Buffer)
+-      this._fallbackOverrides.postDataBuffer = overrides.postData;
+-    else if (overrides.postData)
+-      this._fallbackOverrides.postDataBuffer = Buffer.from(JSON.stringify(overrides.postData), 'utf-8');
++    		if (overrides.url)
++    			this._fallbackOverrides.url = overrides.url;
++    		if (overrides.method)
++    			this._fallbackOverrides.method = overrides.method;
++    		if (overrides.headers)
++    			this._fallbackOverrides.headers = overrides.headers;
++    		if ((overrides as any).patchrightInitScript)
++    			(this._fallbackOverrides as any).patchrightInitScript = true;
++    		if (isString(overrides.postData))
++    			this._fallbackOverrides.postDataBuffer = Buffer.from(overrides.postData, "utf-8");
++    		else if (overrides.postData instanceof Buffer)
++    			this._fallbackOverrides.postDataBuffer = overrides.postData;
++    		else if (overrides.postData)
++    			this._fallbackOverrides.postDataBuffer = Buffer.from(JSON.stringify(overrides.postData), "utf-8");
++    	
+   }
+ 
+   _fallbackOverridesForContinue() {
+@@ -449,6 +458,7 @@
+       headers: options.headers ? headersObjectToArray(options.headers) : undefined,
+       postData: options.postDataBuffer,
+       isFallback,
++      patchrightInitScript: (options as any).patchrightInitScript
+     }));
+   }
+ }
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/client/page.ts patchright/packages/playwright-core/src/client/page.ts
 ---
 +++
@@ -5115,7 +5210,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
      const source = await evaluationScript(this._platform, script, arg);
      return DisposableObject.from((await this._channel.addInitScript({ source })).disposable);
    }
-@@ -864,6 +867,27 @@
+@@ -864,6 +867,26 @@
    async _setDockTile(image: Buffer) {
      await this._channel.setDockTile({ image });
    }
@@ -5128,8 +5223,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/clie
 +    		await this.route('**/*', async route => {
 +    			try {
 +    				if (route.request().resourceType() === 'document' && route.request().url().startsWith('http')) {
-+    						const protocol = route.request().url().split(':')[0];
-+    						await route.fallback({ url: protocol + '://patchright-init-script-inject.internal/' });
++    						await route.fallback({ patchrightInitScript: true } as any);
 +    				} else {
 +    						await route.fallback();
 +    				}
@@ -5526,7 +5620,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class InterceptableRequest {
-@@ -614,38 +636,148 @@
+@@ -614,38 +636,149 @@
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
  
@@ -5555,6 +5649,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -      await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
 -    });
 +    		;
++    		const patchrightInitScript = !!(overrides as any).patchrightInitScript;
 +    		this._alreadyContinuedParams = {
 +    			requestId: this._interceptionId,
 +    			url: overrides.url,
@@ -5562,11 +5657,11 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    			method: overrides.method,
 +    			postData: overrides.postData?.toString('base64'),
 +    		};
-+    		if (overrides.url && (overrides.url === 'http://patchright-init-script-inject.internal/' || overrides.url === 'https://patchright-init-script-inject.internal/')) {
++    		if (patchrightInitScript) {
 +    			await catchDisallowedErrors(async () => {
 +    				this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
 +    				try {
-+    					await this._session._sendMayFail('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
++    					await this._session.send('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
 +    				} catch (e) {
 +    					this._sessionManager._alreadyTrackedNetworkIds.delete(this._networkId);
 +    					throw e;
@@ -5574,7 +5669,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    			});
 +    		} else {
 +    			await catchDisallowedErrors(async () => {
-+    				await this._session._sendMayFail('Fetch.continueRequest', this._alreadyContinuedParams);
++    				await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
 +    			});
 +    		}
 +    	
@@ -5698,7 +5793,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async abort(errorCode: string = 'failed') {
-@@ -658,6 +790,211 @@
+@@ -658,6 +791,211 @@
        });
      });
    }
@@ -6499,6 +6594,17 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // If "jsHandle" is an ElementHandle, it belongs to the same frame as "this".
      return { handle: ElementHandleDispatcher.fromJSOrElementHandle(this.parentScope() as FrameDispatcher, jsHandle) };
    }
+diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/dispatchers/networkDispatchers.ts patchright/packages/playwright-core/src/server/dispatchers/networkDispatchers.ts
+---
++++
+@@ -153,6 +153,7 @@
+       headers: params.headers,
+       postData: params.postData,
+       isFallback: params.isFallback,
++      patchrightInitScript: (params as any).patchrightInitScript
+     });
+   }
+ 
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/frameSelectors.ts patchright/packages/playwright-core/src/server/frameSelectors.ts
 ---
 +++
