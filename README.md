@@ -58,23 +58,38 @@
 
 </br>
 
-<img width="500" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
+[<img height="100" alt="swiftproxy banner" src="https://github.com/user-attachments/assets/123ac558-f99f-4c59-b826-b86822f2c92a" />](https://www.swiftproxy.net/?ref=Vinyzu)
 
-Running Patchright? Your proxy layer can decide whether you scale — or get blocked.
+#### [Swiftproxy](https://www.swiftproxy.net/?ref=Vinyzu): High-Performance Residential Proxies for Scalable Data Collection
 
-#### [ProxyEmpire](https://proxyempire.io/?ref=patchright&utm_source=patchright) delivers:
+Built for developers who need **reliable**, anti-detection proxy infrastructure. [Swiftproxy](https://www.swiftproxy.net/?ref=Vinyzu) delivers **stable connections**, **high success rates**, and flexible control for **large-scale scraping and automation**.
 
-- 🌍 30M+ Residential IPs (170+ countries)
-- 📱 4G/5G Mobile Proxies
-- 🔄 Rotating & Sticky Sessions + Unlimited Concurrent Sessions
+- 🌍 195+ locations with ethically sourced residential IPs
+- 🔄 **Rotating** & **sticky sessions** with precise geo-targeting
+- ⚡ Optimized for **anti-ban** & **high success rate**
+- 🔌 HTTP / HTTPS / SOCKS5 support
+- 🧪 **Free 500MB trial** for testing
+- 💸 **Special discount** code for Patchright users: **PROXY90 - 10%**
+
+<sup> Best for: Web scraping, automation, multi-accounting, and large-scale data extraction </sup>
+
+---
+
+[<img height="90" alt="rapidproxy banner" src="https://github.com/user-attachments/assets/bb771788-5c99-4e22-be40-c99cca95db22" />](https://www.rapidproxy.io/?ref=Vinyzu)
+
+
+#### [RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu) provides a stable and high-performance proxy network built for large-scale data operations.
+
+[RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu) delivers:
+- 🌍 90M+ Residential IPs (200+ locations)
+- 🔄 **Rotating Residential Proxies** — from **$0.65/GB** (non-expiring traffic)
+- 🧩 **Static Residential IPs** — **$5/IP** (30 days, unlimited traffic)
 - 🎯 Precise geo-targeting
-- HTTP, HTTPS & SOCKS5 Support
+- ⚡ **Free Trial Available** — test proxy performance risk-free
+- Built for scraping, automation, and high-performance data workflows.
+- 🔥 Special Offer: Use code **RAPID10** to get **10% off**
 
-<sup>Built for scraping, automation, and high-stealth workflows.</sup>
-
-<span style="font-size:3em;"> 🔥 **Special Offer**: Use code **Patchright30** to get **30% recurring discount** (not just first month). </span>
-
-<sup>Upgrade your proxies. Reduce bans. Scale properly.</sup>
+<sup> Start fast. Scale globally. Stay stable with [RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu). </sup>
 
 </details>
 
