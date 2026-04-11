@@ -1,4 +1,5 @@
 import { type Project, SyntaxKind } from "ts-morph";
+import { assertDefined } from "./utils.ts";
 
 // ---------------
 // server/clock.ts
@@ -9,6 +10,28 @@ export function patchClock(project: Project) {
 
 	// ------- Page Class -------
 	const clockClass = clockSourceFile.getClassOrThrow("Clock");
+
+	// -- _installIfNeeded Method --
+	const installIfNeededMethod = clockClass.getMethodOrThrow("_installIfNeeded");
+	const installIfNeededGuard = assertDefined(
+		installIfNeededMethod
+			.getBodyOrThrow()
+			.asKindOrThrow(SyntaxKind.Block)
+			.getStatements()
+			.find((statement) => statement.getKind() === SyntaxKind.IfStatement && statement.getText().includes("this._initScripts.length"))
+	);
+	installIfNeededGuard.replaceWithText(`
+		if (this._initScripts.length) {
+			const initScriptSources = JSON.stringify(this._initScripts.map((initScript) => initScript.source));
+			await this._evaluateInFrames(\`(() => {
+				if (globalThis.__pwClock?.controller)
+					return;
+				for (const source of \${initScriptSources})
+					(0, eval)(source);
+			})();\`);
+			return;
+		}
+	`);
 
 	// -- _evaluateInFrames Method --
 	const evaluateInFramesMethod = clockClass.getMethodOrThrow("_evaluateInFrames");
