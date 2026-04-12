@@ -1769,7 +1769,28 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/clock.ts patchright/node_modules/playwright-core/src/server/clock.ts
 ---
 +++
-@@ -106,6 +106,15 @@
+@@ -92,8 +92,18 @@
+   }
+ 
+   private async _installIfNeeded() {
+-    if (this._initScripts.length)
+-      return;
++    
++    		if (this._initScripts.length) {
++    			const initScriptSources = JSON.stringify(this._initScripts.map((initScript) => initScript.source));
++    			await this._evaluateInFrames(`(() => {
++				if (globalThis.__pwClock?.controller)
++					return;
++				for (const source of ${initScriptSources})
++					(0, eval)(source);
++			})();`);
++    			return;
++    		}
++    	
+     const script = `(() => {
+       const module = {};
+       ${rawClockSource.source}
+@@ -106,6 +116,15 @@
    }
  
    private async _evaluateInFrames(script: string) {
@@ -6474,7 +6495,28 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/clock.ts patchright/packages/playwright-core/src/server/clock.ts
 ---
 +++
-@@ -106,6 +106,15 @@
+@@ -92,8 +92,18 @@
+   }
+ 
+   private async _installIfNeeded() {
+-    if (this._initScripts.length)
+-      return;
++    
++    		if (this._initScripts.length) {
++    			const initScriptSources = JSON.stringify(this._initScripts.map((initScript) => initScript.source));
++    			await this._evaluateInFrames(`(() => {
++				if (globalThis.__pwClock?.controller)
++					return;
++				for (const source of ${initScriptSources})
++					(0, eval)(source);
++			})();`);
++    			return;
++    		}
++    	
+     const script = `(() => {
+       const module = {};
+       ${rawClockSource.source}
+@@ -106,6 +116,15 @@
    }
  
    private async _evaluateInFrames(script: string) {
