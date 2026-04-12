@@ -368,12 +368,26 @@ jobs:
       - name: Publish Patchright-Core Package
         run: |
           cd playwright/packages/patchright-core/
-          npm publish --access=public --provenance
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "Skipping ${package_name}@${package_version}: already published."
+          else
+            npm publish --access=public --provenance
+          fi
 
       - name: Publish Patchright Package
         run: |
           cd playwright/packages/patchright/
-          npm publish --access=public --provenance
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+
+          if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+            echo "Skipping ${package_name}@${package_version}: already published."
+          else
+            npm publish --access=public --provenance
+          fi
 
       - name: Publish Patchright Driver
         if: env.patchright_release == '' || needs.check-release-version.outputs.previous_playwright_version != needs.check-release-version.outputs.playwright_version
