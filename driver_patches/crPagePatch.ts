@@ -233,21 +233,13 @@ export function patchCRPage(project: Project) {
 					  for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 				`);
 		});
-	// Find the statement `promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))`
+	// Remove the `promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))` statement
+	// to fix expose_binding causing page click stuck on Windows
 	const promisePushStatements = initializeFrameSessionMethodBody
 		.getStatements()
 		.filter((statement) => statement.getText().includes("promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))"));
-	// Ensure the right statements were found
 	if (promisePushStatements.length === 1) {
-		// Replace the first `promises.push` statement with the new conditional code
-		promisePushStatements[0].replaceWithText(`
-			if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
-				promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-		`);
-		initializeFrameSessionMethodBody.addStatements(`
-			if (this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size)
-				await this._client.send('Runtime.runIfWaitingForDebugger');
-		`);
+		promisePushStatements[0].remove();
 	}
 
 	// -- _initBinding Method --

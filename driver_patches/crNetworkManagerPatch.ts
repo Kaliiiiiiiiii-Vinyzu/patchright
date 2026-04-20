@@ -495,6 +495,15 @@ export function patchCRNetworkManager(project: Project) {
 
 		const trackedNetworkId = event.networkId;
 		try {
+			// Skip fulfill for browser's privilege pages, such as Edge's new tab page.
+			// These pages have special security contexts and Fetch.fulfillRequest may cause crashes
+			const url = event.request?.url || '';
+			const isPrivilegePage = url.startsWith("https://ntp.msn");
+			if (isPrivilegePage) {
+				await this._session._sendMayFail("Fetch.continueRequest", { requestId: event.requestId });
+				return;
+			}
+
 			if (event.resourceType !== 'Document')
 				return;
 
