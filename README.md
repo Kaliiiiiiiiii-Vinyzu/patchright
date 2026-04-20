@@ -54,37 +54,42 @@
 <details open>
     <summary><h3>Sponsors</h1></summary>
 
+<sup>Want to Sponsor this Project? [Contact Me](https://discordapp.com/users/935224495126487150)!</sup>
 
-<a href="https://www.thordata.com/?ls=github&lk=Vinyzu" target="_blank">
-  <img alt="Thordata Banner" src="https://github.com/user-attachments/assets/58460bff-b057-4191-88da-80e0bd29b745" width="80%" />
-</a>
+</br>
 
-[Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) - Your First Plan is on Us! 💰Get 100% of your first residential proxy purchase back as wallet balance, up to $900.
-### **⚡ Why Thordata?**
-🌍 190+ real residential & ISP IP locations\
-🔐 Fully encrypted, ultra-secure connections\
-🚀 Optimized for web scraping, ad verification & automation workflows
+[<img height="100" alt="swiftproxy banner" src="https://github.com/user-attachments/assets/123ac558-f99f-4c59-b826-b86822f2c92a" />](https://www.swiftproxy.net/?ref=Vinyzu)
 
-🔥Don’t wait — this is your **best time to start** with [Thordata](https://www.thordata.com/?ls=github&lk=Vinyzu) and experience the safest, fastest proxy network.
+#### [Swiftproxy](https://www.swiftproxy.net/?ref=Vinyzu): High-Performance Residential Proxies for Scalable Data Collection
+
+Built for developers who need **reliable**, anti-detection proxy infrastructure. [Swiftproxy](https://www.swiftproxy.net/?ref=Vinyzu) delivers **stable connections**, **high success rates**, and flexible control for **large-scale scraping and automation**.
+
+- 🌍 195+ locations with ethically sourced residential IPs
+- 🔄 **Rotating** & **sticky sessions** with precise geo-targeting
+- ⚡ Optimized for **anti-ban** & **high success rate**
+- 🔌 HTTP / HTTPS / SOCKS5 support
+- 🧪 **Free 500MB trial** for testing
+- 💸 **Special discount** code for Patchright users: **PROXY90 - 10%**
+
+<sup> Best for: Web scraping, automation, multi-accounting, and large-scale data extraction </sup>
 
 ---
-<img width="500" alt="proxylayer" src="https://github.com/user-attachments/assets/d1c5f849-5cb0-4aff-b48c-530bda2ee03f" />
 
-Running Patchright? Your proxy layer can decide whether you scale — or get blocked.
+[<img height="90" alt="rapidproxy banner" src="https://github.com/user-attachments/assets/bb771788-5c99-4e22-be40-c99cca95db22" />](https://www.rapidproxy.io/?ref=Vinyzu)
 
-#### [ProxyEmpire](https://proxyempire.io/?ref=patchright&utm_source=patchright) delivers:
 
-- 🌍 30M+ Residential IPs (170+ countries)
-- 📱 4G/5G Mobile Proxies
-- 🔄 Rotating & Sticky Sessions + Unlimited Concurrent Sessions
+#### [RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu) provides a stable and high-performance proxy network built for large-scale data operations.
+
+[RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu) delivers:
+- 🌍 90M+ Residential IPs (200+ locations)
+- 🔄 **Rotating Residential Proxies** — from **$0.65/GB** (non-expiring traffic)
+- 🧩 **Static Residential IPs** — **$5/IP** (30 days, unlimited traffic)
 - 🎯 Precise geo-targeting
-- HTTP, HTTPS & SOCKS5 Support
+- ⚡ **Free Trial Available** — test proxy performance risk-free
+- Built for scraping, automation, and high-performance data workflows.
+- 🔥 Special Offer: Use code **RAPID10** to get **10% off**
 
-<sup>Built for scraping, automation, and high-stealth workflows.</sup>
-
-<span style="font-size:3em;"> 🔥 **Special Offer**: Use code **Patchright30** to get **30% recurring discount** (not just first month). </span>
-
-<sup>Upgrade your proxies. Reduce bans. Scale properly.</sup>
+<sup> Start fast. Scale globally. Stay stable with [RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu). </sup>
 
 </details>
 
@@ -190,7 +195,7 @@ If you choose to support our work, please contact [@vinyzu](https://discord.com/
 
 Patchright is licensed [Apache 2.0](https://choosealicense.com/licenses/apache-2.0/)
 
-[Some Parts](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/main/patchright_driver_patch.js#L435-L448) of the Codebase are inspired by [Driverless](https://github.com/kaliiiiiiiiii/Selenium-Driverless).
+[Some Parts](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/blob/10c5a090e9a1dcd2107c253d65b3d8b27d0670a9/driver_patches/framesPatch.ts#L156-L171) of the Codebase are inspired by [Driverless](https://github.com/kaliiiiiiiiii/Selenium-Driverless).
 Thanks to [Nick Webson](https://github.com/rebrowser/rebrowser-patches) for the idea of .patch-File Documentation.
 
 ---

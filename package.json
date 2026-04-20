@@ -1,6 +1,22 @@
 {
+    "scripts": {
+        "patch": "cd playwright && tsx ../patchright_driver_patch.ts",
+        "prepatch": "git -C . submodule update --init --recursive patchright-nodejs",
+        "patchright-nodejs:update": "git -C . submodule update --init --recursive --remote patchright-nodejs",
+        "typecheck": "tsc --noEmit",
+        "pretypecheck": "git -C . submodule update --init --recursive patchright-nodejs",
+        "format:check": "bash -c 'biome check --line-width=320 --formatter-enabled=false --diagnostic-level=error ${@:-patchright_driver_patch.ts driver_patches/}' --",
+        "format:fix": "tsx utils/format-indentation.ts",
+        "format": "bash -c 'npm run format:fix -- ${@} && npm run format:check -- ${@}' --"
+    },
     "devDependencies": {
-        "ts-morph": "^23.0.0",
+        "@biomejs/biome": "^2.4.10",
+        "@types/node": "^25.5.0",
+        "glob": "^13.0.6",
+        "prettier": "^3.0.0",
+        "ts-morph": "^27.0.2",
+        "tsx": "^4.21.0",
+        "typescript": "^6.0.2",
         "yaml": "^2.7.0"
     },
     "type": "module"

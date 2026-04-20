@@ -46,16 +46,23 @@ jobs:
           chmod +x utils/release_version_check.sh
           utils/release_version_check.sh
 
+      - name: Stop When Playwright Version Is Unavailable
+        if: steps.version_check.outputs.playwright_version == 'v0.0.0'
+        run: |
+          echo "GitHub API did not return a valid Playwright release tag."
+          exit 1
+
       - name: Install Playwright Driver
         run: |
-          git clone https://github.com/microsoft/playwright --branch ${{ env.playwright_version }}
+          git clone https://github.com/microsoft/playwright --branch ${{ steps.version_check.outputs.playwright_version }}
           cd playwright
           npm ci
 
       - name: Patch Playwright Driver
         run: |
           cd playwright
-          node "../patchright_driver_patch.js"
+          git -C .. submodule update --init --recursive --remote patchright-nodejs
+          cd .. && npm run patch
 
       - name: Generate Playwright Channels
         # Ignore the error exit code, as the script exits 1 when a file is modified.
