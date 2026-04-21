@@ -12,6 +12,9 @@ export function patchChromiumSwitches(project: Project) {
 		.getVariableDeclarationOrThrow("chromiumSwitches")
 		.getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction);
 
+	// Add disablePopupBlocking parameter to the arrow function
+	chromiumSwitchesArrow.addParameter({ name: "disablePopupBlocking", type: "boolean", hasQuestionToken: true });
+
 	const chromiumSwitchesArray = chromiumSwitchesArrow
 		.getBody()
 		.getFirstDescendantByKindOrThrow(SyntaxKind.ArrayLiteralExpression);
@@ -19,7 +22,7 @@ export function patchChromiumSwitches(project: Project) {
 	// Patchright defined switches to disable
 	const switchesToDisable = [
 		"assistantMode ? '' : '--enable-automation'",
-		"'--disable-popup-blocking'",
+		// '--disable-popup-blocking' intentionally NOT removed here — handled conditionally below
 		"'--disable-component-update'",
 		"'--disable-default-apps'",
 		"'--disable-extensions'",
@@ -36,7 +39,14 @@ export function patchChromiumSwitches(project: Project) {
 		.getElements()
 		.filter((element) => switchesToDisable.includes(element.getText()))
 		.forEach((element) => { chromiumSwitchesArray.removeElement(element); });
-	
-		// Add custom switches to the array
+
+	// Replace '--disable-popup-blocking' with a conditional: only include when explicitly requested
+	const popupBlockingElement = chromiumSwitchesArray
+		.getElements()
+		.find((element) => element.getText() === "'--disable-popup-blocking'");
+	if (popupBlockingElement)
+		popupBlockingElement.replaceWithText("disablePopupBlocking ? '--disable-popup-blocking' : ''");
+
+	// Add custom switches to the array
 	chromiumSwitchesArray.addElement(`'--disable-blink-features=AutomationControlled'`);
 }
