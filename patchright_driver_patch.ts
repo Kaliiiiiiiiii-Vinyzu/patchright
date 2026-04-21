@@ -77,7 +77,7 @@ patches.patchChromium(project);
 patches.patchChromiumSwitches(project);
 
 // ------------------------------------
-// server/chromium/chromiumLaunchArgs.ts
+// server/chromium/chromium.ts (call site)
 // ------------------------------------
 patches.patchChromiumLaunchArgs(project);
 

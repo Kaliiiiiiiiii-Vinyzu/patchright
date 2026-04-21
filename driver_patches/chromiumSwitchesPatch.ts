@@ -44,8 +44,9 @@ export function patchChromiumSwitches(project: Project) {
 	const popupBlockingElement = chromiumSwitchesArray
 		.getElements()
 		.find((element) => element.getText() === "'--disable-popup-blocking'");
-	if (popupBlockingElement)
-		popupBlockingElement.replaceWithText("disablePopupBlocking ? '--disable-popup-blocking' : ''");
+	if (!popupBlockingElement)
+		throw new Error("Expected '--disable-popup-blocking' element not found in chromiumSwitches array");
+	popupBlockingElement.replaceWithText("disablePopupBlocking ? '--disable-popup-blocking' : ''");
 
 	// Add custom switches to the array
 	chromiumSwitchesArray.addElement(`'--disable-blink-features=AutomationControlled'`);

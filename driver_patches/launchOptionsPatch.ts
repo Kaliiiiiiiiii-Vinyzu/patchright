@@ -11,7 +11,7 @@ export function patchLaunchOptions(project: Project) {
 	const launchOptionsDecl = typesSourceFile.getTypeAliasOrThrow("LaunchOptions");
 	const intersectionType = launchOptionsDecl.getTypeNodeOrThrow().asKindOrThrow(SyntaxKind.IntersectionType);
 
-	// The second member of the intersection is the object type { cdpPort?, ... }
+	// The second member is the object literal { cdpPort?, ... }; Omit<> is a TypeReference, not TypeLiteral
 	const objectType = assertDefined(
 		intersectionType
 			.getTypeNodes()

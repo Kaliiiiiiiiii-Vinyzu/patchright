@@ -13,7 +13,7 @@ export function patchChromiumLaunchArgs(project: Project) {
 			.getDescendantsOfKind(SyntaxKind.CallExpression)
 			.find(call =>
 				call.getExpression().getText() === "chromiumSwitches" &&
-				call.getArguments().length === 2
+				call.getArguments().length === 2  // upstream call has 2 args before this patch runs
 			)
 	);
 
