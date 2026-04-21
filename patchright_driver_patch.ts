@@ -76,6 +76,11 @@ patches.patchChromium(project);
 // -----------------------------------
 patches.patchChromiumSwitches(project);
 
+// ------------------------------------
+// server/chromium/chromiumLaunchArgs.ts
+// ------------------------------------
+patches.patchChromiumLaunchArgs(project);
+
 // ----------------------------
 // server/chromium/crBrowser.ts
 // ----------------------------
@@ -155,6 +160,11 @@ patches.patchJavascript(project);
 // server/launchApp.ts
 // -------------------
 patches.patchLaunchApp(project);
+
+// --------------------
+// server/launchOptions.ts
+// --------------------
+patches.patchLaunchOptions(project);
 
 // -------------------------------------
 // server/dispatchers/frameDispatcher.ts
