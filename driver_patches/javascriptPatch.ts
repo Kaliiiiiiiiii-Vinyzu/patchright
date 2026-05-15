@@ -31,9 +31,9 @@ export function patchJavascript(project: Project) {
 			const frame = context.frame;
 			if (frame) {
 				if (isolatedContext === true)
-					context = await frame._utilityContext();
+					context = await frame.utilityContext();
 				else if (isolatedContext === false)
-					context = await frame._mainContext();
+					context = await frame.mainContext();
 			}
 		}
 		if (context !== this._context && context.adoptIfNeeded(this) === null)
@@ -57,9 +57,9 @@ export function patchJavascript(project: Project) {
 			const frame = context.frame;
 			if (frame) {
 				if (isolatedContext === true)
-					context = await frame._utilityContext();
+					context = await frame.utilityContext();
 				else if (isolatedContext === false)
-					context = await frame._mainContext();
+					context = await frame.mainContext();
 			}
 		}
 		if (context !== this._context && context.adoptIfNeeded(this) === null)

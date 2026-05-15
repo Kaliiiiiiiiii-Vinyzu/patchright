@@ -23,7 +23,7 @@ export function patchScreenshotter(project: Project) {
 		.getParentIfKindOrThrow(SyntaxKind.Block)
 		.insertStatements(safeEvalStatement.getChildIndex(), `
 			await Promise.all(this._page.frames().map(async (f: any) => {
-				try { await f._utilityContext(); } catch {}
+				try { await f.utilityContext(); } catch {}
 			}));
 		`);
 	

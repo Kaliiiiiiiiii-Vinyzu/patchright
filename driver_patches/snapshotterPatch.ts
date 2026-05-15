@@ -102,7 +102,7 @@ export function patchSnapshotter(project: Project) {
 	const mainContextIdentifier = assertDefined(
 		annotateMethod
 			.getDescendantsOfKind(SyntaxKind.Identifier)
-			.find(id => id.getText() === "_mainContext")
+			.find(id => id.getText() === "mainContext")
 	);
-	mainContextIdentifier.replaceWithText("_utilityContext");
+	mainContextIdentifier.replaceWithText("utilityContext");
 }
