@@ -761,8 +761,8 @@ export function patchFrames(project: Project) {
 			lastIntermediateResult.errorMessage = missingReceived ? 'Error: element(s) not found' : undefined;
 			lastIntermediateResult.received = received;
 			lastIntermediateResult.isSet = true;
-			if (!missingReceived && !Array.isArray(received))
-				progressLog('  unexpected value "' + renderUnexpectedValue(options.expression, received) + '"');
+			if (!missingReceived && !Array.isArray(received?.value))
+				progressLog('  unexpected value "' + renderUnexpectedValue(options.expression, received?.value) + '"');
 		}
 		return { matches, received };
 	`);
