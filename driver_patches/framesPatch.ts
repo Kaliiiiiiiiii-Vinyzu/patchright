@@ -578,9 +578,12 @@ export function patchFrames(project: Project) {
 					return null;
 				return continuePolling;
 			}
-			const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root }) => {
-				if (root && !root.isConnected)
+			const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
+				if (root && !root.isConnected) {
+					if (state === 'hidden' || state === 'detached')
+						return { log: '', element: undefined, visible: false, attached: false };
 					throw injected.createStacklessError('Element is not attached to the DOM');
+				}
 				const elements = injected.querySelectorAll(info.parsed, root || document);
 				const element = elements[0];
 				const visible = element ? injected.utils.isElementVisible(element) : false;
@@ -594,7 +597,7 @@ export function patchFrames(project: Project) {
 				}
 				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 				return { log, element, visible, attached: !!element };
-			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
+			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
 			const { log, visible, attached } = await progress.race(result.evaluate(r => ({ log: r.log, visible: r.visible, attached: r.attached })));
 			if (log)
 				progress.log(log);
@@ -758,8 +761,8 @@ export function patchFrames(project: Project) {
 			lastIntermediateResult.errorMessage = missingReceived ? 'Error: element(s) not found' : undefined;
 			lastIntermediateResult.received = received;
 			lastIntermediateResult.isSet = true;
-			if (!missingReceived && !Array.isArray(received?.value))
-				progressLog('  unexpected value "' + renderUnexpectedValue(options.expression, received?.value) + '"');
+			if (!missingReceived && !Array.isArray(received))
+				progressLog('  unexpected value "' + renderUnexpectedValue(options.expression, received) + '"');
 		}
 		return { matches, received };
 	`);
