@@ -33,11 +33,12 @@ export function patchFrameSelectors(project: Project) {
 
 	// -- queryArrayInMainWorld Method --
 	const queryArrayInMainWorldMethod = frameSelectorsClass.getMethodOrThrow("queryArrayInMainWorld");
-	queryArrayInMainWorldMethod.addParameter({
-		name: "isolatedContext",
-		type: "boolean",
-		hasQuestionToken: true,
-	});
+	if (!queryArrayInMainWorldMethod.getParameter("isolatedContext"))
+		queryArrayInMainWorldMethod.addParameter({
+			name: "isolatedContext",
+			type: "boolean",
+			hasQuestionToken: true,
+		});
 	// Update mainWorld property based on isolatedContext parameter
 	const resolveInjectedCall = queryArrayInMainWorldMethod
 		.getDescendantsOfKind(SyntaxKind.CallExpression)
@@ -57,34 +58,34 @@ export function patchFrameSelectors(project: Project) {
 	// -- resolveFrameForSelector Method --
 	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveFrameForSelector");
 	// Change 'element' variable declaration from const to let to allow reassignment.
-	assertDefined(
-		resolveFrameForSelectorMethod
-			.getDescendantsOfKind(SyntaxKind.VariableStatement)
-			.find(s => s.getText().includes("const element = handle.asElement()"))
-	).setDeclarationKind(VariableDeclarationKind.Let);
+	resolveFrameForSelectorMethod
+		.getDescendantsOfKind(SyntaxKind.VariableStatement)
+		.find(s => s.getText().includes("const element = handle.asElement()"))
+		?.setDeclarationKind(VariableDeclarationKind.Let);
 	// Handle the case when element is not found - fetch it from the document using the parsed selector
 	const resolveFrameForSelectorIfStatement = resolveFrameForSelectorMethod
 		.getDescendantsOfKind(SyntaxKind.IfStatement)
 		.find(statement => statement.getExpression().getText() === "!element");
-	assertDefined(resolveFrameForSelectorIfStatement).replaceWithText(`
-		if (!element) {
-			try {
-				var client = frame._page.delegate._sessionForFrame(frame)._client;
-			} catch (e) {
-				var client = frame._page.delegate._mainFrameSession._client;
+	if (resolveFrameForSelectorIfStatement)
+		resolveFrameForSelectorIfStatement.replaceWithText(`
+			if (!element) {
+				try {
+					var client = frame._page.delegate._sessionForFrame(frame)._client;
+				} catch (e) {
+					var client = frame._page.delegate._mainFrameSession._client;
+				}
+				var mainContext = await frame._context("main");
+				const documentNode = await client.send("Runtime.evaluate", {
+					expression: "document",
+					serializationOptions: { serialization: "idOnly" },
+					contextId: mainContext.delegate._contextId
+				});
+				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
+					var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
+				if (check.length === 0) return null;
+				element = check[0];
 			}
-			var mainContext = await frame._context("main");
-			const documentNode = await client.send("Runtime.evaluate", {
-				expression: "document",
-				serializationOptions: { serialization: "idOnly" },
-				contextId: mainContext.delegate._contextId
-			});
-			const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
-			if (check.length === 0) return null;
-			element = check[0];
-		}
-	`);
+		`);
 
 		// -- resolveInjectedForSelector Method --
 		const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
@@ -102,24 +103,27 @@ export function patchFrameSelectors(project: Project) {
 				if (!callExpr)
 					return false;
 
-				return decl.getName() === "context" && callExpr.getExpression().getText().includes("._context");
+				const expressionText = callExpr.getExpression().getText();
+				return decl.getName() === "context" && (expressionText.includes("._context") || expressionText.includes(".context"));
 			}));
-		resolveInjectedForSelectorMethod.insertStatements(contextStatement.getChildIndex() + 1, `if (!context) throw new Error("Frame was detached");`);
+		if (!resolveInjectedForSelectorMethod.getText().includes('if (!context) throw new Error("Frame was detached");'))
+			resolveInjectedForSelectorMethod.insertStatements(contextStatement.getChildIndex() + 1, `if (!context) throw new Error("Frame was detached");`);
 
 
 	// -- _customFindFramesByParsed Method -- progress
-	frameSelectorsClass.addMethod({
-		name: "_customFindFramesByParsed",
-		isAsync: true,
-		parameters: [
-			{ name: "resolved", type: "JSHandle<InjectedScript>" },
-			{ name: "client", type: "CRSession" },
-			{ name: "context", type: "FrameExecutionContext" },
-			{ name: "documentScope", type: "ElementHandle" },
-			{ name: "progress", type: "Progress | undefined" },
-			{ name: "parsed", type: "ParsedSelector" },
-		],
-	});
+	if (!frameSelectorsClass.getMethod("_customFindFramesByParsed"))
+		frameSelectorsClass.addMethod({
+			name: "_customFindFramesByParsed",
+			isAsync: true,
+			parameters: [
+				{ name: "resolved", type: "JSHandle<InjectedScript>" },
+				{ name: "client", type: "CRSession" },
+				{ name: "context", type: "FrameExecutionContext" },
+				{ name: "documentScope", type: "ElementHandle" },
+				{ name: "progress", type: "Progress | undefined" },
+				{ name: "parsed", type: "ParsedSelector" },
+			],
+		});
 	const customFindFramesByParsedSelectorsMethod = frameSelectorsClass.getMethodOrThrow("_customFindFramesByParsed");
 	customFindFramesByParsedSelectorsMethod.setBodyText(`
 		var parsedEdits = { ...parsed };

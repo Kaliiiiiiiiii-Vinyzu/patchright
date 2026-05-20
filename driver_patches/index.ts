@@ -11,7 +11,6 @@ export * from "./crDevToolsPatch.ts";
 export * from "./crNetworkManagerPatch.ts";
 export * from "./crPagePatch.ts";
 export * from "./crServiceWorkerPatch.ts";
-export * from "./expectUtilsPatch.ts";
 export * from "./frameDispatcherPatch.ts";
 export * from "./frameSelectorsPatch.ts";
 export * from "./framesPatch.ts";

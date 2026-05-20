@@ -196,10 +196,6 @@ export function patchCRPage(project: Project) {
 				this._page.frameManager.frame(frame._id)._context("utility").catch(() => {});
 				for (const binding of this._crPage._browserContext._pageBindings.values())
 					frame.evaluateExpression(binding.source).catch(e => {});
-				for (const source of this._crPage._browserContext.initScripts)
-					frame.evaluateExpression(source.source).catch(e => {});
-				for (const source of this._crPage._page.initScripts)
-					frame.evaluateExpression(source.source).catch(e => {});
 			}
 		`);
 		
@@ -362,10 +358,10 @@ export function patchCRPage(project: Project) {
 	onExecutionContextCreatedMethod
 		.getStatements()
 		.filter((statement) =>
-			statement.getText().includes("let worldName: types.World") ||
+			statement.getText().includes("let worldName: types.World|null") ||
 			statement.getText().includes("if (contextPayload.auxData && !!contextPayload.auxData.isDefault)") ||
 			statement.getText().includes("worldName = 'main'") ||
-			statement.getText().includes("else if (contextPayload.name === UTILITY_WORLD_NAME)") ||
+			statement.getText().includes("else if (contextPayload.name === this._crPage.utilityWorldName)") ||
 			statement.getText().includes("worldName = 'utility'")
 		)
 		.forEach((statement, index) => {
@@ -376,11 +372,11 @@ export function patchCRPage(project: Project) {
 	const contextCreatedIfStatement = assertDefined(
 		onExecutionContextCreatedMethod
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find((stmt) => stmt.getText().includes("if (worldName)") && stmt.getText().includes("_contextCreated"))
+			.find((stmt) => stmt.getText().includes("if (worldName)") && stmt.getText().includes("contextCreated"))
 	);
 	contextCreatedIfStatement.replaceWithText(`
 		if (worldName && (worldName === 'main' || worldName === 'utility'))
-			frame._contextCreated(worldName, context);
+			frame.contextCreated(worldName, context);
 	`);
 	// Execute all exposed binding scripts in the created execution context
 	onExecutionContextCreatedMethod.addStatements(`
@@ -437,13 +433,18 @@ export function patchCRPage(project: Project) {
 	);
 	onBindingCalledIfStatement.replaceWithText(`
 		if (context) await this._page.onBindingCalled(event.payload, context);
-		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame()._mainContext())) // This might be a bit sketchy but it works for now
+		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame().mainContext())) // This might be a bit sketchy but it works for now
 	`);
 
 	// -- _evaluateOnNewDocument Method --
 	frameSessionClass
 		.getMethodOrThrow("_evaluateOnNewDocument")
-		.setBodyText(`this._evaluateOnNewDocumentScripts.push(initScript);		`);
+		.setBodyText(`
+			this._evaluateOnNewDocumentScripts.push(initScript);
+			const worldName = world === 'utility' ? this._crPage.utilityWorldName : undefined;
+			const { identifier } = await this._client.send('Page.addScriptToEvaluateOnNewDocument', { source: initScript.source, worldName, runImmediately });
+			this._initScriptIds.set(initScript, identifier);
+		`);
 
 	// -- _removeEvaluatesOnNewDocument Method --
 	frameSessionClass
@@ -451,6 +452,14 @@ export function patchCRPage(project: Project) {
 		.setBodyText(`
 			const toRemove = new Set(initScripts);
 			this._evaluateOnNewDocumentScripts = this._evaluateOnNewDocumentScripts.filter(script => !toRemove.has(script));
+			const ids: string[] = [];
+			for (const script of initScripts) {
+				const id = this._initScriptIds.get(script);
+				if (id)
+					ids.push(id);
+				this._initScriptIds.delete(script);
+			}
+			await Promise.all(ids.map(identifier => this._client.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {})));
 		`);
 
 	// -- _adoptBackendNodeId Method --

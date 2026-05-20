@@ -121,11 +121,6 @@ patches.patchCRPage(project);
 // --------------
 patches.patchPage(project);
 
-// ---------------------------
-// server/utils/expectUtils.ts
-// ---------------------------
-patches.patchExpectUtils(project);
-
 // ---------------------------------------------
 // utils/isomorphic/utilityScriptSerializers.ts
 // --------------------------------------------
@@ -211,26 +206,34 @@ patches.patchSnapshotterInjected(project);
 // --------------------------------
 patches.patchTracing(project);
 
-// -------------------------
-// protocol/protocol.yml
-// -------------------------
-const protocol = YAML.parse(await fs.readFile("packages/protocol/src/protocol.yml", "utf8"));
-
-// isolatedContext parameters
-for (const type of ["Frame", "JSHandle", "Worker"]) {
-	const commands = protocol[type].commands;
-	commands.evaluateExpression.parameters.isolatedContext = "boolean?";
-	commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
+// ----------------------
+// protocol/spec/*.yml
+// ----------------------
+async function mutateYaml(path: string, callback: (document: any) => void) {
+	const document = YAML.parse(await fs.readFile(path, "utf8"));
+	callback(document);
+	await fs.writeFile(path, YAML.stringify(document));
 }
-protocol.Frame.commands.evalOnSelectorAll.parameters.isolatedContext = "boolean?";
 
-// focusControl parameter
-protocol.ContextOptions.properties.focusControl = "boolean?";
-
-// Internal init-script route marker
-protocol.Route.commands.continue.parameters.patchrightInitScript = "boolean?";
-
-await fs.writeFile("packages/protocol/src/protocol.yml", YAML.stringify(protocol));
+await mutateYaml("packages/protocol/spec/frame.yml", protocol => {
+	protocol.Frame.commands.evaluateExpression.parameters.isolatedContext = "boolean?";
+	protocol.Frame.commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
+	protocol.Frame.commands.evalOnSelectorAll.parameters.isolatedContext = "boolean?";
+});
+await mutateYaml("packages/protocol/spec/handles.yml", protocol => {
+	protocol.JSHandle.commands.evaluateExpression.parameters.isolatedContext = "boolean?";
+	protocol.JSHandle.commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
+});
+await mutateYaml("packages/protocol/spec/worker.yml", protocol => {
+	protocol.Worker.commands.evaluateExpression.parameters.isolatedContext = "boolean?";
+	protocol.Worker.commands.evaluateExpressionHandle.parameters.isolatedContext = "boolean?";
+});
+await mutateYaml("packages/protocol/spec/mixins.yml", protocol => {
+	protocol.ContextOptions.properties.focusControl = "boolean?";
+});
+await mutateYaml("packages/protocol/spec/network.yml", protocol => {
+	protocol.Route.commands.continue.parameters.patchrightInitScript = "boolean?";
+});
 
 // Save the changes without reformatting
 await project.save();

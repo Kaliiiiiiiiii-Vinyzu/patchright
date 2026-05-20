@@ -12,7 +12,7 @@ export function patchBrowserContext(project: Project) {
 	const browserContextClass = browserContextSourceFile.getClassOrThrow("BrowserContext");
 
 	// -- _initialize Method --
-	const initializeMethod = browserContextClass.getMethodOrThrow("_initialize");
+	const initializeMethod = browserContextClass.getMethodOrThrow("initialize");
 	// Getting the service worker registration call
 	const initializeMethodCall = assertDefined(
 		initializeMethod

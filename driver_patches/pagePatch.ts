@@ -27,7 +27,7 @@ export function patchPage(project: Project) {
 			throw new Error(\`Function "\${name}" has been already registered\`);
 		if (this.browserContext._pageBindings.has(name))
 			throw new Error(\`Function "\${name}" has been already registered in the browser context\`);
-		const binding = new PageBinding(this, name, playwrightBinding, needsHandle);
+		const binding = new PageBinding(this, name, playwrightBinding, false);
 		this._pageBindings.set(name, binding);
 		await this.delegate.exposeBinding(binding);
 		return binding;
@@ -85,8 +85,8 @@ export function patchPage(project: Project) {
 						debugLogger.log('error', deliveryError);
 						return;
 					}
-					const mainContext = await frame._mainContext().catch(() => null);
-					const utilityContext = await frame._utilityContext().catch(() => null);
+					const mainContext = await frame.mainContext().catch(() => null);
+					const utilityContext = await frame.utilityContext().catch(() => null);
 					for (const ctx of [mainContext, utilityContext]) {
 						if (!ctx || ctx === context)
 							continue;
@@ -160,8 +160,8 @@ export function patchPage(project: Project) {
 			if (context instanceof domValue.FrameExecutionContext) {
 				const frame = context.frame;
 				if (frame) {
-					if (isolatedContext) context = await frame._utilityContext();
-					else if (!isolatedContext) context = await frame._mainContext();
+					if (isolatedContext) context = await frame.utilityContext();
+					else if (!isolatedContext) context = await frame.mainContext();
 				}
 			}
 		`);
