@@ -2340,7 +2340,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _existingMainContext(): dom.FrameExecutionContext | null {
-@@ -752,107 +823,172 @@
+@@ -752,107 +823,173 @@
    }
  
    utilityContext(): Promise<dom.FrameExecutionContext> {
@@ -2386,7 +2386,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    		return this.querySelectorAll(progress, selector).then((handles) => {
 +    			if (handles.length === 0)
 +    				return null;
-+    			if (handles.length > 1 && options?.strict)
++    			const strict = options?.strict ?? this._page.browserContext._options.strictSelectors;
++    			if (handles.length > 1 && strict)
 +    				throw new Error(`Strict mode: expected one element matching selector "${selector}", found ${handles.length}`);
 +    			return handles[0];
 +    		});
@@ -2585,7 +2586,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private async _evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -864,8 +1000,23 @@
+@@ -864,8 +1001,23 @@
      return result;
    }
  
@@ -2611,7 +2612,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private async _evalOnSelectorAll(selector: string, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -884,17 +1035,26 @@
+@@ -884,17 +1036,26 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -2646,7 +2647,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async content(progress: Progress): Promise<string> {
-@@ -920,31 +1080,23 @@
+@@ -920,31 +1081,23 @@
    }
  
    async setContent(progress: Progress, html: string, options: types.NavigateOptions): Promise<void> {
@@ -2695,7 +2696,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    name(): string {
-@@ -1158,60 +1310,69 @@
+@@ -1158,60 +1311,69 @@
      progress: Progress,
      selector: string,
      options: { strict?: boolean, noAutoWaiting?: boolean, force?: boolean, performActionPreChecks?: boolean },
@@ -2818,7 +2819,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1373,20 +1534,21 @@
+@@ -1373,20 +1535,21 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -2854,7 +2855,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1515,46 +1677,48 @@
+@@ -1515,46 +1678,48 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: ExpectReceived, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -2940,7 +2941,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1613,7 +1777,7 @@
+@@ -1613,7 +1778,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -2949,7 +2950,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1837,162 @@
+@@ -1673,42 +1838,162 @@
    }
  
    _onDetached() {
@@ -3145,7 +3146,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2049,7 @@
+@@ -1765,7 +2050,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -3154,7 +3155,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2088,325 @@
+@@ -1804,6 +2089,325 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -7108,7 +7109,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _existingMainContext(): dom.FrameExecutionContext | null {
-@@ -752,107 +823,172 @@
+@@ -752,107 +823,173 @@
    }
  
    utilityContext(): Promise<dom.FrameExecutionContext> {
@@ -7154,7 +7155,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    		return this.querySelectorAll(progress, selector).then((handles) => {
 +    			if (handles.length === 0)
 +    				return null;
-+    			if (handles.length > 1 && options?.strict)
++    			const strict = options?.strict ?? this._page.browserContext._options.strictSelectors;
++    			if (handles.length > 1 && strict)
 +    				throw new Error(`Strict mode: expected one element matching selector "${selector}", found ${handles.length}`);
 +    			return handles[0];
 +    		});
@@ -7353,7 +7355,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private async _evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -864,8 +1000,23 @@
+@@ -864,8 +1001,23 @@
      return result;
    }
  
@@ -7379,7 +7381,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private async _evalOnSelectorAll(selector: string, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -884,17 +1035,26 @@
+@@ -884,17 +1036,26 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -7414,7 +7416,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async content(progress: Progress): Promise<string> {
-@@ -920,31 +1080,23 @@
+@@ -920,31 +1081,23 @@
    }
  
    async setContent(progress: Progress, html: string, options: types.NavigateOptions): Promise<void> {
@@ -7463,7 +7465,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    name(): string {
-@@ -1158,60 +1310,69 @@
+@@ -1158,60 +1311,69 @@
      progress: Progress,
      selector: string,
      options: { strict?: boolean, noAutoWaiting?: boolean, force?: boolean, performActionPreChecks?: boolean },
@@ -7586,7 +7588,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1373,20 +1534,21 @@
+@@ -1373,20 +1535,21 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -7622,7 +7624,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1515,46 +1677,48 @@
+@@ -1515,46 +1678,48 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: ExpectReceived, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -7708,7 +7710,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1613,7 +1777,7 @@
+@@ -1613,7 +1778,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -7717,7 +7719,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1837,162 @@
+@@ -1673,42 +1838,162 @@
    }
  
    _onDetached() {
@@ -7913,7 +7915,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2049,7 @@
+@@ -1765,7 +2050,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -7922,7 +7924,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2088,325 @@
+@@ -1804,6 +2089,325 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
