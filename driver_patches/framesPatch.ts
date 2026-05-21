@@ -137,7 +137,8 @@ export function patchFrames(project: Project) {
 		return this.querySelectorAll(progress, selector).then((handles) => {
 			if (handles.length === 0)
 				return null;
-			if (handles.length > 1 && options?.strict)
+			const strict = options?.strict ?? this._page.browserContext._options.strictSelectors;
+			if (handles.length > 1 && strict)
 				throw new Error(\`Strict mode: expected one element matching selector "\${selector}", found \${handles.length}\`);
 			return handles[0];
 		});
