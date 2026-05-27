@@ -7,6 +7,9 @@ import { assertDefined } from "./utils.ts";
 export function patchPage(project: Project) {
 	// Add source file to the project
 	const pageSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/page.ts");
+	const selectorParserImport = pageSourceFile.getImportDeclarationOrThrow("@isomorphic/selectorParser");
+	if (!selectorParserImport.getNamedImports().some(namedImport => namedImport.getName() === "splitSelectorByFrame"))
+		selectorParserImport.addNamedImport("splitSelectorByFrame");
 	pageSourceFile.addImportDeclaration({
 		moduleSpecifier: "./dom",
 		namespaceImport: "domValue",
@@ -166,4 +169,16 @@ export function patchPage(project: Project) {
 			}
 		`);
 	}
+
+	const pagePerformLocatorHandlersCheckpointMethod = pageClass.getMethodOrThrow("_performLocatorHandlersCheckpoint");
+	const waitForHiddenStatement = pagePerformLocatorHandlersCheckpointMethod
+		.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
+		.find(statement => statement.getText() === "await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });");
+	if (waitForHiddenStatement)
+		waitForHiddenStatement.replaceWithText(`
+			const frameChunks = splitSelectorByFrame(handler.selector);
+			if (frameChunks.length > 1 && !await this.mainFrame().isVisibleInternal(progress, stringifySelector(frameChunks[0]), { strict: true }))
+				return;
+			await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });
+		`);
 }

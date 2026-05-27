@@ -582,7 +582,11 @@ export function patchFrames(project: Project) {
 					return null;
 				return continuePolling;
 			}
-			const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
+			if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
+				return null;
+			let result;
+			try {
+				result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
 				if (root && !root.isConnected) {
 					if (state === 'hidden' || state === 'detached')
 						return { log: '', element: undefined, visible: false, attached: false };
@@ -601,7 +605,12 @@ export function patchFrames(project: Project) {
 				}
 				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 				return { log, element, visible, attached: !!element };
-			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
+				}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
+			} catch (e) {
+				if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
+					return null;
+				throw e;
+			}
 			const { log, visible, attached } = await progress.race(result.evaluate(r => ({ log: r.log, visible: r.visible, attached: r.attached })));
 			if (log)
 				progress.log(log);

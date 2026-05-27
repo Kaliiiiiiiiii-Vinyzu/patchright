@@ -69,6 +69,8 @@ export function patchFrameSelectors(project: Project) {
 	if (resolveFrameForSelectorIfStatement)
 		resolveFrameForSelectorIfStatement.replaceWithText(`
 			if (!element) {
+				if ((options as any).state === "hidden" || (options as any).state === "detached")
+					return null;
 				try {
 					var client = frame._page.delegate._sessionForFrame(frame)._client;
 				} catch (e) {
@@ -86,6 +88,20 @@ export function patchFrameSelectors(project: Project) {
 				element = check[0];
 			}
 		`);
+	if (!resolveFrameForSelectorMethod.getText().includes("const isConnected = await element.evaluateInUtility"))
+		resolveFrameForSelectorMethod.insertStatements(
+			assertDefined(resolveFrameForSelectorMethod
+				.getStatements()
+				.find(statement => statement.getText().includes("const maybeFrame = await frame._page.delegate.getContentFrame(element)")))
+				.getChildIndex(),
+			`
+			const isConnected = await element.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false);
+			if (!isConnected) {
+				element.dispose();
+				return null;
+			}
+			`
+		);
 
 		// -- resolveInjectedForSelector Method --
 		const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
