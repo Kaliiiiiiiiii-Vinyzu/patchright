@@ -405,10 +405,12 @@ export function patchCRPage(project: Project) {
 				expression: "globalThis",
 				serializationOptions: { serialization: "idOnly" }
 			});
-			if (globalThis && globalThis.result) {
+			if (globalThis && globalThis.result && globalThis.result.objectId) {
 				var globalThisObjId = globalThis.result.objectId;
 				var executionContextId = parseInt(globalThisObjId.split('.')[1], 10);
-				worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
+				if (!isNaN(executionContextId)) {
+					worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
+				}
 			}
 		`);
 		
@@ -432,8 +434,22 @@ export function patchCRPage(project: Project) {
 			)
 	);
 	onBindingCalledIfStatement.replaceWithText(`
-		if (context) await this._page.onBindingCalled(event.payload, context);
-		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame().mainContext())) // This might be a bit sketchy but it works for now
+		if (context) {
+			await this._page.onBindingCalled(event.payload, context);
+		} else {
+			// Ensure execution contexts for all frames are resolved/created
+			await Promise.all(this._page.frames().map(frame => frame.mainContext().catch(() => null)));
+			const fallbackContext = this._contextIdToContext.get(event.executionContextId);
+			if (fallbackContext) {
+				await this._page.onBindingCalled(event.payload, fallbackContext);
+			} else {
+				// Last resort fallback
+				const mainCtx = await this._page.mainFrame().mainContext().catch(() => null);
+				if (mainCtx) {
+					await this._page.onBindingCalled(event.payload, mainCtx);
+				}
+			}
+		}
 	`);
 
 	// -- _evaluateOnNewDocument Method --

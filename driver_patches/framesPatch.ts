@@ -168,7 +168,8 @@ export function patchFrames(project: Project) {
 		  if (!resolvedNode?.object?.objectId)
 		    return 0;
 
-		  return parseInt(resolvedNode.object.objectId.split(".")[1], 10);
+		  const executionContextId = parseInt(resolvedNode.object.objectId.split(".")[1], 10);
+		  return isNaN(executionContextId) ? 0 : executionContextId;
 		} catch (e) {}
 		return 0;
 	`);
@@ -213,12 +214,14 @@ export function patchFrames(project: Project) {
 					expression: "globalThis",
 					serializationOptions: { serialization: "idOnly" },
 				});
-				if (!globalThis) {
+				if (!globalThis || !globalThis?.result?.objectId) {
 					if (this._isDetached()) throw new Error('Frame was detached');
 					return;
 				}
 				const executionContextId = parseInt(globalThis.result.objectId.split('.')[1], 10);
-				this._mainWorld = registerContext(executionContextId, world);
+				if (!isNaN(executionContextId)) {
+					this._mainWorld = registerContext(executionContextId, world);
+				}
 			}
 		}
 

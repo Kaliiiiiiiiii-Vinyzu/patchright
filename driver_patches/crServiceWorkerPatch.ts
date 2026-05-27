@@ -35,10 +35,12 @@ export function patchCRServiceWorker(project: Project) {
 			expression: "globalThis",
 			serializationOptions: { serialization: "idOnly" }
 		}).then(globalThis => {
-			if (globalThis && globalThis.result) {
+			if (globalThis && globalThis.result && globalThis.result.objectId) {
 				var globalThisObjId = globalThis.result.objectId;
 				var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
-				this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
+				if (!isNaN(executionContextId)) {
+					this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
+				}
 			}
 		});
 	`);
