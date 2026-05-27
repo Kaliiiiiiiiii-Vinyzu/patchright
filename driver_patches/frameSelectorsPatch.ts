@@ -88,12 +88,15 @@ export function patchFrameSelectors(project: Project) {
 				element = check[0];
 			}
 		`);
-	if (!resolveFrameForSelectorMethod.getText().includes("const isConnected = await element.evaluateInUtility"))
-		resolveFrameForSelectorMethod.insertStatements(
-			assertDefined(resolveFrameForSelectorMethod
-				.getStatements()
-				.find(statement => statement.getText().includes("const maybeFrame = await frame._page.delegate.getContentFrame(element)")))
-				.getChildIndex(),
+	if (!resolveFrameForSelectorMethod.getText().includes("const isConnected = await element.evaluateInUtility")) {
+		const maybeFrameStatement = assertDefined(
+			resolveFrameForSelectorMethod
+				.getDescendantsOfKind(SyntaxKind.VariableStatement)
+				.find(statement => statement.getText().includes("const maybeFrame = await frame._page.delegate.getContentFrame(element)"))
+		);
+		const parentBlock = maybeFrameStatement.getParentIfKindOrThrow(SyntaxKind.Block);
+		parentBlock.insertStatements(
+			maybeFrameStatement.getChildIndex(),
 			`
 			const isConnected = await element.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false);
 			if (!isConnected) {
@@ -102,6 +105,7 @@ export function patchFrameSelectors(project: Project) {
 			}
 			`
 		);
+	}
 
 		// -- resolveInjectedForSelector Method --
 		const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
@@ -243,13 +247,14 @@ export function patchFrameSelectors(project: Project) {
 					for (const { handles, parentNode } of queryGroups) {
 						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
 						for (var i = 0; i < handlesAmount; i++) {
+							let element;
 						  if (parentNode instanceof ElementHandle) {
-								var element = await parentNode.evaluateHandleInUtility(
+								element = await parentNode.evaluateHandleInUtility(
 									([injected, node, { i, handles: elems }]) => elems[i],
 									{ i, handles }
 								);
 							} else {
-								var element = await parentNode.evaluateHandle(
+								element = await parentNode.evaluateHandle(
 									(injected, { i, handles: elems }) => elems[i],
 									{ i, handles }
 								);

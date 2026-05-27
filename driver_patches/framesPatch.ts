@@ -130,10 +130,18 @@ export function patchFrames(project: Project) {
 	const querySelectorAllMethod = frameClass.getMethodOrThrow("querySelectorAll");
 	querySelectorAllMethod.setBodyText(`
 		const continuePolling = Symbol("continuePolling");
-		const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
-			if (!result || !result[0]) return [];
-			return Array.isArray(result[1]) ? result[1] : [];
-		}, 'returnAll', continuePolling);
+		let result;
+		try {
+			result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
+				if (!result || !result[0]) return [];
+				return Array.isArray(result[1]) ? result[1] : [];
+			}, 'returnAll', continuePolling);
+		} catch (e: any) {
+			if ((e instanceof ReferenceError || e?.name === 'ReferenceError' || e?.message?.includes("element is not defined")) && e.message.includes("element is not defined"))
+				result = continuePolling;
+			else
+				throw e;
+		}
 		return result === continuePolling ? await progress.race(this.selectors.queryAll(selector)) : result;
 	`);
 
@@ -1063,13 +1071,14 @@ export function patchFrames(project: Project) {
 					for (const { handles, parentNode } of queryGroups) {
 						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
 						for (var i = 0; i < handlesAmount; i++) {
+							let element;
 						  if (parentNode instanceof dom.ElementHandle) {
-								var element = await parentNode.evaluateHandleInUtility(
+								element = await parentNode.evaluateHandleInUtility(
 									([injected, node, { i, handles: elems }]) => elems[i],
 									{ i, handles }
 								);
 							} else {
-								var element = await parentNode.evaluateHandle(
+								element = await parentNode.evaluateHandle(
 									(injected, { i, handles: elems }) => elems[i],
 									{ i, handles }
 								);
