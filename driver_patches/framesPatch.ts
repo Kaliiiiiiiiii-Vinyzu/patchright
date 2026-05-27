@@ -104,6 +104,13 @@ export function patchFrames(project: Project) {
 		const callback = (injectedScript, element, data) => {
 			injectedScript.dispatchEvent(element, data.type, data.eventInit);
 		};
+		if (eventInitHandles.length > 0 && selector !== ":scope") {
+			dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, { strict: options.strict, performActionPreChecks: false }, async (progress, handle) => {
+				await handle.dispatchEvent(progress, type, eventInit);
+				return 'done' as const;
+			}));
+			return;
+		}
 		if (eventInitHandles.length === 0) {
 			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 			return;
@@ -796,6 +803,29 @@ export function patchFrames(project: Project) {
 			return Object.values(value).some(eventInitContainsHandle);
 		};
 		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
+			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+				if (!resolved)
+					return continuePolling;
+				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
+					const callback = injected.eval(callbackText);
+					const element = injected.querySelector(info.parsed, root || document, info.strict);
+					if (!element)
+						return { success: false };
+					const log = "  locator resolved to " + injected.previewNode(element);
+					if (callId)
+						injected.markTargetElements(new Set([element]), callId);
+					return { log, success: true, value: callback(injected, element, taskData) };
+				}, { info: resolved.info, callbackText, taskData, callId: progress.metadata.id, root: resolved.frame === this ? scope : undefined }));
+				if (log)
+					progress.log(log);
+				if (!success)
+					return continuePolling;
+				return value;
+			});
+			return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
+		}
+		if (options?.mainWorld && eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 				if (!resolved)
