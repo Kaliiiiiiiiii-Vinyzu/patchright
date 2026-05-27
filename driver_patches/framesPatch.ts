@@ -130,18 +130,10 @@ export function patchFrames(project: Project) {
 	const querySelectorAllMethod = frameClass.getMethodOrThrow("querySelectorAll");
 	querySelectorAllMethod.setBodyText(`
 		const continuePolling = Symbol("continuePolling");
-		let result;
-		try {
-			result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
-				if (!result || !result[0]) return [];
-				return Array.isArray(result[1]) ? result[1] : [];
-			}, 'returnAll', continuePolling);
-		} catch (e) {
-			if (e instanceof ReferenceError && e.message.includes("element is not defined"))
-				result = continuePolling;
-			else
-				throw e;
-		}
+		const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
+			if (!result || !result[0]) return [];
+			return Array.isArray(result[1]) ? result[1] : [];
+		}, 'returnAll', continuePolling);
 		return result === continuePolling ? await progress.race(this.selectors.queryAll(selector)) : result;
 	`);
 
@@ -900,31 +892,6 @@ export function patchFrames(project: Project) {
 		} else {
 
 			promise = this._retryWithProgressIfNotConnected(progress, selector, { ...options, performActionPreChecks: false }, async (progress, handle) => {
-				if (!handle.parentNode) {
-					if (options?.mainWorld) {
-						const mainContext = await handle._frame.mainContext();
-						const adoptedHandle = await this._page.delegate.adoptElementHandle(handle, mainContext);
-						try {
-							return await mainContext.evaluate(([injected, node, { callbackText: callbackText2, taskData: taskData2 }]) => {
-								const callback = injected.eval(callbackText2);
-								return callback(injected, node, taskData2);
-							}, [
-								await mainContext.injectedScript(),
-								adoptedHandle,
-								{ callbackText, taskData },
-							]);
-						} finally {
-							adoptedHandle.dispose();
-						}
-					}
-					return await handle.evaluateInUtility(([injected, node, { callbackText: callbackText2, taskData: taskData2 }]) => {
-						const callback = injected.eval(callbackText2);
-						return callback(injected, node, taskData2);
-					}, {
-						callbackText,
-						taskData
-					});
-				}
 				if (handle.parentNode instanceof dom.ElementHandle) {
 					if (options?.mainWorld) {
 						const mainContext = await handle._frame.mainContext();
