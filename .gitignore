@@ -161,8 +161,12 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 .DS_Store
+.vscode/
 
 # Node.js
 node_modules/
 package-lock.json
 playwright/
+
+# MCP
+.playwright-mcp/

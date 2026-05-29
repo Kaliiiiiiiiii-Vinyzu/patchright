@@ -19,8 +19,7 @@ export function patchFrameSelectors(project: Project) {
 	});
 	frameSelectorsSourceFile.addImportDeclaration({
 		moduleSpecifier: "./progress",
-		namedImports: ["Progress"],
-		isTypeOnly: true,
+		namedImports: ["Progress", "nullProgress"],
 	});
 	frameSelectorsSourceFile.addImportDeclaration({
 		moduleSpecifier: "./chromium/protocol",
@@ -83,7 +82,7 @@ export function patchFrameSelectors(project: Project) {
 					contextId: mainContext.delegate._contextId
 				});
 				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-					var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
+				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
 				if (check.length === 0) return null;
 				element = check[0];
 			}
@@ -107,27 +106,27 @@ export function patchFrameSelectors(project: Project) {
 		);
 	}
 
-		// -- resolveInjectedForSelector Method --
-		const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
-		// Find the statement where 'injected' is assigned from 'context.injectedScript' and add a null check
-		const contextStatement = assertDefined(resolveInjectedForSelectorMethod
-			.getStatements()
-			.find(stmt => {
-				const varStmt = stmt.asKind(SyntaxKind.VariableStatement);
-				if (!varStmt)
-					return false;
-				const decl = assertDefined(varStmt.getDeclarations()[0]);
-				const callExpr = decl
-					.getInitializerIfKind(SyntaxKind.AwaitExpression)
-					?.getExpressionIfKind(SyntaxKind.CallExpression);
-				if (!callExpr)
-					return false;
+	// -- resolveInjectedForSelector Method --
+	const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
+	// Find the statement where 'injected' is assigned from 'context.injectedScript' and add a null check
+	const contextStatement = assertDefined(resolveInjectedForSelectorMethod
+		.getStatements()
+		.find(stmt => {
+			const varStmt = stmt.asKind(SyntaxKind.VariableStatement);
+			if (!varStmt)
+				return false;
+			const decl = assertDefined(varStmt.getDeclarations()[0]);
+			const callExpr = decl
+				.getInitializerIfKind(SyntaxKind.AwaitExpression)
+				?.getExpressionIfKind(SyntaxKind.CallExpression);
+			if (!callExpr)
+				return false;
 
-				const expressionText = callExpr.getExpression().getText();
-				return decl.getName() === "context" && (expressionText.includes("._context") || expressionText.includes(".context"));
-			}));
-		if (!resolveInjectedForSelectorMethod.getText().includes('if (!context) throw new Error("Frame was detached");'))
-			resolveInjectedForSelectorMethod.insertStatements(contextStatement.getChildIndex() + 1, `if (!context) throw new Error("Frame was detached");`);
+			const expressionText = callExpr.getExpression().getText();
+			return decl.getName() === "context" && (expressionText.includes("._context") || expressionText.includes(".context"));
+		}));
+	if (!resolveInjectedForSelectorMethod.getText().includes('if (!context) throw new Error("Frame was detached");'))
+		resolveInjectedForSelectorMethod.insertStatements(contextStatement.getChildIndex() + 1, `if (!context) throw new Error("Frame was detached");`);
 
 
 	// -- _customFindFramesByParsed Method -- progress
@@ -148,6 +147,7 @@ export function patchFrameSelectors(project: Project) {
 	customFindFramesByParsedSelectorsMethod.setBodyText(`
 		var parsedEdits = { ...parsed };
 		const callId = progress?.metadata.id;
+		progress = progress || nullProgress;
 		// Note: We start scoping at document level
 		var currentScopingElements = [documentScope];
 
@@ -215,7 +215,7 @@ export function patchFrameSelectors(project: Project) {
 					// Elements Queryed in the "current round"
 					const queryGroups: { handles: any; parentNode: any }[] = [];
 					for (var shadowRoot of shadowRoots) {
-						const shadowHandles = await shadowRoot.evaluateHandleInUtility(
+						const shadowHandles = await (shadowRoot as any)._evaluateHandleInUtility(
 							([injected, node, { parsed, callId }]) => {
 							 	const elements = injected.querySelectorAll(parsed, node);
 								if (callId)
@@ -230,7 +230,7 @@ export function patchFrameSelectors(project: Project) {
 					}
 
 					// Document Root Elements (not in CSR)
-					const rootHandles = await scope.evaluateHandleInUtility(
+					const rootHandles = await (scope as any)._evaluateHandleInUtility(
 						([injected, node, { parsed, callId }]) => {
 						 	const elements = injected.querySelectorAll(parsed, node);
 							if (callId)
@@ -245,11 +245,11 @@ export function patchFrameSelectors(project: Project) {
 
 					// Querying and Sorting the elements by their backendNodeId
 					for (const { handles, parentNode } of queryGroups) {
-						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
+						const handlesAmount = await (await handles.getProperty(progress, "length")).jsonValue(progress);
 						for (var i = 0; i < handlesAmount; i++) {
 							let element;
 						  if (parentNode instanceof ElementHandle) {
-								element = await parentNode.evaluateHandleInUtility(
+								element = await (parentNode as any)._evaluateHandleInUtility(
 									([injected, node, { i, handles: elems }]) => elems[i],
 									{ i, handles }
 								);

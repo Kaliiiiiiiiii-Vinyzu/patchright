@@ -22,7 +22,7 @@ export function patchJavascript(project: Project) {
 		hasQuestionToken: true,
 	});
 	jsHandleEvaluateExpressionMethod.replaceWithText(
-		jsHandleEvaluateExpressionMethod.getText().replace(/this\._context/g, "context")
+		jsHandleEvaluateExpressionMethod.getText().replace(/this\.internalEvaluateExpression\(expression, options, arg\)/g, "evaluateExpression(context, expression, { ...options, returnByValue: true }, this, arg)")
 	);
 	// Initialize context with frame-specific context if needed
 	jsHandleEvaluateExpressionMethod.insertStatements(0, `
@@ -36,8 +36,6 @@ export function patchJavascript(project: Project) {
 					context = await frame.mainContext();
 			}
 		}
-		if (context !== this._context && context.adoptIfNeeded(this) === null)
-			context = this._context;
 	`);
 
 	// -- evaluateExpressionHandle Method --
@@ -48,7 +46,7 @@ export function patchJavascript(project: Project) {
 		hasQuestionToken: true,
 	});
 	jsHandleEvaluateExpressionHandleMethod.replaceWithText(
-			jsHandleEvaluateExpressionHandleMethod.getText().replace(/this\._context/g, "context")
+			jsHandleEvaluateExpressionHandleMethod.getText().replace(/this\._evaluateExpressionHandle\(expression, options, arg\)/g, "evaluateExpression(context, expression, { ...options, returnByValue: false }, this, arg)")
 	);
 	// Initialize context with frame-specific context if needed
 	jsHandleEvaluateExpressionHandleMethod.insertStatements(0, `
@@ -62,7 +60,5 @@ export function patchJavascript(project: Project) {
 					context = await frame.mainContext();
 			}
 		}
-		if (context !== this._context && context.adoptIfNeeded(this) === null)
-			context = this._context;
 	`);
 }
