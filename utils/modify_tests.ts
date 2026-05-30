@@ -368,7 +368,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should work when owner frame detaches', 'Patchright action retry checkpoints differ when a locator handler detaches the owner frame.'],
 	]),
 	'tests/page/page-dispatchevent.spec.ts': new Map([
-		['should dispatch drag drop events', 'Patchright dispatchEvent cross-context adoption can hang for drag payload handles.'],
 		['should throw if argument is from different frame', 'Patchright dispatchEvent cross-context adoption can hang for foreign-frame handles.'],
 	]),
 	'tests/page/page-wait-for-selector-1.spec.ts': new Map([
