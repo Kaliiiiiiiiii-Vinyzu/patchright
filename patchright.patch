@@ -1613,7 +1613,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -735,12 +828,22 @@
+@@ -735,12 +828,24 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -1622,10 +1622,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    				expression: "globalThis",
 +    				serializationOptions: { serialization: "idOnly" }
 +    			});
-+    			if (globalThis && globalThis.result) {
++    			if (globalThis && globalThis.result && globalThis.result.objectId) {
 +    				var globalThisObjId = globalThis.result.objectId;
 +    				var executionContextId = parseInt(globalThisObjId.split('.')[1], 10);
-+    				worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				if (!isNaN(executionContextId)) {
++    					worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				}
 +    			}
 +    		
      if (this._crPage._browserContext._browser.majorVersion() >= 143)
@@ -1637,20 +1639,34 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -819,8 +922,10 @@
+@@ -819,8 +924,24 @@
      const pageOrError = await this._crPage._page.waitForInitializedOrError();
      if (!(pageOrError instanceof Error)) {
        const context = this._contextIdToContext.get(event.executionContextId);
 -      if (context)
 -        await this._page.onBindingCalled(event.payload, context);
 +      
-+      		if (context) await this._page.onBindingCalled(event.payload, context);
-+      		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame().mainContext())) // This might be a bit sketchy but it works for now
++      		if (context) {
++      			await this._page.onBindingCalled(event.payload, context);
++      		} else {
++      			// Ensure execution contexts for all frames are resolved/created
++      			await Promise.all(this._page.frames().map(frame => frame.mainContext().catch(() => null)));
++      			const fallbackContext = this._contextIdToContext.get(event.executionContextId);
++      			if (fallbackContext) {
++      				await this._page.onBindingCalled(event.payload, fallbackContext);
++      			} else {
++      				// Last resort fallback
++      				const mainCtx = await this._page.mainFrame().mainContext().catch(() => null);
++      				if (mainCtx) {
++      					await this._page.onBindingCalled(event.payload, mainCtx);
++      				}
++      			}
++      		}
 +      	
      }
    }
  
-@@ -1014,20 +1119,27 @@
+@@ -1014,20 +1135,27 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -1689,7 +1705,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async exposePlaywrightBinding() {
-@@ -1132,12 +1244,53 @@
+@@ -1132,12 +1260,53 @@
    async _adoptBackendNodeId(backendNodeId: Protocol.DOM.BackendNodeId, to: dom.FrameExecutionContext): Promise<dom.ElementHandle> {
      const result = await this._client._sendMayFail('DOM.resolveNode', {
        backendNodeId,
@@ -1747,7 +1763,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/crServiceWorker.ts patchright/node_modules/playwright-core/src/server/chromium/crServiceWorker.ts
 ---
 +++
-@@ -63,13 +63,23 @@
+@@ -63,13 +63,25 @@
        const message = new ConsoleMessage(null, this, event.type, undefined, args, stackTraceToLocation(event.stackTrace), event.timestamp);
        this.browserContext.emit(BrowserContext.Events.Console, message);
      });
@@ -1763,10 +1779,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    			expression: "globalThis",
 +    			serializationOptions: { serialization: "idOnly" }
 +    		}).then(globalThis => {
-+    			if (globalThis && globalThis.result) {
++    			if (globalThis && globalThis.result && globalThis.result.objectId) {
 +    				var globalThisObjId = globalThis.result.objectId;
 +    				var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
-+    				this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				if (!isNaN(executionContextId)) {
++    					this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				}
 +    			}
 +    		});
 +    	
@@ -1958,7 +1976,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -
 +import { ElementHandle } from "./dom";
 +import type { CRSession } from "./chromium/crConnection";
-+import type { Progress } from "./progress";
++import { Progress, nullProgress } from "./progress";
 +import type { Protocol } from "./chromium/protocol";
  
  export type SelectorInfo = {
@@ -1983,7 +2001,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const injectedScript = await context.injectedScript();
        const handle = await injectedScript.evaluateHandle((injected, { info, scope, selectorString }) => {
          const element = injected.querySelector(info.parsed, scope || document, info.strict);
-@@ -156,9 +159,26 @@
+@@ -156,9 +159,35 @@
            throw injected.createStacklessError(`Selector "${selectorString}" resolved to ${injected.previewNode(element)}, <iframe> was expected`);
          return element;
        }, { info, scope: i === 0 ? scope : undefined, selectorString: stringifySelector(info.parsed) });
@@ -1993,6 +2011,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +      let element = handle.asElement() as ElementHandle<Element> | null;
 +      
 +      			if (!element) {
++      				if ((options as any).state === "hidden" || (options as any).state === "detached")
++      					return null;
 +      				try {
 +      					var client = frame._page.delegate._sessionForFrame(frame)._client;
 +      				} catch (e) {
@@ -2005,15 +2025,22 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +      					contextId: mainContext.delegate._contextId
 +      				});
 +      				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-+      					var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
++      				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
 +      				if (check.length === 0) return null;
 +      				element = check[0];
 +      			}
++
++      			const isConnected = await element.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false);
++      			if (!isConnected) {
++      				element.dispose();
++      				return null;
++      			}
++      			
 +      		
        const maybeFrame = await frame._page.delegate.getContentFrame(element);
        element.dispose();
        if (!maybeFrame)
-@@ -178,10 +198,195 @@
+@@ -178,10 +207,197 @@
      // Be careful, |this.frame| can be different from |resolved.frame|.
      if (!resolved)
        return;
@@ -2028,6 +2055,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +    		var parsedEdits = { ...parsed };
 +    		const callId = progress?.metadata.id;
++    		progress = progress || nullProgress;
 +    		// Note: We start scoping at document level
 +    		var currentScopingElements = [documentScope];
 +
@@ -2095,7 +2123,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					// Elements Queryed in the "current round"
 +    					const queryGroups: { handles: any; parentNode: any }[] = [];
 +    					for (var shadowRoot of shadowRoots) {
-+    						const shadowHandles = await shadowRoot.evaluateHandleInUtility(
++    						const shadowHandles = await (shadowRoot as any)._evaluateHandleInUtility(
 +    							([injected, node, { parsed, callId }]) => {
 +    							 	const elements = injected.querySelectorAll(parsed, node);
 +    								if (callId)
@@ -2110,7 +2138,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					}
 +
 +    					// Document Root Elements (not in CSR)
-+    					const rootHandles = await scope.evaluateHandleInUtility(
++    					const rootHandles = await (scope as any)._evaluateHandleInUtility(
 +    						([injected, node, { parsed, callId }]) => {
 +    						 	const elements = injected.querySelectorAll(parsed, node);
 +    							if (callId)
@@ -2125,15 +2153,16 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +    					// Querying and Sorting the elements by their backendNodeId
 +    					for (const { handles, parentNode } of queryGroups) {
-+    						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
++    						const handlesAmount = await (await handles.getProperty(progress, "length")).jsonValue(progress);
 +    						for (var i = 0; i < handlesAmount; i++) {
++    							let element;
 +    						  if (parentNode instanceof ElementHandle) {
-+    								var element = await parentNode.evaluateHandleInUtility(
++    								element = await (parentNode as any)._evaluateHandleInUtility(
 +    									([injected, node, { i, handles: elems }]) => elems[i],
 +    									{ i, handles }
 +    								);
 +    							} else {
-+    								var element = await parentNode.evaluateHandle(
++    								element = await parentNode.evaluateHandle(
 +    									(injected, { i, handles: elems }) => elems[i],
 +    									{ i, handles }
 +    								);
@@ -2256,7 +2285,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _recalculateNetworkIdle(frameThatAllowsRemovingNetworkIdle?: Frame) {
-@@ -735,16 +745,77 @@
+@@ -735,16 +745,79 @@
      return await progress.race(this._page.delegate.getFrameElement(this));
    }
  
@@ -2297,12 +2326,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					expression: "globalThis",
 +    					serializationOptions: { serialization: "idOnly" },
 +    				});
-+    				if (!globalThis) {
++    				if (!globalThis || !globalThis?.result?.objectId) {
 +    					if (this._isDetached()) throw new Error('Frame was detached');
 +    					return;
 +    				}
 +    				const executionContextId = parseInt(globalThis.result.objectId.split('.')[1], 10);
-+    				this._mainWorld = registerContext(executionContextId, world);
++    				if (!isNaN(executionContextId)) {
++    					this._mainWorld = registerContext(executionContextId, world);
++    				}
 +    			}
 +    		}
 +
@@ -2340,7 +2371,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _existingMainContext(): dom.FrameExecutionContext | null {
-@@ -752,107 +823,173 @@
+@@ -752,107 +825,189 @@
    }
  
    utilityContext(): Promise<dom.FrameExecutionContext> {
@@ -2475,7 +2506,11 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					return null;
 +    				return continuePolling;
 +    			}
-+    			const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
++    			if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
++    				return null;
++    			let result;
++    			try {
++    				result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
 +    				if (root && !root.isConnected) {
 +    					if (state === 'hidden' || state === 'detached')
 +    						return { log: '', element: undefined, visible: false, attached: false };
@@ -2494,7 +2529,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    				}
 +    				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 +    				return { log, element, visible, attached: !!element };
-+    			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
++    				}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
++    			} catch (e) {
++    				if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
++    					return null;
++    				throw e;
++    			}
 +    			const { log, visible, attached } = await progress.race(result.evaluate(r => ({ log: r.log, visible: r.visible, attached: r.attached })));
 +    			if (log)
 +    				progress.log(log);
@@ -2557,6 +2597,13 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    		const callback = (injectedScript, element, data) => {
 +    			injectedScript.dispatchEvent(element, data.type, data.eventInit);
 +    		};
++    		if (eventInitHandles.length > 0 && selector !== ":scope") {
++    			dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, { strict: options.strict, performActionPreChecks: false }, async (progress, handle) => {
++    				await handle.dispatchEvent(progress, type, eventInit);
++    				return 'done' as const;
++    			}));
++    			return;
++    		}
 +    		if (eventInitHandles.length === 0) {
 +    			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 +    			return;
@@ -2586,7 +2633,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private async _evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -864,8 +1001,23 @@
+@@ -864,8 +1019,23 @@
      return result;
    }
  
@@ -2612,17 +2659,25 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private async _evalOnSelectorAll(selector: string, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -884,17 +1036,26 @@
+@@ -884,17 +1054,34 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
 -    return progress.race(this.selectors.queryAll(selector));
 +
 +    		const continuePolling = Symbol("continuePolling");
-+    		const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
-+    			if (!result || !result[0]) return [];
-+    			return Array.isArray(result[1]) ? result[1] : [];
-+    		}, 'returnAll', continuePolling);
++    		let result;
++    		try {
++    			result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
++    				if (!result || !result[0]) return [];
++    				return Array.isArray(result[1]) ? result[1] : [];
++    			}, 'returnAll', continuePolling);
++    		} catch (e: any) {
++    			if ((e instanceof ReferenceError || e?.name === 'ReferenceError' || e?.message?.includes("element is not defined")) && e.message.includes("element is not defined"))
++    				result = continuePolling;
++    			else
++    				throw e;
++    		}
 +    		return result === continuePolling ? await progress.race(this.selectors.queryAll(selector)) : result;
 +    	
    }
@@ -2647,7 +2702,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async content(progress: Progress): Promise<string> {
-@@ -920,31 +1081,23 @@
+@@ -920,31 +1107,23 @@
    }
  
    async setContent(progress: Progress, html: string, options: types.NavigateOptions): Promise<void> {
@@ -2696,7 +2751,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    name(): string {
-@@ -1158,60 +1311,69 @@
+@@ -1158,60 +1337,68 @@
      progress: Progress,
      selector: string,
      options: { strict?: boolean, noAutoWaiting?: boolean, force?: boolean, performActionPreChecks?: boolean },
@@ -2755,71 +2810,70 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -        element?.dispose();
 -      }
 -    });
-+    			if (!(options as any)?.__patchrightSkipRetryLogWaiting)
-+    				progress.log("waiting for " + this._asLocator(selector));
-+    			if (returnAction === undefined) {
-+    				const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
-+    				const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
-+    				return this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-+    					if (performActionPreChecks)
-+    						await this._page.performActionPreChecks(progress);
++    			progress.log(`waiting for ${this._asLocator(selector)}`);
++    			const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
++    			const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
++    			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (progress, continuePolling) => {
++    				if (performActionPreChecks)
++    					await this._page.performActionPreChecks(progress);
 +
-+    					const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
-+    					if (!resolved) {
-+    						if (noAutoWaiting)
-+    							throw new dom.NonRecoverableDOMError('Element(s) not found');
-+    						return continuePolling;
++    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
++    				if (!resolved) {
++    					if (noAutoWaiting)
++    						throw new dom.NonRecoverableDOMError('Element(s) not found');
++    					return continuePolling;
++    				}
++    				const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
++    					const elements = injected.querySelectorAll(info.parsed, document);
++    					if (callId)
++    						injected.markTargetElements(new Set(elements), callId);
++    					const element = elements[0] as Element | undefined;
++    					let log = '';
++    					if (elements.length > 1) {
++    						if (info.strict)
++    							throw injected.strictModeViolationError(info.parsed, elements);
++    						log = `  locator resolved to ${elements.length} elements. Proceeding with the first one: ${injected.previewNode(elements[0])}`;
++    					} else if (element) {
++    						log = `  locator resolved to ${injected.previewNode(element)}`;
 +    					}
-+    					const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
-+    						const elements = injected.querySelectorAll(info.parsed, document);
-+    						if (callId)
-+    							injected.markTargetElements(new Set(elements), callId);
-+    						const element = elements[0];
-+    						let log = '';
-+    						if (elements.length > 1) {
-+    							if (info.strict)
-+    								throw injected.strictModeViolationError(info.parsed, elements);
-+    							log = "  locator resolved to " + elements.length + " elements. Proceeding with the first one: " + injected.previewNode(elements[0]);
-+    						} else if (element) {
-+    							log = "  locator resolved to " + injected.previewNode(element);
-+    						}
-+    						injected.checkDeprecatedSelectorUsage(info.parsed, elements);
-+    						return { log, success: !!element, element };
-+    					}, { info: resolved.info, callId: progress.metadata.id }));
-+    					const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
-+    					if (log)
-+    						progress.log(log);
-+    					if (!success) {
-+    						if (noAutoWaiting)
-+    							throw new dom.NonRecoverableDOMError('Element(s) not found');
-+    						result.dispose();
-+    						return continuePolling;
-+    					}
-+    					const element = await progress.race(result.evaluateHandle(r => r.element));
++    					injected.checkDeprecatedSelectorUsage(info.parsed, elements);
++    					return { log, success: !!element, element };
++    				}, { info: resolved.info, callId: progress.metadata.id }));
++    				const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
++    				if (log)
++    					progress.log(log);
++    				if (!success) {
 +    					result.dispose();
-+    					try {
-+    						const result = await (action.length >= 2 ? action(progress, element) : (action as any)(element));
-+    						if (result === 'error:notconnected') {
-+    							if (noAutoWaiting)
-+    								throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
-+    							progress.log('element was detached from the DOM, retrying');
-+    							return continuePolling;
-+    						}
-+    						return result;
-+    					} finally {
-+    						element?.dispose();
++    					// Fallback to custom _retryWithoutProgress
++    					const actionWithProgress = async (res) => action.length >= 2 ? action(progress, res as any) : (action as any)(res);
++    					const retryRes = await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false } as any, actionWithProgress as any, returnAction, continuePolling);
++    					if (retryRes !== continuePolling)
++    						return retryRes;
++
++    					if (noAutoWaiting)
++    						throw new dom.NonRecoverableDOMError('Element(s) not found');
++    					return continuePolling;
++    				}
++    				const element = await progress.race(result.evaluateHandle(r => r.element)) as dom.ElementHandle<Element>;
++    				result.dispose();
++    				try {
++    					const result = await action(progress, element);
++    					if (result === 'error:notconnected') {
++    						if (noAutoWaiting)
++    							throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
++    						progress.log('element was detached from the DOM, retrying');
++    						return continuePolling;
 +    					}
-+    				});
-+    			}
-+    			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (_progress, continuePolling) => {
-+    				const actionWithProgress = async (result) => action.length >= 2 ? action(progress, result as any) : (action as any)(result);
-+    				return this._retryWithoutProgress(progress, selector, options as any, actionWithProgress as any, returnAction, continuePolling);
++    					return result;
++    				} finally {
++    					element?.dispose();
++    				}
 +    			});
 +    		
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1373,20 +1535,21 @@
+@@ -1373,20 +1560,21 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -2855,7 +2909,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1515,46 +1678,48 @@
+@@ -1515,46 +1703,48 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: ExpectReceived, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -2941,7 +2995,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1613,7 +1778,7 @@
+@@ -1613,7 +1803,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -2950,7 +3004,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1838,162 @@
+@@ -1673,42 +1863,185 @@
    }
  
    _onDetached() {
@@ -3022,6 +3076,29 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    			return Object.values(value).some(eventInitContainsHandle);
 +    		};
 +    		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
++    			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
++    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
++    				if (!resolved)
++    					return continuePolling;
++    				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
++    					const callback = injected.eval(callbackText);
++    					const element = injected.querySelector(info.parsed, root || document, info.strict);
++    					if (!element)
++    						return { success: false };
++    					const log = "  locator resolved to " + injected.previewNode(element);
++    					if (callId)
++    						injected.markTargetElements(new Set([element]), callId);
++    					return { log, success: true, value: callback(injected, element, taskData) };
++    				}, { info: resolved.info, callbackText, taskData, callId: progress.metadata.id, root: resolved.frame === this ? scope : undefined }));
++    				if (log)
++    					progress.log(log);
++    				if (!success)
++    					return continuePolling;
++    				return value;
++    			});
++    			return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
++    		}
++    		if (options?.mainWorld && eventInitContainsHandle(eventInit)) {
 +    			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 +    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 +    				if (!resolved)
@@ -3146,7 +3223,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2050,7 @@
+@@ -1765,7 +2098,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -3155,7 +3232,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2089,325 @@
+@@ -1804,6 +2137,328 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -3179,7 +3256,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    		  if (!resolvedNode?.object?.objectId)
 +    		    return 0;
 +
-+    		  return parseInt(resolvedNode.object.objectId.split(".")[1], 10);
++    		  const executionContextId = parseInt(resolvedNode.object.objectId.split(".")[1], 10);
++    		  return isNaN(executionContextId) ? 0 : executionContextId;
 +    		} catch (e) {}
 +    		return 0;
 +    	
@@ -3334,6 +3412,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +  async _customFindElementsByParsed(resolved: { injected: js.JSHandle<InjectedScript>, info: { parsed: ParsedSelector, strict: boolean }, frame: Frame, scope?: dom.ElementHandle }, client: CRSession, context: dom.FrameExecutionContext, documentScope: dom.ElementHandle, progress: Progress, parsed: ParsedSelector) {
 +
 +    		var parsedEdits = { ...parsed };
++    		progress = progress || nullProgress;
 +    		// Note: We start scoping at document level
 +    		var currentScopingElements = [documentScope];
 +
@@ -3401,7 +3480,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					// Elements Queryed in the "current round"
 +    					const queryGroups: { handles: any; parentNode: any }[] = [];
 +    					for (var shadowRoot of shadowRoots) {
-+    						const shadowHandles = await shadowRoot.evaluateHandleInUtility(
++    						const shadowHandles = await (shadowRoot as any)._evaluateHandleInUtility(
 +    							([injected, node, { parsed, callId }]) => {
 +    							 	const elements = injected.querySelectorAll(parsed, node);
 +    								if (callId)
@@ -3416,7 +3495,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					}
 +
 +    					// Document Root Elements (not in CSR)
-+    					const rootHandles = await scope.evaluateHandleInUtility(
++    					const rootHandles = await (scope as any)._evaluateHandleInUtility(
 +    						([injected, node, { parsed, callId }]) => {
 +    						 	const elements = injected.querySelectorAll(parsed, node);
 +    							if (callId)
@@ -3431,15 +3510,16 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +    					// Querying and Sorting the elements by their backendNodeId
 +    					for (const { handles, parentNode } of queryGroups) {
-+    						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
++    						const handlesAmount = await (await handles.getProperty(progress, "length")).jsonValue(progress);
 +    						for (var i = 0; i < handlesAmount; i++) {
++    							let element;
 +    						  if (parentNode instanceof dom.ElementHandle) {
-+    								var element = await parentNode.evaluateHandleInUtility(
++    								element = await (parentNode as any)._evaluateHandleInUtility(
 +    									([injected, node, { i, handles: elems }]) => elems[i],
 +    									{ i, handles }
 +    								);
 +    							} else {
-+    								var element = await parentNode.evaluateHandle(
++    								element = await parentNode.evaluateHandle(
 +    									(injected, { i, handles: elems }) => elems[i],
 +    									{ i, handles }
 +    								);
@@ -3492,7 +3572,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
  interface TaggedAsJSHandle<T> {
    __jshandle: T;
-@@ -139,13 +140,41 @@
+@@ -139,13 +140,37 @@
        (globalThis as any).leakedJSHandles.set(this, new Error('Leaked JSHandle'));
    }
  
@@ -3514,10 +3594,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					context = await frame.mainContext();
 +    			}
 +    		}
-+    		if (context !== this._context && context.adoptIfNeeded(this) === null)
-+    			context = this._context;
 +    	
-+      return await progress.race(this.internalEvaluateExpression(expression, options, arg));
++      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: true }, this, arg));
 +    }
 +
 +  async evaluateExpressionHandle(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any, isolatedContext?: boolean): Promise<JSHandle<any>> {
@@ -3532,10 +3610,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    					context = await frame.mainContext();
 +    			}
 +    		}
-+    		if (context !== this._context && context.adoptIfNeeded(this) === null)
-+    			context = this._context;
 +    	
-+      return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
++      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: false }, this, arg));
 +    }
  
    async getProperty(progress: Progress, propertyName: string): Promise<JSHandle> {
@@ -3556,6 +3632,15 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/page.ts patchright/node_modules/playwright-core/src/server/page.ts
 ---
 +++
+@@ -15,7 +15,7 @@
+  * limitations under the License.
+  */
+ 
+-import { isInvalidSelectorError, stringifySelector } from '@isomorphic/selectorParser';
++import { isInvalidSelectorError, stringifySelector, splitSelectorByFrame } from '@isomorphic/selectorParser';
+ import { ManualPromise } from '@isomorphic/manualPromise';
+ import { parseEvaluationResultValue } from '@isomorphic/utilityScriptSerializers';
+ import { getComparator } from '@utils/comparators';
 @@ -54,6 +54,8 @@
  import type * as channels from '@protocol/channels';
  import type { BindingPayload } from '@injected/bindingsController';
@@ -3597,7 +3682,21 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async removeExposedBinding(binding: PageBinding) {
-@@ -897,13 +894,6 @@
+@@ -571,7 +568,12 @@
+         const promise = handler.resolved.then(async () => {
+           if (!handler.noWaitAfter) {
+             progress.log(`  locator handler has finished, waiting for ${asLocator(this.browserContext._browser.sdkLanguage(), handler.selector)} to be hidden`);
+-            await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });
++            
++            			const frameChunks = splitSelectorByFrame(handler.selector);
++            			if (frameChunks.length > 1 && !await this.mainFrame().isVisibleInternal(progress, stringifySelector(frameChunks[0]), { strict: true }))
++            				return;
++            			await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });
++            		
+           } else {
+             progress.log(`  locator handler has finished`);
+           }
+@@ -897,13 +899,6 @@
      }
    }
  
@@ -3611,7 +3710,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    getBinding(name: string) {
      return this._pageBindings.get(name) || this.browserContext._pageBindings.get(name);
    }
-@@ -926,6 +916,12 @@
+@@ -926,6 +921,12 @@
    async setDockTile(image: Buffer) {
      await this.delegate.setDockTile(image);
    }
@@ -3624,7 +3723,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  export const WorkerEvent = {
-@@ -984,13 +980,33 @@
+@@ -984,13 +985,33 @@
      this.openScope.close(new Error('Worker closed'));
    }
  
@@ -3664,7 +3763,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
    async disconnect(progress: Progress, options: { reason?: string } = {}) {
      if (!this._onDisconnect)
-@@ -1000,66 +1016,90 @@
+@@ -1000,66 +1021,90 @@
    }
  }
  
@@ -6382,7 +6481,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -735,12 +828,22 @@
+@@ -735,12 +828,24 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -6391,10 +6490,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    				expression: "globalThis",
 +    				serializationOptions: { serialization: "idOnly" }
 +    			});
-+    			if (globalThis && globalThis.result) {
++    			if (globalThis && globalThis.result && globalThis.result.objectId) {
 +    				var globalThisObjId = globalThis.result.objectId;
 +    				var executionContextId = parseInt(globalThisObjId.split('.')[1], 10);
-+    				worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				if (!isNaN(executionContextId)) {
++    					worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				}
 +    			}
 +    		
      if (this._crPage._browserContext._browser.majorVersion() >= 143)
@@ -6406,20 +6507,34 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // TODO: attribute workers to the right frame.
      this._crPage._networkManager.addSession(session, this._page.frameManager.frame(this._targetId) ?? undefined).catch(() => {});
      session._sendMayFail('Runtime.runIfWaitingForDebugger');
-@@ -819,8 +922,10 @@
+@@ -819,8 +924,24 @@
      const pageOrError = await this._crPage._page.waitForInitializedOrError();
      if (!(pageOrError instanceof Error)) {
        const context = this._contextIdToContext.get(event.executionContextId);
 -      if (context)
 -        await this._page.onBindingCalled(event.payload, context);
 +      
-+      		if (context) await this._page.onBindingCalled(event.payload, context);
-+      		else await this._page._onBindingCalled(event.payload, (await this._page.mainFrame().mainContext())) // This might be a bit sketchy but it works for now
++      		if (context) {
++      			await this._page.onBindingCalled(event.payload, context);
++      		} else {
++      			// Ensure execution contexts for all frames are resolved/created
++      			await Promise.all(this._page.frames().map(frame => frame.mainContext().catch(() => null)));
++      			const fallbackContext = this._contextIdToContext.get(event.executionContextId);
++      			if (fallbackContext) {
++      				await this._page.onBindingCalled(event.payload, fallbackContext);
++      			} else {
++      				// Last resort fallback
++      				const mainCtx = await this._page.mainFrame().mainContext().catch(() => null);
++      				if (mainCtx) {
++      					await this._page.onBindingCalled(event.payload, mainCtx);
++      				}
++      			}
++      		}
 +      	
      }
    }
  
-@@ -1014,20 +1119,27 @@
+@@ -1014,20 +1135,27 @@
    }
  
    async _evaluateOnNewDocument(initScript: InitScript, world: types.World, runImmediately?: boolean): Promise<void> {
@@ -6458,7 +6573,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async exposePlaywrightBinding() {
-@@ -1132,12 +1244,53 @@
+@@ -1132,12 +1260,53 @@
    async _adoptBackendNodeId(backendNodeId: Protocol.DOM.BackendNodeId, to: dom.FrameExecutionContext): Promise<dom.ElementHandle> {
      const result = await this._client._sendMayFail('DOM.resolveNode', {
        backendNodeId,
@@ -6516,7 +6631,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/crServiceWorker.ts patchright/packages/playwright-core/src/server/chromium/crServiceWorker.ts
 ---
 +++
-@@ -63,13 +63,23 @@
+@@ -63,13 +63,25 @@
        const message = new ConsoleMessage(null, this, event.type, undefined, args, stackTraceToLocation(event.stackTrace), event.timestamp);
        this.browserContext.emit(BrowserContext.Events.Console, message);
      });
@@ -6532,10 +6647,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    			expression: "globalThis",
 +    			serializationOptions: { serialization: "idOnly" }
 +    		}).then(globalThis => {
-+    			if (globalThis && globalThis.result) {
++    			if (globalThis && globalThis.result && globalThis.result.objectId) {
 +    				var globalThisObjId = globalThis.result.objectId;
 +    				var executionContextId = parseInt(globalThisObjId.split(".")[1], 10);
-+    				this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				if (!isNaN(executionContextId)) {
++    					this.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
++    				}
 +    			}
 +    		});
 +    	
@@ -6727,7 +6844,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -
 +import { ElementHandle } from "./dom";
 +import type { CRSession } from "./chromium/crConnection";
-+import type { Progress } from "./progress";
++import { Progress, nullProgress } from "./progress";
 +import type { Protocol } from "./chromium/protocol";
  
  export type SelectorInfo = {
@@ -6752,7 +6869,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const injectedScript = await context.injectedScript();
        const handle = await injectedScript.evaluateHandle((injected, { info, scope, selectorString }) => {
          const element = injected.querySelector(info.parsed, scope || document, info.strict);
-@@ -156,9 +159,26 @@
+@@ -156,9 +159,35 @@
            throw injected.createStacklessError(`Selector "${selectorString}" resolved to ${injected.previewNode(element)}, <iframe> was expected`);
          return element;
        }, { info, scope: i === 0 ? scope : undefined, selectorString: stringifySelector(info.parsed) });
@@ -6762,6 +6879,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +      let element = handle.asElement() as ElementHandle<Element> | null;
 +      
 +      			if (!element) {
++      				if ((options as any).state === "hidden" || (options as any).state === "detached")
++      					return null;
 +      				try {
 +      					var client = frame._page.delegate._sessionForFrame(frame)._client;
 +      				} catch (e) {
@@ -6774,15 +6893,22 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +      					contextId: mainContext.delegate._contextId
 +      				});
 +      				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-+      					var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
++      				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
 +      				if (check.length === 0) return null;
 +      				element = check[0];
 +      			}
++
++      			const isConnected = await element.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false);
++      			if (!isConnected) {
++      				element.dispose();
++      				return null;
++      			}
++      			
 +      		
        const maybeFrame = await frame._page.delegate.getContentFrame(element);
        element.dispose();
        if (!maybeFrame)
-@@ -178,10 +198,195 @@
+@@ -178,10 +207,197 @@
      // Be careful, |this.frame| can be different from |resolved.frame|.
      if (!resolved)
        return;
@@ -6797,6 +6923,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +
 +    		var parsedEdits = { ...parsed };
 +    		const callId = progress?.metadata.id;
++    		progress = progress || nullProgress;
 +    		// Note: We start scoping at document level
 +    		var currentScopingElements = [documentScope];
 +
@@ -6864,7 +6991,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					// Elements Queryed in the "current round"
 +    					const queryGroups: { handles: any; parentNode: any }[] = [];
 +    					for (var shadowRoot of shadowRoots) {
-+    						const shadowHandles = await shadowRoot.evaluateHandleInUtility(
++    						const shadowHandles = await (shadowRoot as any)._evaluateHandleInUtility(
 +    							([injected, node, { parsed, callId }]) => {
 +    							 	const elements = injected.querySelectorAll(parsed, node);
 +    								if (callId)
@@ -6879,7 +7006,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					}
 +
 +    					// Document Root Elements (not in CSR)
-+    					const rootHandles = await scope.evaluateHandleInUtility(
++    					const rootHandles = await (scope as any)._evaluateHandleInUtility(
 +    						([injected, node, { parsed, callId }]) => {
 +    						 	const elements = injected.querySelectorAll(parsed, node);
 +    							if (callId)
@@ -6894,15 +7021,16 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +
 +    					// Querying and Sorting the elements by their backendNodeId
 +    					for (const { handles, parentNode } of queryGroups) {
-+    						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
++    						const handlesAmount = await (await handles.getProperty(progress, "length")).jsonValue(progress);
 +    						for (var i = 0; i < handlesAmount; i++) {
++    							let element;
 +    						  if (parentNode instanceof ElementHandle) {
-+    								var element = await parentNode.evaluateHandleInUtility(
++    								element = await (parentNode as any)._evaluateHandleInUtility(
 +    									([injected, node, { i, handles: elems }]) => elems[i],
 +    									{ i, handles }
 +    								);
 +    							} else {
-+    								var element = await parentNode.evaluateHandle(
++    								element = await parentNode.evaluateHandle(
 +    									(injected, { i, handles: elems }) => elems[i],
 +    									{ i, handles }
 +    								);
@@ -7025,7 +7153,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _recalculateNetworkIdle(frameThatAllowsRemovingNetworkIdle?: Frame) {
-@@ -735,16 +745,77 @@
+@@ -735,16 +745,79 @@
      return await progress.race(this._page.delegate.getFrameElement(this));
    }
  
@@ -7066,12 +7194,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					expression: "globalThis",
 +    					serializationOptions: { serialization: "idOnly" },
 +    				});
-+    				if (!globalThis) {
++    				if (!globalThis || !globalThis?.result?.objectId) {
 +    					if (this._isDetached()) throw new Error('Frame was detached');
 +    					return;
 +    				}
 +    				const executionContextId = parseInt(globalThis.result.objectId.split('.')[1], 10);
-+    				this._mainWorld = registerContext(executionContextId, world);
++    				if (!isNaN(executionContextId)) {
++    					this._mainWorld = registerContext(executionContextId, world);
++    				}
 +    			}
 +    		}
 +
@@ -7109,7 +7239,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _existingMainContext(): dom.FrameExecutionContext | null {
-@@ -752,107 +823,173 @@
+@@ -752,107 +825,189 @@
    }
  
    utilityContext(): Promise<dom.FrameExecutionContext> {
@@ -7244,7 +7374,11 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					return null;
 +    				return continuePolling;
 +    			}
-+    			const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
++    			if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
++    				return null;
++    			let result;
++    			try {
++    				result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
 +    				if (root && !root.isConnected) {
 +    					if (state === 'hidden' || state === 'detached')
 +    						return { log: '', element: undefined, visible: false, attached: false };
@@ -7263,7 +7397,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    				}
 +    				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 +    				return { log, element, visible, attached: !!element };
-+    			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
++    				}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
++    			} catch (e) {
++    				if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
++    					return null;
++    				throw e;
++    			}
 +    			const { log, visible, attached } = await progress.race(result.evaluate(r => ({ log: r.log, visible: r.visible, attached: r.attached })));
 +    			if (log)
 +    				progress.log(log);
@@ -7326,6 +7465,13 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    		const callback = (injectedScript, element, data) => {
 +    			injectedScript.dispatchEvent(element, data.type, data.eventInit);
 +    		};
++    		if (eventInitHandles.length > 0 && selector !== ":scope") {
++    			dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, { strict: options.strict, performActionPreChecks: false }, async (progress, handle) => {
++    				await handle.dispatchEvent(progress, type, eventInit);
++    				return 'done' as const;
++    			}));
++    			return;
++    		}
 +    		if (eventInitHandles.length === 0) {
 +    			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 +    			return;
@@ -7355,7 +7501,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private async _evalOnSelector(selector: string, strict: boolean, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -864,8 +1001,23 @@
+@@ -864,8 +1019,23 @@
      return result;
    }
  
@@ -7381,17 +7527,25 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private async _evalOnSelectorAll(selector: string, expression: string, isFunction: boolean | undefined, arg: any, scope?: dom.ElementHandle): Promise<any> {
-@@ -884,17 +1036,26 @@
+@@ -884,17 +1054,34 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
 -    return progress.race(this.selectors.queryAll(selector));
 +
 +    		const continuePolling = Symbol("continuePolling");
-+    		const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
-+    			if (!result || !result[0]) return [];
-+    			return Array.isArray(result[1]) ? result[1] : [];
-+    		}, 'returnAll', continuePolling);
++    		let result;
++    		try {
++    			result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
++    				if (!result || !result[0]) return [];
++    				return Array.isArray(result[1]) ? result[1] : [];
++    			}, 'returnAll', continuePolling);
++    		} catch (e: any) {
++    			if ((e instanceof ReferenceError || e?.name === 'ReferenceError' || e?.message?.includes("element is not defined")) && e.message.includes("element is not defined"))
++    				result = continuePolling;
++    			else
++    				throw e;
++    		}
 +    		return result === continuePolling ? await progress.race(this.selectors.queryAll(selector)) : result;
 +    	
    }
@@ -7416,7 +7570,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async content(progress: Progress): Promise<string> {
-@@ -920,31 +1081,23 @@
+@@ -920,31 +1107,23 @@
    }
  
    async setContent(progress: Progress, html: string, options: types.NavigateOptions): Promise<void> {
@@ -7465,7 +7619,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    name(): string {
-@@ -1158,60 +1311,69 @@
+@@ -1158,60 +1337,68 @@
      progress: Progress,
      selector: string,
      options: { strict?: boolean, noAutoWaiting?: boolean, force?: boolean, performActionPreChecks?: boolean },
@@ -7524,71 +7678,70 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -        element?.dispose();
 -      }
 -    });
-+    			if (!(options as any)?.__patchrightSkipRetryLogWaiting)
-+    				progress.log("waiting for " + this._asLocator(selector));
-+    			if (returnAction === undefined) {
-+    				const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
-+    				const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
-+    				return this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-+    					if (performActionPreChecks)
-+    						await this._page.performActionPreChecks(progress);
++    			progress.log(`waiting for ${this._asLocator(selector)}`);
++    			const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
++    			const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
++    			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (progress, continuePolling) => {
++    				if (performActionPreChecks)
++    					await this._page.performActionPreChecks(progress);
 +
-+    					const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
-+    					if (!resolved) {
-+    						if (noAutoWaiting)
-+    							throw new dom.NonRecoverableDOMError('Element(s) not found');
-+    						return continuePolling;
++    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
++    				if (!resolved) {
++    					if (noAutoWaiting)
++    						throw new dom.NonRecoverableDOMError('Element(s) not found');
++    					return continuePolling;
++    				}
++    				const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
++    					const elements = injected.querySelectorAll(info.parsed, document);
++    					if (callId)
++    						injected.markTargetElements(new Set(elements), callId);
++    					const element = elements[0] as Element | undefined;
++    					let log = '';
++    					if (elements.length > 1) {
++    						if (info.strict)
++    							throw injected.strictModeViolationError(info.parsed, elements);
++    						log = `  locator resolved to ${elements.length} elements. Proceeding with the first one: ${injected.previewNode(elements[0])}`;
++    					} else if (element) {
++    						log = `  locator resolved to ${injected.previewNode(element)}`;
 +    					}
-+    					const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
-+    						const elements = injected.querySelectorAll(info.parsed, document);
-+    						if (callId)
-+    							injected.markTargetElements(new Set(elements), callId);
-+    						const element = elements[0];
-+    						let log = '';
-+    						if (elements.length > 1) {
-+    							if (info.strict)
-+    								throw injected.strictModeViolationError(info.parsed, elements);
-+    							log = "  locator resolved to " + elements.length + " elements. Proceeding with the first one: " + injected.previewNode(elements[0]);
-+    						} else if (element) {
-+    							log = "  locator resolved to " + injected.previewNode(element);
-+    						}
-+    						injected.checkDeprecatedSelectorUsage(info.parsed, elements);
-+    						return { log, success: !!element, element };
-+    					}, { info: resolved.info, callId: progress.metadata.id }));
-+    					const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
-+    					if (log)
-+    						progress.log(log);
-+    					if (!success) {
-+    						if (noAutoWaiting)
-+    							throw new dom.NonRecoverableDOMError('Element(s) not found');
-+    						result.dispose();
-+    						return continuePolling;
-+    					}
-+    					const element = await progress.race(result.evaluateHandle(r => r.element));
++    					injected.checkDeprecatedSelectorUsage(info.parsed, elements);
++    					return { log, success: !!element, element };
++    				}, { info: resolved.info, callId: progress.metadata.id }));
++    				const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
++    				if (log)
++    					progress.log(log);
++    				if (!success) {
 +    					result.dispose();
-+    					try {
-+    						const result = await (action.length >= 2 ? action(progress, element) : (action as any)(element));
-+    						if (result === 'error:notconnected') {
-+    							if (noAutoWaiting)
-+    								throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
-+    							progress.log('element was detached from the DOM, retrying');
-+    							return continuePolling;
-+    						}
-+    						return result;
-+    					} finally {
-+    						element?.dispose();
++    					// Fallback to custom _retryWithoutProgress
++    					const actionWithProgress = async (res) => action.length >= 2 ? action(progress, res as any) : (action as any)(res);
++    					const retryRes = await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false } as any, actionWithProgress as any, returnAction, continuePolling);
++    					if (retryRes !== continuePolling)
++    						return retryRes;
++
++    					if (noAutoWaiting)
++    						throw new dom.NonRecoverableDOMError('Element(s) not found');
++    					return continuePolling;
++    				}
++    				const element = await progress.race(result.evaluateHandle(r => r.element)) as dom.ElementHandle<Element>;
++    				result.dispose();
++    				try {
++    					const result = await action(progress, element);
++    					if (result === 'error:notconnected') {
++    						if (noAutoWaiting)
++    							throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
++    						progress.log('element was detached from the DOM, retrying');
++    						return continuePolling;
 +    					}
-+    				});
-+    			}
-+    			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (_progress, continuePolling) => {
-+    				const actionWithProgress = async (result) => action.length >= 2 ? action(progress, result as any) : (action as any)(result);
-+    				return this._retryWithoutProgress(progress, selector, options as any, actionWithProgress as any, returnAction, continuePolling);
++    					return result;
++    				} finally {
++    					element?.dispose();
++    				}
 +    			});
 +    		
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1373,20 +1535,21 @@
+@@ -1373,20 +1560,21 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -7624,7 +7777,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1515,46 +1678,48 @@
+@@ -1515,46 +1703,48 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: ExpectReceived, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -7710,7 +7863,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1613,7 +1778,7 @@
+@@ -1613,7 +1803,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -7719,7 +7872,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1838,162 @@
+@@ -1673,42 +1863,185 @@
    }
  
    _onDetached() {
@@ -7791,6 +7944,29 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    			return Object.values(value).some(eventInitContainsHandle);
 +    		};
 +    		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
++    			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
++    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
++    				if (!resolved)
++    					return continuePolling;
++    				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
++    					const callback = injected.eval(callbackText);
++    					const element = injected.querySelector(info.parsed, root || document, info.strict);
++    					if (!element)
++    						return { success: false };
++    					const log = "  locator resolved to " + injected.previewNode(element);
++    					if (callId)
++    						injected.markTargetElements(new Set([element]), callId);
++    					return { log, success: true, value: callback(injected, element, taskData) };
++    				}, { info: resolved.info, callbackText, taskData, callId: progress.metadata.id, root: resolved.frame === this ? scope : undefined }));
++    				if (log)
++    					progress.log(log);
++    				if (!success)
++    					return continuePolling;
++    				return value;
++    			});
++    			return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
++    		}
++    		if (options?.mainWorld && eventInitContainsHandle(eventInit)) {
 +    			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 +    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 +    				if (!resolved)
@@ -7915,7 +8091,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2050,7 @@
+@@ -1765,7 +2098,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -7924,7 +8100,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2089,325 @@
+@@ -1804,6 +2137,328 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -7948,7 +8124,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    		  if (!resolvedNode?.object?.objectId)
 +    		    return 0;
 +
-+    		  return parseInt(resolvedNode.object.objectId.split(".")[1], 10);
++    		  const executionContextId = parseInt(resolvedNode.object.objectId.split(".")[1], 10);
++    		  return isNaN(executionContextId) ? 0 : executionContextId;
 +    		} catch (e) {}
 +    		return 0;
 +    	
@@ -8103,6 +8280,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +  async _customFindElementsByParsed(resolved: { injected: js.JSHandle<InjectedScript>, info: { parsed: ParsedSelector, strict: boolean }, frame: Frame, scope?: dom.ElementHandle }, client: CRSession, context: dom.FrameExecutionContext, documentScope: dom.ElementHandle, progress: Progress, parsed: ParsedSelector) {
 +
 +    		var parsedEdits = { ...parsed };
++    		progress = progress || nullProgress;
 +    		// Note: We start scoping at document level
 +    		var currentScopingElements = [documentScope];
 +
@@ -8170,7 +8348,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					// Elements Queryed in the "current round"
 +    					const queryGroups: { handles: any; parentNode: any }[] = [];
 +    					for (var shadowRoot of shadowRoots) {
-+    						const shadowHandles = await shadowRoot.evaluateHandleInUtility(
++    						const shadowHandles = await (shadowRoot as any)._evaluateHandleInUtility(
 +    							([injected, node, { parsed, callId }]) => {
 +    							 	const elements = injected.querySelectorAll(parsed, node);
 +    								if (callId)
@@ -8185,7 +8363,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					}
 +
 +    					// Document Root Elements (not in CSR)
-+    					const rootHandles = await scope.evaluateHandleInUtility(
++    					const rootHandles = await (scope as any)._evaluateHandleInUtility(
 +    						([injected, node, { parsed, callId }]) => {
 +    						 	const elements = injected.querySelectorAll(parsed, node);
 +    							if (callId)
@@ -8200,15 +8378,16 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +
 +    					// Querying and Sorting the elements by their backendNodeId
 +    					for (const { handles, parentNode } of queryGroups) {
-+    						const handlesAmount = await (await handles.getProperty("length")).jsonValue();
++    						const handlesAmount = await (await handles.getProperty(progress, "length")).jsonValue(progress);
 +    						for (var i = 0; i < handlesAmount; i++) {
++    							let element;
 +    						  if (parentNode instanceof dom.ElementHandle) {
-+    								var element = await parentNode.evaluateHandleInUtility(
++    								element = await (parentNode as any)._evaluateHandleInUtility(
 +    									([injected, node, { i, handles: elems }]) => elems[i],
 +    									{ i, handles }
 +    								);
 +    							} else {
-+    								var element = await parentNode.evaluateHandle(
++    								element = await parentNode.evaluateHandle(
 +    									(injected, { i, handles: elems }) => elems[i],
 +    									{ i, handles }
 +    								);
@@ -8261,7 +8440,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
  interface TaggedAsJSHandle<T> {
    __jshandle: T;
-@@ -139,13 +140,41 @@
+@@ -139,13 +140,37 @@
        (globalThis as any).leakedJSHandles.set(this, new Error('Leaked JSHandle'));
    }
  
@@ -8283,10 +8462,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					context = await frame.mainContext();
 +    			}
 +    		}
-+    		if (context !== this._context && context.adoptIfNeeded(this) === null)
-+    			context = this._context;
 +    	
-+      return await progress.race(this.internalEvaluateExpression(expression, options, arg));
++      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: true }, this, arg));
 +    }
 +
 +  async evaluateExpressionHandle(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any, isolatedContext?: boolean): Promise<JSHandle<any>> {
@@ -8301,10 +8478,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    					context = await frame.mainContext();
 +    			}
 +    		}
-+    		if (context !== this._context && context.adoptIfNeeded(this) === null)
-+    			context = this._context;
 +    	
-+      return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
++      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: false }, this, arg));
 +    }
  
    async getProperty(progress: Progress, propertyName: string): Promise<JSHandle> {
@@ -8325,6 +8500,15 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/page.ts patchright/packages/playwright-core/src/server/page.ts
 ---
 +++
+@@ -15,7 +15,7 @@
+  * limitations under the License.
+  */
+ 
+-import { isInvalidSelectorError, stringifySelector } from '@isomorphic/selectorParser';
++import { isInvalidSelectorError, stringifySelector, splitSelectorByFrame } from '@isomorphic/selectorParser';
+ import { ManualPromise } from '@isomorphic/manualPromise';
+ import { parseEvaluationResultValue } from '@isomorphic/utilityScriptSerializers';
+ import { getComparator } from '@utils/comparators';
 @@ -54,6 +54,8 @@
  import type * as channels from '@protocol/channels';
  import type { BindingPayload } from '@injected/bindingsController';
@@ -8366,7 +8550,21 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async removeExposedBinding(binding: PageBinding) {
-@@ -897,13 +894,6 @@
+@@ -571,7 +568,12 @@
+         const promise = handler.resolved.then(async () => {
+           if (!handler.noWaitAfter) {
+             progress.log(`  locator handler has finished, waiting for ${asLocator(this.browserContext._browser.sdkLanguage(), handler.selector)} to be hidden`);
+-            await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });
++            
++            			const frameChunks = splitSelectorByFrame(handler.selector);
++            			if (frameChunks.length > 1 && !await this.mainFrame().isVisibleInternal(progress, stringifySelector(frameChunks[0]), { strict: true }))
++            				return;
++            			await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });
++            		
+           } else {
+             progress.log(`  locator handler has finished`);
+           }
+@@ -897,13 +899,6 @@
      }
    }
  
@@ -8380,7 +8578,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    getBinding(name: string) {
      return this._pageBindings.get(name) || this.browserContext._pageBindings.get(name);
    }
-@@ -926,6 +916,12 @@
+@@ -926,6 +921,12 @@
    async setDockTile(image: Buffer) {
      await this.delegate.setDockTile(image);
    }
@@ -8393,7 +8591,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  export const WorkerEvent = {
-@@ -984,13 +980,33 @@
+@@ -984,13 +985,33 @@
      this.openScope.close(new Error('Worker closed'));
    }
  
@@ -8433,7 +8631,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
    async disconnect(progress: Progress, options: { reason?: string } = {}) {
      if (!this._onDisconnect)
-@@ -1000,66 +1016,90 @@
+@@ -1000,66 +1021,90 @@
    }
  }
  
