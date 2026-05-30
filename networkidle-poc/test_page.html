@@ -1,0 +1,18 @@
+<!doctype html>                                                                                                                       
+<html><body>                                                    
+  <h1>networkidle PoC</h1>
+  <pre id="log"></pre>
+  <script>                                                                                                                            
+    const log = document.getElementById('log');
+    let n = 0;                                                                                                                        
+    function poll() {                                                                                                                 
+      n += 1;
+      log.textContent = `heartbeat #${n}`;                                                                                            
+      fetch('/heartbeat?n=' + n).catch(() => {});               
+    }                                                                                                                                 
+    window.addEventListener('load', () => {
+      setInterval(poll, 200);                                                                                                         
+      poll();                                                                                                                         
+    });
+  </script>                                                                                                                           
+</body></html>
