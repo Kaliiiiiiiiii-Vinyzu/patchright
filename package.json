@@ -8,7 +8,8 @@
         "format:check": "bash -c 'biome check --line-width=320 --formatter-enabled=false --diagnostic-level=error ${@:-patchright_driver_patch.ts driver_patches/}' --",
         "format:fix": "tsx utils/format-indentation.ts",
         "format": "bash -c 'npm run format:fix -- ${@} && npm run format:check -- ${@}' --",
-        "rebuild": "bash utils/rebuild_local_package.sh"
+        "rebuild": "bash utils/rebuild_local_package.sh",
+        "test": "bash utils/test_local_package.sh"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.10",
