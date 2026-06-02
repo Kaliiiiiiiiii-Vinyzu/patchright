@@ -2873,7 +2873,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1373,20 +1560,21 @@
+@@ -1373,20 +1560,50 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -2893,14 +2893,43 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    }
 +
 +    		try {
-+    			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
-+    			if (!resolved)
-+    				return false;
-+    			return await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
-+    				const element = injected.querySelector(info.parsed, root || document, info.strict);
-+    				const state = element ? injected.elementState(element, "visible") : { matches: false, received: "error:notconnected" };
-+    				return state.matches;
-+    			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
++    			const metadata: any = { internal: false, log: [], method: 'isVisible' };
++    			const progress2: any = {
++    				log: (message: string) => metadata.log.push(message),
++    				metadata,
++    				race: (promise: any) => Promise.race(Array.isArray(promise) ? promise : [promise]),
++    			};
++    			progress2.log(`waiting for ${this._asLocator(selector)}`);
++    			if (selector === ':scope') {
++    				const scopeParentNode = (scope as any).parentNode || scope;
++    				if (scopeParentNode instanceof dom.ElementHandle) {
++    					return await scopeParentNode.evaluateInUtility(([injected, node, { scope: handle }]) => {
++    						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
++    						return state.matches;
++    					}, { scope });
++    				} else {
++    					return await scopeParentNode.evaluate((injected, node, { scope: handle }) => {
++    						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
++    						return state.matches;
++    					}, { scope });
++    				}
++    			} else {
++    				return await this._retryWithoutProgress(progress2, selector, { ...options, performActionPreChecks: false }, async (handle) => {
++    					if (!handle)
++    						return false;
++    					if (handle.parentNode instanceof dom.ElementHandle) {
++    						return await handle.parentNode.evaluateInUtility(([injected, node, { handle: handle2 }]) => {
++    							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
++    							return state.matches;
++    						}, { handle });
++    					} else {
++    						return await handle.parentNode.evaluate((injected, { handle: handle2 }) => {
++    							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
++    							return state.matches;
++    						}, { handle });
++    					}
++    				}, 'returnOnNotResolved', null as any) as boolean;
++    			}
 +    		} catch (e) {
 +    			if (this.isNonRetriableError(e)) throw e;
 +    			return false;
@@ -2909,7 +2938,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1515,46 +1703,48 @@
+@@ -1515,46 +1732,48 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: ExpectReceived, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -2995,7 +3024,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1613,7 +1803,7 @@
+@@ -1613,7 +1832,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -3004,7 +3033,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1863,185 @@
+@@ -1673,42 +1892,185 @@
    }
  
    _onDetached() {
@@ -3223,7 +3252,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2098,7 @@
+@@ -1765,7 +2127,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -3232,7 +3261,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2137,328 @@
+@@ -1804,6 +2166,328 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -7741,7 +7770,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async rafrafTimeoutScreenshotElementWithProgress(progress: Progress, selector: string, timeout: number, options: ScreenshotOptions): Promise<Buffer> {
-@@ -1373,20 +1560,21 @@
+@@ -1373,20 +1560,50 @@
    }
  
    async isVisibleInternal(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
@@ -7761,14 +7790,43 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -    }
 +
 +    		try {
-+    			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
-+    			if (!resolved)
-+    				return false;
-+    			return await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
-+    				const element = injected.querySelector(info.parsed, root || document, info.strict);
-+    				const state = element ? injected.elementState(element, "visible") : { matches: false, received: "error:notconnected" };
-+    				return state.matches;
-+    			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
++    			const metadata: any = { internal: false, log: [], method: 'isVisible' };
++    			const progress2: any = {
++    				log: (message: string) => metadata.log.push(message),
++    				metadata,
++    				race: (promise: any) => Promise.race(Array.isArray(promise) ? promise : [promise]),
++    			};
++    			progress2.log(`waiting for ${this._asLocator(selector)}`);
++    			if (selector === ':scope') {
++    				const scopeParentNode = (scope as any).parentNode || scope;
++    				if (scopeParentNode instanceof dom.ElementHandle) {
++    					return await scopeParentNode.evaluateInUtility(([injected, node, { scope: handle }]) => {
++    						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
++    						return state.matches;
++    					}, { scope });
++    				} else {
++    					return await scopeParentNode.evaluate((injected, node, { scope: handle }) => {
++    						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
++    						return state.matches;
++    					}, { scope });
++    				}
++    			} else {
++    				return await this._retryWithoutProgress(progress2, selector, { ...options, performActionPreChecks: false }, async (handle) => {
++    					if (!handle)
++    						return false;
++    					if (handle.parentNode instanceof dom.ElementHandle) {
++    						return await handle.parentNode.evaluateInUtility(([injected, node, { handle: handle2 }]) => {
++    							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
++    							return state.matches;
++    						}, { handle });
++    					} else {
++    						return await handle.parentNode.evaluate((injected, { handle: handle2 }) => {
++    							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
++    							return state.matches;
++    						}, { handle });
++    					}
++    				}, 'returnOnNotResolved', null as any) as boolean;
++    			}
 +    		} catch (e) {
 +    			if (this.isNonRetriableError(e)) throw e;
 +    			return false;
@@ -7777,7 +7835,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async isHidden(progress: Progress, selector: string, options: types.StrictOptions = {}, scope?: dom.ElementHandle): Promise<boolean> {
-@@ -1515,46 +1703,48 @@
+@@ -1515,46 +1732,48 @@
    }
  
    private async _expectInternal(progress: Progress, selector: string | undefined, options: FrameExpectParams, lastIntermediateResult: { received?: ExpectReceived, isSet: boolean, errorMessage?: string }, noAbort: boolean) {
@@ -7863,7 +7921,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionExpression<R>(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any, options: { pollingInterval?: number }, world: types.World = 'main'): Promise<js.SmartHandle<R>> {
-@@ -1613,7 +1803,7 @@
+@@ -1613,7 +1832,7 @@
          return { result, abort: () => aborted = true };
        }, { expression, isFunction, polling: options.pollingInterval, arg }));
        try {
@@ -7872,7 +7930,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1863,185 @@
+@@ -1673,42 +1892,185 @@
    }
  
    _onDetached() {
@@ -8091,7 +8149,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2098,7 @@
+@@ -1765,7 +2127,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -8100,7 +8158,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2137,328 @@
+@@ -1804,6 +2166,328 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
