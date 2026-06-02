@@ -683,14 +683,43 @@ export function patchFrames(project: Project) {
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");
 	isVisibleInternalMethod.setBodyText(`
 		try {
-			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
-			if (!resolved)
-				return false;
-			return await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
-				const element = injected.querySelector(info.parsed, root || document, info.strict);
-				const state = element ? injected.elementState(element, "visible") : { matches: false, received: "error:notconnected" };
-				return state.matches;
-			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
+			const metadata: any = { internal: false, log: [], method: 'isVisible' };
+			const progress2: any = {
+				log: (message: string) => metadata.log.push(message),
+				metadata,
+				race: (promise: any) => Promise.race(Array.isArray(promise) ? promise : [promise]),
+			};
+			progress2.log(\`waiting for \${this._asLocator(selector)}\`);
+			if (selector === ':scope') {
+				const scopeParentNode = (scope as any).parentNode || scope;
+				if (scopeParentNode instanceof dom.ElementHandle) {
+					return await scopeParentNode.evaluateInUtility(([injected, node, { scope: handle }]) => {
+						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
+						return state.matches;
+					}, { scope });
+				} else {
+					return await scopeParentNode.evaluate((injected, node, { scope: handle }) => {
+						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
+						return state.matches;
+					}, { scope });
+				}
+			} else {
+				return await this._retryWithoutProgress(progress2, selector, { ...options, performActionPreChecks: false }, async (handle) => {
+					if (!handle)
+						return false;
+					if (handle.parentNode instanceof dom.ElementHandle) {
+						return await handle.parentNode.evaluateInUtility(([injected, node, { handle: handle2 }]) => {
+							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
+							return state.matches;
+						}, { handle });
+					} else {
+						return await handle.parentNode.evaluate((injected, { handle: handle2 }) => {
+							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
+							return state.matches;
+						}, { handle });
+					}
+				}, 'returnOnNotResolved', null as any) as boolean;
+			}
 		} catch (e) {
 			if (this.isNonRetriableError(e)) throw e;
 			return false;
