@@ -845,6 +845,49 @@ export function patchFrames(project: Project) {
 				return value.some(eventInitContainsHandle);
 			return Object.values(value).some(eventInitContainsHandle);
 		};
+		const firstEventInitHandle = (value: unknown): js.JSHandle | null => {
+			if (!value || typeof value !== "object")
+				return null;
+			if (value instanceof js.JSHandle)
+				return value;
+			if (Array.isArray(value)) {
+				for (const item of value) {
+					const handle = firstEventInitHandle(item);
+					if (handle)
+						return handle;
+				}
+				return null;
+			}
+			for (const propertyValue of Object.values(value)) {
+				const handle = firstEventInitHandle(propertyValue);
+				if (handle)
+					return handle;
+			}
+			return null;
+		};
+		if (selector === ":scope" && scope instanceof dom.ElementHandle) {
+			const taskScope = firstEventInitHandle(eventInit);
+			if (taskScope) {
+				const taskScopeContext = taskScope._context;
+				const promise = (async () => {
+					const adoptedScope = scope._context === taskScopeContext ? scope : await this._page.delegate.adoptElementHandle(scope, taskScopeContext);
+					try {
+						return await taskScopeContext.evaluate(([injected, node, { callbackText: callbackText2, taskData: taskData2 }]) => {
+							const callback = injected.eval(callbackText2);
+							return callback(injected, node, taskData2);
+						}, [
+							await taskScopeContext.injectedScript(),
+							adoptedScope,
+							{ callbackText, taskData },
+						]);
+					} finally {
+						if (adoptedScope !== scope)
+							adoptedScope.dispose();
+					}
+				})();
+				return taskScopeContext.raceAgainstContextDestroyed(promise);
+			}
+		}
 		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));

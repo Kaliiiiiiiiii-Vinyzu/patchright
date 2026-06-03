@@ -6,11 +6,6 @@ import type { Project } from "ts-morph";
 export function patchJavascript(project: Project) {
 	// Add source file to the project
 	const javascriptSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/javascript.ts");
-	javascriptSourceFile.addImportDeclaration({
-		moduleSpecifier: "./dom",
-		namespaceImport: "domValue",
-	});
-
 	// -------JSHandle Class -------
 	const jsHandleClass = javascriptSourceFile.getClassOrThrow("JSHandle");
 
@@ -22,21 +17,8 @@ export function patchJavascript(project: Project) {
 		hasQuestionToken: true,
 	});
 	jsHandleEvaluateExpressionMethod.replaceWithText(
-		jsHandleEvaluateExpressionMethod.getText().replace(/this\.internalEvaluateExpression\(expression, options, arg\)/g, "evaluateExpression(context, expression, { ...options, returnByValue: true }, this, arg)")
+		jsHandleEvaluateExpressionMethod.getText().replace(/this\.internalEvaluateExpression\(expression, options, arg\)/g, "this.internalEvaluateExpression(expression, options, arg)")
 	);
-	// Initialize context with frame-specific context if needed
-	jsHandleEvaluateExpressionMethod.insertStatements(0, `
-		let context = this._context;
-		if (context instanceof domValue.FrameExecutionContext) {
-			const frame = context.frame;
-			if (frame) {
-				if (isolatedContext === true)
-					context = await frame.utilityContext();
-				else if (isolatedContext === false)
-					context = await frame.mainContext();
-			}
-		}
-	`);
 
 	// -- evaluateExpressionHandle Method --
 	const jsHandleEvaluateExpressionHandleMethod = jsHandleClass.getMethodOrThrow("evaluateExpressionHandle");
@@ -46,19 +28,6 @@ export function patchJavascript(project: Project) {
 		hasQuestionToken: true,
 	});
 	jsHandleEvaluateExpressionHandleMethod.replaceWithText(
-			jsHandleEvaluateExpressionHandleMethod.getText().replace(/this\._evaluateExpressionHandle\(expression, options, arg\)/g, "evaluateExpression(context, expression, { ...options, returnByValue: false }, this, arg)")
+			jsHandleEvaluateExpressionHandleMethod.getText().replace(/this\._evaluateExpressionHandle\(expression, options, arg\)/g, "this._evaluateExpressionHandle(expression, options, arg)")
 	);
-	// Initialize context with frame-specific context if needed
-	jsHandleEvaluateExpressionHandleMethod.insertStatements(0, `
-		let context = this._context;
-		if (context instanceof domValue.FrameExecutionContext) {
-			const frame = context.frame;
-			if (frame) {
-				if (isolatedContext === true)
-					context = await frame.utilityContext();
-				else if (isolatedContext === false)
-					context = await frame.mainContext();
-			}
-		}
-	`);
 }
