@@ -3033,7 +3033,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1892,185 @@
+@@ -1673,42 +1892,228 @@
    }
  
    _onDetached() {
@@ -3104,6 +3104,49 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    				return value.some(eventInitContainsHandle);
 +    			return Object.values(value).some(eventInitContainsHandle);
 +    		};
++    		const firstEventInitHandle = (value: unknown): js.JSHandle | null => {
++    			if (!value || typeof value !== "object")
++    				return null;
++    			if (value instanceof js.JSHandle)
++    				return value;
++    			if (Array.isArray(value)) {
++    				for (const item of value) {
++    					const handle = firstEventInitHandle(item);
++    					if (handle)
++    						return handle;
++    				}
++    				return null;
++    			}
++    			for (const propertyValue of Object.values(value)) {
++    				const handle = firstEventInitHandle(propertyValue);
++    				if (handle)
++    					return handle;
++    			}
++    			return null;
++    		};
++    		if (selector === ":scope" && scope instanceof dom.ElementHandle) {
++    			const taskScope = firstEventInitHandle(eventInit);
++    			if (taskScope) {
++    				const taskScopeContext = taskScope._context;
++    				const promise = (async () => {
++    					const adoptedScope = scope._context === taskScopeContext ? scope : await this._page.delegate.adoptElementHandle(scope, taskScopeContext);
++    					try {
++    						return await taskScopeContext.evaluate(([injected, node, { callbackText: callbackText2, taskData: taskData2 }]) => {
++    							const callback = injected.eval(callbackText2);
++    							return callback(injected, node, taskData2);
++    						}, [
++    							await taskScopeContext.injectedScript(),
++    							adoptedScope,
++    							{ callbackText, taskData },
++    						]);
++    					} finally {
++    						if (adoptedScope !== scope)
++    							adoptedScope.dispose();
++    					}
++    				})();
++    				return taskScopeContext.raceAgainstContextDestroyed(promise);
++    			}
++    		}
 +    		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
 +    			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 +    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
@@ -3252,7 +3295,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2127,7 @@
+@@ -1765,7 +2170,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -3261,7 +3304,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2166,328 @@
+@@ -1804,6 +2209,328 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -3593,15 +3636,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/javascript.ts patchright/node_modules/playwright-core/src/server/javascript.ts
 ---
 +++
-@@ -23,6 +23,7 @@
- import type * as dom from './dom';
- import type { Progress } from '@protocol/progress';
- import type { UtilityScript } from '@injected/utilityScript';
-+import * as domValue from "./dom";
- 
- interface TaggedAsJSHandle<T> {
-   __jshandle: T;
-@@ -139,13 +140,37 @@
+@@ -139,13 +139,13 @@
        (globalThis as any).leakedJSHandles.set(this, new Error('Leaked JSHandle'));
    }
  
@@ -3609,38 +3644,14 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -    return await progress.race(this.internalEvaluateExpression(expression, options, arg));
 -  }
 +  async evaluateExpression(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any, isolatedContext?: boolean) {
++      return await progress.race(this.internalEvaluateExpression(expression, options, arg));
++    }
  
 -  async evaluateExpressionHandle(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any): Promise<JSHandle<any>> {
 -    return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
 -  }
-+    		let context = this._context;
-+    		if (context instanceof domValue.FrameExecutionContext) {
-+    			const frame = context.frame;
-+    			if (frame) {
-+    				if (isolatedContext === true)
-+    					context = await frame.utilityContext();
-+    				else if (isolatedContext === false)
-+    					context = await frame.mainContext();
-+    			}
-+    		}
-+    	
-+      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: true }, this, arg));
-+    }
-+
 +  async evaluateExpressionHandle(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any, isolatedContext?: boolean): Promise<JSHandle<any>> {
-+
-+    		let context = this._context;
-+    		if (context instanceof domValue.FrameExecutionContext) {
-+    			const frame = context.frame;
-+    			if (frame) {
-+    				if (isolatedContext === true)
-+    					context = await frame.utilityContext();
-+    				else if (isolatedContext === false)
-+    					context = await frame.mainContext();
-+    			}
-+    		}
-+    	
-+      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: false }, this, arg));
++      return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
 +    }
  
    async getProperty(progress: Progress, propertyName: string): Promise<JSHandle> {
@@ -7930,7 +7941,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1673,42 +1892,185 @@
+@@ -1673,42 +1892,228 @@
    }
  
    _onDetached() {
@@ -8001,6 +8012,49 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    				return value.some(eventInitContainsHandle);
 +    			return Object.values(value).some(eventInitContainsHandle);
 +    		};
++    		const firstEventInitHandle = (value: unknown): js.JSHandle | null => {
++    			if (!value || typeof value !== "object")
++    				return null;
++    			if (value instanceof js.JSHandle)
++    				return value;
++    			if (Array.isArray(value)) {
++    				for (const item of value) {
++    					const handle = firstEventInitHandle(item);
++    					if (handle)
++    						return handle;
++    				}
++    				return null;
++    			}
++    			for (const propertyValue of Object.values(value)) {
++    				const handle = firstEventInitHandle(propertyValue);
++    				if (handle)
++    					return handle;
++    			}
++    			return null;
++    		};
++    		if (selector === ":scope" && scope instanceof dom.ElementHandle) {
++    			const taskScope = firstEventInitHandle(eventInit);
++    			if (taskScope) {
++    				const taskScopeContext = taskScope._context;
++    				const promise = (async () => {
++    					const adoptedScope = scope._context === taskScopeContext ? scope : await this._page.delegate.adoptElementHandle(scope, taskScopeContext);
++    					try {
++    						return await taskScopeContext.evaluate(([injected, node, { callbackText: callbackText2, taskData: taskData2 }]) => {
++    							const callback = injected.eval(callbackText2);
++    							return callback(injected, node, taskData2);
++    						}, [
++    							await taskScopeContext.injectedScript(),
++    							adoptedScope,
++    							{ callbackText, taskData },
++    						]);
++    					} finally {
++    						if (adoptedScope !== scope)
++    							adoptedScope.dispose();
++    					}
++    				})();
++    				return taskScopeContext.raceAgainstContextDestroyed(promise);
++    			}
++    		}
 +    		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
 +    			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 +    				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
@@ -8149,7 +8203,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    private _setContext(world: types.World, context: dom.FrameExecutionContext | null) {
-@@ -1765,7 +2127,7 @@
+@@ -1765,7 +2170,7 @@
    }
  
    async extendInjectedScript(source: string, arg?: any) {
@@ -8158,7 +8212,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const injectedScriptHandle = await context.injectedScript();
      await injectedScriptHandle.evaluate((injectedScript, { source, arg }) => {
        injectedScript.extend(source, arg);
-@@ -1804,6 +2166,328 @@
+@@ -1804,6 +2209,328 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -8490,15 +8544,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/javascript.ts patchright/packages/playwright-core/src/server/javascript.ts
 ---
 +++
-@@ -23,6 +23,7 @@
- import type * as dom from './dom';
- import type { Progress } from '@protocol/progress';
- import type { UtilityScript } from '@injected/utilityScript';
-+import * as domValue from "./dom";
- 
- interface TaggedAsJSHandle<T> {
-   __jshandle: T;
-@@ -139,13 +140,37 @@
+@@ -139,13 +139,13 @@
        (globalThis as any).leakedJSHandles.set(this, new Error('Leaked JSHandle'));
    }
  
@@ -8506,38 +8552,14 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -    return await progress.race(this.internalEvaluateExpression(expression, options, arg));
 -  }
 +  async evaluateExpression(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any, isolatedContext?: boolean) {
++      return await progress.race(this.internalEvaluateExpression(expression, options, arg));
++    }
  
 -  async evaluateExpressionHandle(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any): Promise<JSHandle<any>> {
 -    return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
 -  }
-+    		let context = this._context;
-+    		if (context instanceof domValue.FrameExecutionContext) {
-+    			const frame = context.frame;
-+    			if (frame) {
-+    				if (isolatedContext === true)
-+    					context = await frame.utilityContext();
-+    				else if (isolatedContext === false)
-+    					context = await frame.mainContext();
-+    			}
-+    		}
-+    	
-+      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: true }, this, arg));
-+    }
-+
 +  async evaluateExpressionHandle(progress: Progress, expression: string, options: { isFunction?: boolean }, arg: any, isolatedContext?: boolean): Promise<JSHandle<any>> {
-+
-+    		let context = this._context;
-+    		if (context instanceof domValue.FrameExecutionContext) {
-+    			const frame = context.frame;
-+    			if (frame) {
-+    				if (isolatedContext === true)
-+    					context = await frame.utilityContext();
-+    				else if (isolatedContext === false)
-+    					context = await frame.mainContext();
-+    			}
-+    		}
-+    	
-+      return await progress.race(evaluateExpression(context, expression, { ...options, returnByValue: false }, this, arg));
++      return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
 +    }
  
    async getProperty(progress: Progress, propertyName: string): Promise<JSHandle> {
