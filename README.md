@@ -91,6 +91,32 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 
 <sup> Start fast. Scale globally. Stay stable with [RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu). </sup>
 
+---
+
+[<img width="80%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/5db03567-59c6-414f-a9ce-9b662ffa2b02" />](https://go.nodemaven.com/Vinyzu)
+</br>
+#### [NodeMaven](https://go.nodemaven.com/Vinyzu): Your reliable proxy provider with High Quality IPs. </br> Superb solution for automation, web scraping, SEO research, and social media management.
+
+Why [NodeMaven](https://go.nodemaven.com/Vinyzu)?
+
+✅ 99.9% Uptime
+</br>
+🎯 Sticky sessions up to 7 days
+</br>
+🔍 IP Filtering: Proxies are guaranteed to have fraud score <97%
+</br>
+🔰 No KYC required
+</br>
+💸 Cashback on Traffic - Burn GB and earn up to 10% back
+
+**Special codes** for Patchright users:
+</br>
+🔥 **PATCHRIGHT35** - **35% off** to Mobile and Residential Proxies
+</br>
+🔥 **PATCHRIGHT40** - **40% off** to ISP (Static) Proxies
+
+<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Vinyzu).</sup>
+
 </details>
 
 ---
