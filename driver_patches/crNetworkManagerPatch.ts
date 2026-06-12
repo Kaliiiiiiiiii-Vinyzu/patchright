@@ -192,7 +192,7 @@ export function patchCRNetworkManager(project: Project) {
 
 		for (let directive of directives) {
 			// Improved directive parsing to handle more edge cases
-			const directiveMatch = directive.match(/^([a-zA-Z-]+)\\s+(.*)$/);
+			const directiveMatch = directive.match(/^([a-zA-Z-]+)(?:\\s+(.*))?$/);
 			if (!directiveMatch) {
 				fixedDirectives.push(directive);
 				continue;
