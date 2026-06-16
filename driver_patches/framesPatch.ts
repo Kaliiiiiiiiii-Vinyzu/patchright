@@ -638,6 +638,27 @@ export function patchFrames(project: Project) {
 			const success = { attached, detached: !attached, visible, hidden: !visible }[state];
 			if (!success) {
 				result.dispose();
+				if ((state === 'attached' || state === 'visible') && !attached) {
+					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, state, performActionPreChecks: false, __patchrightWaitForSelector: true, __patchrightInitialScope: scope } as any, async (handle) => {
+						if (!handle)
+							return "internal:continuepolling";
+						const visible = state === 'visible' ? await handle.evaluateInUtility(([injected, node]) => injected.utils.isElementVisible(node), {}).catch(() => false) : true;
+						if (!visible)
+							return "internal:continuepolling";
+						if (options.omitReturnValue)
+							return null;
+						if ((options as any).__testHookBeforeAdoptNode)
+							await progress.race((options as any).__testHookBeforeAdoptNode());
+						try {
+							const mainContext = await progress.race(handle._frame.mainContext());
+							return await progress.race(handle._adoptTo(mainContext));
+						} catch (e) {
+							return "internal:continuepolling";
+						}
+					}, 'returnOnNotResolved', continuePolling);
+					if (fallbackResult !== continuePolling)
+						return fallbackResult;
+				}
 				return continuePolling;
 			}
 			if (options.omitReturnValue) {
@@ -905,8 +926,31 @@ export function patchFrames(project: Project) {
 				}, { info: resolved.info, callbackText, taskData, callId: progress.metadata.id, root: resolved.frame === this ? scope : undefined }));
 				if (log)
 					progress.log(log);
-				if (!success)
-					return continuePolling;
+				if (!success) {
+					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false, __patchrightInitialScope: scope } as any, async (handle) => {
+						if (!handle)
+							return "internal:continuepolling";
+						if (handle.parentNode instanceof dom.ElementHandle) {
+							return await handle.parentNode.evaluateInUtility(([injected, node, { callbackText: callbackText2, handle: handle2, taskData: taskData2 }]) => {
+								const callback = injected.eval(callbackText2);
+								return callback(injected, handle2, taskData2);
+							}, {
+								callbackText,
+								handle,
+								taskData
+							});
+						}
+						return await handle.parentNode.evaluate((injected, { callbackText: callbackText2, handle: handle2, taskData: taskData2 }) => {
+							const callback = injected.eval(callbackText2);
+							return callback(injected, handle2, taskData2);
+						}, {
+							callbackText,
+							handle,
+							taskData
+						});
+					}, 'returnOnNotResolved', continuePolling);
+					return fallbackResult === "internal:continuepolling" ? continuePolling : fallbackResult;
+				}
 				return value;
 			});
 			return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
