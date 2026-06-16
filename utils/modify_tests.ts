@@ -219,6 +219,13 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 		);
 	}
 
+	if (relativePath === 'tests/page/page-click.spec.ts') {
+		replaceOnce(
+			"  await page.evaluate(() => {\n    const logEvent = e => console.log(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, false);\n  const entries = [];\n  page.on('console', message => entries.push(message.text()));\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });",
+			"  await page.evaluate(() => {\n    window['entries'] = [];\n    const logEvent = e => window['entries'].push(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, false);\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });\n  const entries = await page.evaluate(() => window['entries'], undefined, false);"
+		);
+	}
+
 	if (relativePath === 'tests/library/popup.spec.ts') {
 		replaceOnce(
 			"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, false);",
