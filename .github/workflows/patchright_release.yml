@@ -172,6 +172,8 @@ jobs:
 
             let pageTestsStepLink = 'Unavailable';
             let libraryTestsStepLink = 'Unavailable';
+            let pageTestsStepUrl = null;
+            let libraryTestsStepUrl = null;
             try {
               const jobsResponse = await github.rest.actions.listJobsForWorkflowRun({
                 owner: context.repo.owner,
@@ -189,14 +191,61 @@ jobs:
                 const pageStep = (testsJob.steps || []).find((step) => step.name === 'Run Page Tests');
                 const libraryStep = (testsJob.steps || []).find((step) => step.name === 'Run Library Tests');
 
-                if (pageStep?.number)
-                  pageTestsStepLink = `[Run Page Tests](${testsJob.html_url}#step:${pageStep.number}:1)`;
-                if (libraryStep?.number)
-                  libraryTestsStepLink = `[Run Library Tests](${testsJob.html_url}#step:${libraryStep.number}:1)`;
+                if (pageStep?.number) {
+                  pageTestsStepUrl = `${testsJob.html_url}#step:${pageStep.number}:1`;
+                  pageTestsStepLink = `[Run Page Tests](${pageTestsStepUrl})`;
+                }
+                if (libraryStep?.number) {
+                  libraryTestsStepUrl = `${testsJob.html_url}#step:${libraryStep.number}:1`;
+                  libraryTestsStepLink = `[Run Library Tests](${libraryTestsStepUrl})`;
+                }
               }
             } catch (error) {
               // Keep defaults when job/step links are unavailable.
             }
+
+            let reportObj = null;
+            try {
+              reportObj = JSON.parse(reportJsonText);
+            } catch {
+              // leave null; summary will reflect that the report was unreadable
+            }
+
+            let reportArtifact = null;
+            try {
+              const artifactsResponse = await github.rest.actions.listWorkflowRunArtifacts({
+                owner,
+                repo,
+                run_id: context.runId,
+              });
+              reportArtifact = artifactsResponse.data.artifacts.find((a) => a.name === 'report.json') || null;
+            } catch (error) {
+              reportArtifact = { error: String(error.message) };
+            }
+
+            const summaryPayload = {
+              old_version: oldVersion,
+              new_version: rawNewVersion,
+              summary: reportObj?.summary || { total: 0, affected: 0, unaffected: 0 },
+              workflow_run_url: runUrl,
+              commit: commitSha,
+              test_links: {
+                page_tests: pageTestsStepUrl,
+                library_tests: libraryTestsStepUrl,
+              },
+              affected_symbols: (reportObj?.affected || []).map((row) => ({
+                symbol: row.symbol,
+                kind: row.kind,
+                change_type: row.changeType,
+                playwright_file: row.playwrightFile,
+                patch_file: row.patchFile,
+              })),
+              report_artifact: reportArtifact && reportArtifact.id ? {
+                artifact_id: reportArtifact.id,
+                name: reportArtifact.name,
+                archive_download_url: reportArtifact.archive_download_url,
+              } : (reportArtifact && reportArtifact.error ? { error: reportArtifact.error } : null),
+            };
 
             const issueBody = [
               `## Release Failed: Playwright ${oldVersion} → ${rawNewVersion}`,
@@ -215,10 +264,13 @@ jobs:
               '',
               affectedTable,
               '',
-              'Full `check_patch_impact` report (`report.json`):',
+              '### Machine-readable summary',
+              '',
               '```json',
-              reportJsonText,
+              JSON.stringify(summaryPayload, null, 2),
               '```',
+              '',
+              'The full `report.json` artifact is linked in `report_artifact.archive_download_url` above.',
               '',
               'cc @Vinyzu',
             ].join('\n');
