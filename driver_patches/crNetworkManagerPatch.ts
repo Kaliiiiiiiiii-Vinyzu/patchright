@@ -181,6 +181,7 @@ export function patchCRNetworkManager(project: Project) {
 
 		const fixedDirectives = [];
 		let hasScriptSrc = false;
+		let hasDefaultSrc = false;
 
 		const addIfMissing = (values: string[], ...items: string[]) => {
 			for (const item of items)
@@ -191,7 +192,7 @@ export function patchCRNetworkManager(project: Project) {
 
 		for (let directive of directives) {
 			// Improved directive parsing to handle more edge cases
-			const directiveMatch = directive.match(/^([a-zA-Z-]+)\\s+(.*)$/);
+			const directiveMatch = directive.match(/^([a-zA-Z-]+)(?:\\s+(.*))?$/);
 			if (!directiveMatch) {
 				fixedDirectives.push(directive);
 				continue;
@@ -249,14 +250,20 @@ export function patchCRNetworkManager(project: Project) {
 					fixedDirectives.push(\`frame-ancestors \${frameAncestorValues}\`);
 					break;
 
+				case 'default-src':
+					hasDefaultSrc = true;
+					fixedDirectives.push(directive);
+					break;
+
 				default:
 					// Keep other directives as-is
 					fixedDirectives.push(directive);
 			}
 		}
 
-		// Add script-src if it doesn't exist (for our injected scripts)
-		if (!hasScriptSrc) {
+		// Add script-src for our injected scripts only when it's missing AND a
+		// default-src exists to override.
+		if (!hasScriptSrc && hasDefaultSrc) {
 			fixedDirectives.push(
 				scriptNonce
 					? \`script-src 'self' 'unsafe-eval' 'nonce-\${scriptNonce}' *\`
