@@ -351,6 +351,16 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 	'tests/library/har.spec.ts': new Map([
 		['should not hang on resources served from cache', 'Patchright routing/cache behavior records one cached stylesheet entry instead of the upstream duplicate entry.'],
 	]),
+	'tests/library/har-websocket.spec.ts': new Map([
+		['should still capture websocket when route passes messages through', 'WebsocketRoutes do not work in Patchright.'],
+		['should still allow routeWebSocket to fully mock the connection when capturing HAR', 'WebsocketRoutes do not work in Patchright.'],
+		['should still allow routeWebSocket to modify messages when capturing HAR', 'WebsocketRoutes do not work in Patchright.'],
+		['should respect PLAYWRIGHT_HAR_NO_WEBSOCKET_FRAMES', 'Patchright library tests run through an out-of-process driver, so runtime process.env mutations are not visible to the HAR recorder process.'],
+	]),
+	'tests/library/browsercontext-webauthn.spec.ts': new Map([
+		['should seed a known credential and authenticate', 'Patchright driver-mode WebAuthn binding can hang in the upstream library fixture even though the direct credentials API path works.'],
+		['should capture a page-created credential and reuse it in another context', 'Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture.'],
+	]),
 	'tests/library/page-close.spec.ts': new Map([
 		['addLocatorHandler should throw when page closes', 'Patchright action retry checkpoints differ when a locator handler closes the page during hit-target retries.'],
 	]),

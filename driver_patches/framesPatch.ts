@@ -7,6 +7,7 @@ import { assertDefined } from "./utils.ts";
 export function patchFrames(project: Project) {
 	// Add source file to the project
 	const framesSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/frames.ts");
+	framesSourceFile.getImportDeclarationOrThrow("./errors").addNamedImport("TargetClosedError");
 	// Add the custom import and comment at the start of the file
 	framesSourceFile.addImportDeclarations([
 		{ moduleSpecifier: './chromium/crExecutionContext', namedImports: ['CRExecutionContext'] },
@@ -771,15 +772,27 @@ export function patchFrames(project: Project) {
 	// -- evaluateExpression Method --
 	const evaluateExpressionMethod = frameClass.getMethodOrThrow("evaluateExpression");
 	evaluateExpressionMethod.setBodyText(`
-		const context = await this._detachedScope.race(this._context(options.world ?? "main"));
-		return await this._detachedScope.race(context.evaluateExpression(expression, options, arg));
+		try {
+			const context = await this._detachedScope.race(this._context(options.world ?? "main"));
+			return await this._detachedScope.race(context.evaluateExpression(expression, options, arg));
+		} catch (e) {
+			if (e instanceof Error && (this._page.isClosedOrClosingOrCrashed() || this._page.browserContext.isClosingOrClosed() || (this._page.browserContext as any)._browser._startedClosing))
+				throw new TargetClosedError(this._page.closeReason());
+			throw e;
+		}
 	`);
 
 	// -- evaluateExpressionHandle Method --
 	const evaluateExpressionHandleMethod = frameClass.getMethodOrThrow("evaluateExpressionHandle");
 	evaluateExpressionHandleMethod.setBodyText(`
-		const context = await this._detachedScope.race(this._context(options.world ?? "utility"));
-		return await this._detachedScope.race(context.evaluateExpressionHandle(expression, options, arg));
+		try {
+			const context = await this._detachedScope.race(this._context(options.world ?? "utility"));
+			return await this._detachedScope.race(context.evaluateExpressionHandle(expression, options, arg));
+		} catch (e) {
+			if (e instanceof Error && (this._page.isClosedOrClosingOrCrashed() || this._page.browserContext.isClosingOrClosed() || (this._page.browserContext as any)._browser._startedClosing))
+				throw new TargetClosedError(this._page.closeReason());
+			throw e;
+		}
 	`);
 
 	// -- nonStallingEvaluateInExistingContext Method --
