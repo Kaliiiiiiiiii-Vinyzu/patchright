@@ -7,6 +7,7 @@ import { assertDefined } from "./utils.ts";
 export function patchFrames(project: Project) {
 	// Add source file to the project
 	const framesSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/frames.ts");
+	framesSourceFile.getImportDeclarationOrThrow("./errors").addNamedImport("TargetClosedError");
 	// Add the custom import and comment at the start of the file
 	framesSourceFile.addImportDeclarations([
 		{ moduleSpecifier: './chromium/crExecutionContext', namedImports: ['CRExecutionContext'] },
@@ -638,6 +639,27 @@ export function patchFrames(project: Project) {
 			const success = { attached, detached: !attached, visible, hidden: !visible }[state];
 			if (!success) {
 				result.dispose();
+				if ((state === 'attached' || state === 'visible') && !attached) {
+					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, state, performActionPreChecks: false, __patchrightWaitForSelector: true, __patchrightInitialScope: scope } as any, async (handle) => {
+						if (!handle)
+							return "internal:continuepolling";
+						const visible = state === 'visible' ? await handle.evaluateInUtility(([injected, node]) => injected.utils.isElementVisible(node), {}).catch(() => false) : true;
+						if (!visible)
+							return "internal:continuepolling";
+						if (options.omitReturnValue)
+							return null;
+						if ((options as any).__testHookBeforeAdoptNode)
+							await progress.race((options as any).__testHookBeforeAdoptNode());
+						try {
+							const mainContext = await progress.race(handle._frame.mainContext());
+							return await progress.race(handle._adoptTo(mainContext));
+						} catch (e) {
+							return "internal:continuepolling";
+						}
+					}, 'returnOnNotResolved', continuePolling);
+					if (fallbackResult !== continuePolling)
+						return fallbackResult;
+				}
 				return continuePolling;
 			}
 			if (options.omitReturnValue) {
@@ -750,15 +772,27 @@ export function patchFrames(project: Project) {
 	// -- evaluateExpression Method --
 	const evaluateExpressionMethod = frameClass.getMethodOrThrow("evaluateExpression");
 	evaluateExpressionMethod.setBodyText(`
-		const context = await this._detachedScope.race(this._context(options.world ?? "main"));
-		return await this._detachedScope.race(context.evaluateExpression(expression, options, arg));
+		try {
+			const context = await this._detachedScope.race(this._context(options.world ?? "main"));
+			return await this._detachedScope.race(context.evaluateExpression(expression, options, arg));
+		} catch (e) {
+			if (e instanceof Error && (this._page.isClosedOrClosingOrCrashed() || this._page.browserContext.isClosingOrClosed() || (this._page.browserContext as any)._browser._startedClosing))
+				throw new TargetClosedError(this._page.closeReason());
+			throw e;
+		}
 	`);
 
 	// -- evaluateExpressionHandle Method --
 	const evaluateExpressionHandleMethod = frameClass.getMethodOrThrow("evaluateExpressionHandle");
 	evaluateExpressionHandleMethod.setBodyText(`
-		const context = await this._detachedScope.race(this._context(options.world ?? "utility"));
-		return await this._detachedScope.race(context.evaluateExpressionHandle(expression, options, arg));
+		try {
+			const context = await this._detachedScope.race(this._context(options.world ?? "utility"));
+			return await this._detachedScope.race(context.evaluateExpressionHandle(expression, options, arg));
+		} catch (e) {
+			if (e instanceof Error && (this._page.isClosedOrClosingOrCrashed() || this._page.browserContext.isClosingOrClosed() || (this._page.browserContext as any)._browser._startedClosing))
+				throw new TargetClosedError(this._page.closeReason());
+			throw e;
+		}
 	`);
 
 	// -- nonStallingEvaluateInExistingContext Method --
@@ -905,8 +939,31 @@ export function patchFrames(project: Project) {
 				}, { info: resolved.info, callbackText, taskData, callId: progress.metadata.id, root: resolved.frame === this ? scope : undefined }));
 				if (log)
 					progress.log(log);
-				if (!success)
-					return continuePolling;
+				if (!success) {
+					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false, __patchrightInitialScope: scope } as any, async (handle) => {
+						if (!handle)
+							return "internal:continuepolling";
+						if (handle.parentNode instanceof dom.ElementHandle) {
+							return await handle.parentNode.evaluateInUtility(([injected, node, { callbackText: callbackText2, handle: handle2, taskData: taskData2 }]) => {
+								const callback = injected.eval(callbackText2);
+								return callback(injected, handle2, taskData2);
+							}, {
+								callbackText,
+								handle,
+								taskData
+							});
+						}
+						return await handle.parentNode.evaluate((injected, { callbackText: callbackText2, handle: handle2, taskData: taskData2 }) => {
+							const callback = injected.eval(callbackText2);
+							return callback(injected, handle2, taskData2);
+						}, {
+							callbackText,
+							handle,
+							taskData
+						});
+					}, 'returnOnNotResolved', continuePolling);
+					return fallbackResult === "internal:continuepolling" ? continuePolling : fallbackResult;
+				}
 				return value;
 			});
 			return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;

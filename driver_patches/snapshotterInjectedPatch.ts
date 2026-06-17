@@ -93,8 +93,8 @@ export function patchSnapshotterInjected(project: Project) {
 	);
 	forOfStatement.replaceWithText(forOfStatement.getText().replace("this._modifiedStyleSheets", "document.styleSheets"));
 
-	// -- reset Method --
-	const resetMethod = streamerClass.getMethodOrThrow("reset");
+	// -- resetHistory Method --
+	const resetMethod = streamerClass.getMethodOrThrow("resetHistory");
 	// remove _staleStyleSheets.clear()
 	const staleStylesheetsClearStatement = assertDefined(
 		resetMethod

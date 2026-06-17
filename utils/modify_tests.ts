@@ -219,6 +219,13 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 		);
 	}
 
+	if (relativePath === 'tests/page/page-click.spec.ts') {
+		replaceOnce(
+			"  await page.evaluate(() => {\n    const logEvent = e => console.log(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, false);\n  const entries = [];\n  page.on('console', message => entries.push(message.text()));\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });",
+			"  await page.evaluate(() => {\n    window['entries'] = [];\n    const logEvent = e => window['entries'].push(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, false);\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });\n  const entries = await page.evaluate(() => window['entries'], undefined, false);"
+		);
+	}
+
 	if (relativePath === 'tests/library/popup.spec.ts') {
 		replaceOnce(
 			"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, false);",
@@ -343,6 +350,16 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 	]),
 	'tests/library/har.spec.ts': new Map([
 		['should not hang on resources served from cache', 'Patchright routing/cache behavior records one cached stylesheet entry instead of the upstream duplicate entry.'],
+	]),
+	'tests/library/har-websocket.spec.ts': new Map([
+		['should still capture websocket when route passes messages through', 'WebsocketRoutes do not work in Patchright.'],
+		['should still allow routeWebSocket to fully mock the connection when capturing HAR', 'WebsocketRoutes do not work in Patchright.'],
+		['should still allow routeWebSocket to modify messages when capturing HAR', 'WebsocketRoutes do not work in Patchright.'],
+		['should respect PLAYWRIGHT_HAR_NO_WEBSOCKET_FRAMES', 'Patchright library tests run through an out-of-process driver, so runtime process.env mutations are not visible to the HAR recorder process.'],
+	]),
+	'tests/library/browsercontext-webauthn.spec.ts': new Map([
+		['should seed a known credential and authenticate', 'Patchright driver-mode WebAuthn binding can hang in the upstream library fixture even though the direct credentials API path works.'],
+		['should capture a page-created credential and reuse it in another context', 'Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture.'],
 	]),
 	'tests/library/page-close.spec.ts': new Map([
 		['addLocatorHandler should throw when page closes', 'Patchright action retry checkpoints differ when a locator handler closes the page during hit-target retries.'],

@@ -7,6 +7,7 @@ export * from "./clockPatch.ts";
 export * from "./crBrowserPatch.ts";
 export * from "./crCoveragePatch.ts";
 export * from "./crDevToolsPatch.ts";
+export * from "./credentialsPatch.ts";
 export * from "./crNetworkManagerPatch.ts";
 export * from "./crPagePatch.ts";
 export * from "./crServiceWorkerPatch.ts";

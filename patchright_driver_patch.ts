@@ -101,6 +101,11 @@ patches.patchCRCoverage(project);
 // ----------------------------------
 patches.patchCRServiceWorker(project);
 
+// ---------------------
+// server/credentials.ts
+// ---------------------
+patches.patchCredentials(project);
+
 // ----------------
 // server/frames.ts
 // ----------------

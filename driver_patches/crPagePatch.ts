@@ -320,6 +320,21 @@ export function patchCRPage(project: Project) {
 		try { await this._page.frameManager.frame(this._targetId)._context("utility") } catch { };
 	`);
 
+	// -- _eventBelongsToStaleFrame Method --
+	const eventBelongsToStaleFrameMethod = frameSessionClass.getMethodOrThrow("_eventBelongsToStaleFrame");
+	eventBelongsToStaleFrameMethod.setBodyText(`
+		const frame = this._page.frameManager.frame(frameId);
+		if (!frame)
+			return true;
+		let session: FrameSession;
+		try {
+			session = this._crPage._sessionForFrame(frame);
+		} catch {
+			return true;
+		}
+		return session && session !== this && !session._swappedIn;
+	`);
+
 	// -- _onFrameNavigated Method --´
 	const onFrameNavigatedMethod = frameSessionClass.getMethodOrThrow("_onFrameNavigated");
 	onFrameNavigatedMethod.setIsAsync(true);
