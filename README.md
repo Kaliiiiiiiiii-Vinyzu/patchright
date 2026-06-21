@@ -117,6 +117,26 @@ Why [NodeMaven](https://go.nodemaven.com/Vinyzu)?
 
 <sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Vinyzu).</sup>
 
+---
+
+[<img width="80%" alt="ColaProxy Banner" src="https://github.com/user-attachments/assets/4b5b22c4-955a-47cf-b2f1-3c2aa5c500ba" />](https://colaproxy.com/?utm_source=viny&utm_medium=viny&ref=viny)
+
+#### [**ColaProxy**](https://colaproxy.com/?utm_source=viny&utm_medium=viny&ref=viny) : Low-Cost Residential Proxies for Scalable Automation, Scraping, and Global Data Access
+
+Why choose [**ColaProxy**](https://colaproxy.com/?utm_source=viny&utm_medium=viny&ref=viny)?
+
+* Dynamic Residential Proxies from as low as **$0.3/GB**  
+* Massive residential IP pool across 195+ countries  
+* 99.9% uptime with stable and fast connections  
+* HTTP / HTTPS / SOCKS5 protocol support  
+* Rotating & sticky sessions for flexible automation  
+* Precise country-level geo-targeting  
+* 24/7 expert support
+
+Need reliable proxies for Patchright automation? [ColaProxy](https://colaproxy.com/?utm_source=viny&utm_medium=viny&ref=viny) offers cost-effective residential, ISP, and mobile proxy solutions for scraping, testing, account management, SEO monitoring, and global data collection. Use coupon code **COLA20** to enjoy 20% off your order.
+
+<sup>Affordable, stable, and built for developers. Start scaling your Patchright projects with [**ColaProxy**](https://colaproxy.com/?utm_source=viny&utm_medium=viny&ref=viny).</sup>
+
 </details>
 
 ---
