@@ -4624,7 +4624,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/trace/recorder/tracing.ts patchright/node_modules/playwright-core/src/server/trace/recorder/tracing.ts
 ---
 +++
-@@ -727,6 +727,11 @@
+@@ -729,6 +729,11 @@
  }
  
  function createBeforeActionTraceEvent(metadata: CallMetadata, parentId?: string): trace.BeforeActionTraceEvent | null {
@@ -4636,7 +4636,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    const event: trace.BeforeActionTraceEvent = {
-@@ -746,6 +751,11 @@
+@@ -748,6 +753,11 @@
  }
  
  function createInputActionTraceEvent(metadata: CallMetadata, point: types.Point | undefined): trace.InputActionTraceEvent | null {
@@ -4648,7 +4648,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -756,6 +766,11 @@
+@@ -758,6 +768,11 @@
  }
  
  function createActionLogTraceEvent(metadata: CallMetadata, message: string): trace.LogTraceEvent | null {
@@ -4660,7 +4660,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -767,6 +782,11 @@
+@@ -769,6 +784,11 @@
  }
  
  function createAfterActionTraceEvent(metadata: CallMetadata): trace.AfterActionTraceEvent | null {
@@ -9653,7 +9653,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/trace/recorder/tracing.ts patchright/packages/playwright-core/src/server/trace/recorder/tracing.ts
 ---
 +++
-@@ -727,6 +727,11 @@
+@@ -729,6 +729,11 @@
  }
  
  function createBeforeActionTraceEvent(metadata: CallMetadata, parentId?: string): trace.BeforeActionTraceEvent | null {
@@ -9665,7 +9665,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    const event: trace.BeforeActionTraceEvent = {
-@@ -746,6 +751,11 @@
+@@ -748,6 +753,11 @@
  }
  
  function createInputActionTraceEvent(metadata: CallMetadata, point: types.Point | undefined): trace.InputActionTraceEvent | null {
@@ -9677,7 +9677,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -756,6 +766,11 @@
+@@ -758,6 +768,11 @@
  }
  
  function createActionLogTraceEvent(metadata: CallMetadata, message: string): trace.LogTraceEvent | null {
@@ -9689,7 +9689,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    if (metadata.internal || metadata.method.startsWith('tracing'))
      return null;
    return {
-@@ -767,6 +782,11 @@
+@@ -769,6 +784,11 @@
  }
  
  function createAfterActionTraceEvent(metadata: CallMetadata): trace.AfterActionTraceEvent | null {
