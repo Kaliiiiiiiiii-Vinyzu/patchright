@@ -437,6 +437,7 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should not flush console events', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should flush console events on tracing stop', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should not emit after w/o before', 'Console CDP domain is disabled in Patchright, so console.log never fires and the evaluate promise never resolves.'],
+		['should save trace while a WebSocket keeps streaming frames', 'Patchright tracing export can hang while a WebSocket keeps streaming frames.'],
 	]),
 	'tests/library/inspector/recorder-api.spec.ts': new Map([
 		['page.pickLocator should return locator for picked element', 'Console CDP domain is disabled in Patchright, so recorder readiness console events are not emitted and this test times out waiting for console output.'],
