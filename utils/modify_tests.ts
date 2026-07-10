@@ -258,17 +258,9 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['page.press should work for Enter', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 	]),
 	'tests/page/page-network-response.spec.ts': new Map([
-		['should report if request was fromServiceWorker', 'Patchright routing/injection changes service-worker attribution semantics.'],
 		['should return set-cookie header after route.fulfill', 'Patchright always-on routing follows Chromium interception behavior where Set-Cookie is not exposed on fulfilled responses.'],
 	]),
-	'tests/page/page-event-request.spec.ts': new Map([
-		['should report requests and responses handled by service worker', 'Patchright routing/injection changes service-worker attribution semantics.'],
-		['should report requests and responses handled by service worker with routing', 'Patchright routing/injection changes service-worker attribution semantics.'],
-		['should report navigation requests and responses handled by service worker', 'Patchright routing/injection changes service-worker attribution semantics.'],
-		['should report navigation requests and responses handled by service worker with routing', 'Patchright routing/injection changes service-worker attribution semantics.'],
-	]),
 	'tests/page/interception.spec.ts': new Map([
-		['should intercept after a service worker', 'Patchright routing order differs after service-worker interception.'],
 		['should intercept network activity from worker', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 		['should intercept worker requests when enabled after worker creation', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 		['should intercept network activity from worker 2', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
@@ -337,7 +329,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should evaluate in the page context', 'Patchright evaluate string expressions run in utility context by default; page-global resolution differs.'],
 	]),
 	'tests/library/chromium/chromium.spec.ts': new Map([
-		['serviceWorker(), and fromServiceWorker() work', 'Patchright routing/injection changes service-worker attribution semantics.'],
 		['should emit console messages from service worker', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 		['should capture console.log from ServiceWorker start', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],
 	]),
