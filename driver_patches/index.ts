@@ -1,5 +1,6 @@
 export * from "./browserContextDispatcherPatch.ts";
 export * from "./browserContextPatch.ts";
+export * from "./buildPatch.ts";
 export * from "./chromiumPatch.ts";
 export * from "./chromiumSwitchesPatch.ts";
 export * from "./cliAliasPatch.ts";

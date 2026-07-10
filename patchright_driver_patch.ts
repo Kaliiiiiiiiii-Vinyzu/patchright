@@ -67,6 +67,11 @@ clientPatches.patchWorker(project);
 // ------------------------
 patches.patchBrowserContext(project);
 
+// --------------------
+// utils/build/build.js
+// --------------------
+patches.patchBuild(project);
+
 // ---------------------------
 // server/chromium/chromium.ts
 // ---------------------------
