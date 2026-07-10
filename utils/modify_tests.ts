@@ -346,9 +346,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should support webgl @smoke', 'Patchright removes the unsafe SwiftShader fallback, so WebGL availability is environment-dependent in headless runs.'],
 		['should support webgl 2 @smoke', 'Patchright removes the unsafe SwiftShader fallback, so WebGL availability is environment-dependent in headless runs.'],
 	]),
-	'tests/library/har.spec.ts': new Map([
-		['should not hang on resources served from cache', 'Patchright routing/cache behavior records one cached stylesheet entry instead of the upstream duplicate entry.'],
-	]),
 	'tests/library/har-websocket.spec.ts': new Map([
 		['should still capture websocket when route passes messages through', 'WebsocketRoutes do not work in Patchright.'],
 		['should still allow routeWebSocket to fully mock the connection when capturing HAR', 'WebsocketRoutes do not work in Patchright.'],

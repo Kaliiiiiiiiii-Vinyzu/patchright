@@ -126,6 +126,19 @@ export function patchCRNetworkManager(project: Project) {
 		.asKindOrThrow(SyntaxKind.Block)
 		.insertStatements(0, "if (this._alreadyTrackedNetworkIds.has(event.networkId)) return;");
 
+	// Cached requests do not produce Fetch.requestPaused, so finish pairing them from the Network event.
+	const onRequestServedFromCacheMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestServedFromCache");
+	onRequestServedFromCacheMethod
+		.getBodyOrThrow()
+		.asKindOrThrow(SyntaxKind.Block)
+		.addStatements(`
+			const requestWillBeSentEvent = this._requestIdToRequestWillBeSentEvent.get(event.requestId);
+			if (requestWillBeSentEvent) {
+				this._onRequest(requestWillBeSentEvent.sessionInfo, requestWillBeSentEvent.event, undefined, undefined);
+				this._requestIdToRequestWillBeSentEvent.delete(event.requestId);
+			}
+		`);
+
 
 	// ------- RouteImpl Class -------
 	const routeImplClass = crNetworkManagerSourceFile.getClassOrThrow("RouteImpl");
