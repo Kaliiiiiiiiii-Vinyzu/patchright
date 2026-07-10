@@ -10,24 +10,26 @@ export function patchFrames(project: Project) {
 	framesSourceFile.getImportDeclarationOrThrow("./errors").addNamedImport("TargetClosedError");
 	// Add the custom import and comment at the start of the file
 	framesSourceFile.addImportDeclarations([
-		{ moduleSpecifier: './chromium/crExecutionContext', namedImports: ['CRExecutionContext'] },
-		{ moduleSpecifier: './dom', namedImports: ['FrameExecutionContext'] },
-		{ moduleSpecifier: './chromium/crConnection', namedImports: ['CRSession'], isTypeOnly: true },
-		{ moduleSpecifier: 'crypto', defaultImport: 'crypto' },
+		{ moduleSpecifier: "./chromium/crExecutionContext", namedImports: ["CRExecutionContext"] },
+		{ moduleSpecifier: "./dom", namedImports: ["FrameExecutionContext"] },
+		{ moduleSpecifier: "./chromium/crConnection", namedImports: ["CRSession"], isTypeOnly: true },
+		{ moduleSpecifier: "crypto", defaultImport: "crypto" },
 	]);
 
 	// ------- FrameManager Class -------
 	const frameManagerClass = framesSourceFile.getClassOrThrow("FrameManager");
 
 	// -- frameCommittedNewDocumentNavigation Method --
-	const frameCommittedNewDocumentNavigationMethod = frameManagerClass.getMethodOrThrow("frameCommittedNewDocumentNavigation");
+	const frameCommittedNewDocumentNavigationMethod = frameManagerClass.getMethodOrThrow(
+		"frameCommittedNewDocumentNavigation",
+	);
 	const clearLifecycleStatementIndex = frameCommittedNewDocumentNavigationMethod
 		.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
 		.findIndex(stmt => stmt.getText().trim() === "frame._onClearLifecycle();");
 	frameCommittedNewDocumentNavigationMethod.insertStatements(clearLifecycleStatementIndex - 2, [
 		"frame._iframeWorld = undefined;",
 		"frame._mainWorld = undefined;",
-		"frame._isolatedWorld = undefined;"
+		"frame._isolatedWorld = undefined;",
 	]);
 
 	// ------- Frame Class -------
@@ -35,8 +37,8 @@ export function patchFrames(project: Project) {
 	// Add Properties to the Frame Class
 	frameClass.addProperties([
 		{ name: "_isolatedWorld", type: "dom.FrameExecutionContext" },
-		{ name: "_mainWorld",     type: "dom.FrameExecutionContext" },
-		{ name: "_iframeWorld",  type: "dom.FrameExecutionContext" },
+		{ name: "_mainWorld", type: "dom.FrameExecutionContext" },
+		{ name: "_iframeWorld", type: "dom.FrameExecutionContext" },
 	]);
 
 	// -- evalOnSelector Method --
@@ -53,9 +55,9 @@ export function patchFrames(project: Project) {
 	// -- evalOnSelectorAll Method --
 	const evalOnSelectorAllMethod = frameClass.getMethodOrThrow("evalOnSelectorAll");
 	evalOnSelectorAllMethod.addParameter({
-			name: "isolatedContext",
-			type: "boolean",
-			hasQuestionToken: true,
+		name: "isolatedContext",
+		type: "boolean",
+		hasQuestionToken: true,
 	});
 	evalOnSelectorAllMethod.setBodyText(`
 		const maxAttempts = 3;
@@ -166,9 +168,7 @@ export function patchFrames(project: Project) {
 	frameClass.addMethod({
 		name: "_getFrameMainFrameContextId",
 		isAsync: true,
-		parameters: [
-			{ name: "client", type: "CRSession" },
-		],
+		parameters: [{ name: "client", type: "CRSession" }],
 		returnType: "Promise<number>",
 	});
 	const getFrameMainFrameContextIdMethod = frameClass.getMethodOrThrow("_getFrameMainFrameContextId");
@@ -262,9 +262,7 @@ export function patchFrames(project: Project) {
 	`);
 	frameClass.insertMethod(contextMethod.getChildIndex() + 1, {
 		name: "context",
-		parameters: [
-			{ name: "world", type: "types.World" },
-		],
+		parameters: [{ name: "world", type: "types.World" }],
 		returnType: "Promise<dom.FrameExecutionContext>",
 		statements: "return this._context(world);",
 	});
@@ -434,8 +432,14 @@ export function patchFrames(project: Project) {
 		parameters: [
 			{ name: "progress", type: "Progress" },
 			{ name: "selector", type: "string" },
-			{ name: "options", type: "{ performActionPreChecks: boolean; strict?: boolean | null; state?: 'attached' | 'detached' | 'visible' | 'hidden'; noAutoWaiting?: boolean; __testHookNoAutoWaiting?: boolean; __patchrightWaitForSelector?: boolean; __patchrightInitialScope?: dom.ElementHandle; __patchrightSkipRetryLogWaiting?: boolean }" },
-			{ name: "action", type: "(result: dom.ElementHandle | [dom.ElementHandle, dom.ElementHandle[]] | null) => Promise<unknown>" },
+			{
+				name: "options",
+				type: "{ performActionPreChecks: boolean; strict?: boolean | null; state?: 'attached' | 'detached' | 'visible' | 'hidden'; noAutoWaiting?: boolean; __testHookNoAutoWaiting?: boolean; __patchrightWaitForSelector?: boolean; __patchrightInitialScope?: dom.ElementHandle; __patchrightSkipRetryLogWaiting?: boolean }",
+			},
+			{
+				name: "action",
+				type: "(result: dom.ElementHandle | [dom.ElementHandle, dom.ElementHandle[]] | null) => Promise<unknown>",
+			},
 			{ name: "returnAction", type: "'returnOnNotResolved' | 'returnAll' | undefined" },
 			{ name: "continuePolling", type: "symbol" },
 		],
@@ -699,19 +703,25 @@ export function patchFrames(project: Project) {
 	// -- waitForFunctionExpression Method --
 	const waitForFunctionExpressionMethod = frameClass.getMethodOrThrow("waitForFunctionExpression");
 	// Race the inner evaluate against _detachedScope so frame detachment immediately cancels the operation
-	const matchingReturnStmts = waitForFunctionExpressionMethod.getDescendantsOfKind(SyntaxKind.ReturnStatement).filter(stmt => stmt.getText().includes('progress.race(handle.evaluateHandle(h => h.result))'));
+	const matchingReturnStmts = waitForFunctionExpressionMethod
+		.getDescendantsOfKind(SyntaxKind.ReturnStatement)
+		.filter(stmt => stmt.getText().includes("progress.race(handle.evaluateHandle(h => h.result))"));
 	// Take the last (innermost) match to avoid replacing the outer
 	// `return this.retryWithProgressAndTimeouts(...)` statement whose
 	// getText() also contains the substring.
 	const targetReturnStmt = matchingReturnStmts[matchingReturnStmts.length - 1];
 	if (targetReturnStmt) {
-		targetReturnStmt.replaceWithText('return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));');
+		targetReturnStmt.replaceWithText(
+			"return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));",
+		);
 	} else {
 		// Upstream may already include _detachedScope wrapping; assert expected shape exists.
 		assertDefined(
 			waitForFunctionExpressionMethod
 				.getDescendantsOfKind(SyntaxKind.ReturnStatement)
-				.find(stmt => stmt.getText().includes('progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)))'))
+				.find(stmt =>
+					stmt.getText().includes("progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)))"),
+				),
 		);
 	}
 
@@ -1114,7 +1124,10 @@ export function patchFrames(project: Project) {
 		name: "_customFindElementsByParsed",
 		isAsync: true,
 		parameters: [
-			{ name: "resolved", type: "{ injected: js.JSHandle<InjectedScript>, info: { parsed: ParsedSelector, strict: boolean }, frame: Frame, scope?: dom.ElementHandle }" },
+			{
+				name: "resolved",
+				type: "{ injected: js.JSHandle<InjectedScript>, info: { parsed: ParsedSelector, strict: boolean }, frame: Frame, scope?: dom.ElementHandle }",
+			},
 			{ name: "client", type: "CRSession" },
 			{ name: "context", type: "dom.FrameExecutionContext" },
 			{ name: "documentScope", type: "dom.ElementHandle" },

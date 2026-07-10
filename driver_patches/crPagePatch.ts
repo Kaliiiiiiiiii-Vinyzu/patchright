@@ -13,25 +13,25 @@ export function patchCRPage(project: Project) {
 		defaultImport: "crypto",
 	});
 
-
 	// ------- CRPage Class -------
 	const crPageClass = crPageSourceFile.getClassOrThrow("CRPage");
 
 	// -- CRPage Constructor --
 	const crPageConstructor = assertDefined(
-		crPageClass
-		  .getConstructors()
-			.find((ctor) => {
-				const params = ctor.getParameters();
-				return params[0]?.getName() === "client" && params[1]?.getName() === "targetId" && params[2]?.getName() === "browserContext" && params[3]?.getName() === "opener";
-			})
+		crPageClass.getConstructors().find(ctor => {
+			const params = ctor.getParameters();
+			return (
+				params[0]?.getName() === "client" &&
+				params[1]?.getName() === "targetId" &&
+				params[2]?.getName() === "browserContext" &&
+				params[3]?.getName() === "opener"
+			);
+		}),
 	);
 
 	// Swap legacy updateRequestInterception for direct network manager interception + unique script tag.
 	const updateRequestInterceptionStatement = assertDefined(
-		crPageConstructor
-			.getStatements()
-			.find((statement) => statement.getText() === "this.updateRequestInterception();")
+		crPageConstructor.getStatements().find(statement => statement.getText() === "this.updateRequestInterception();"),
 	);
 	updateRequestInterceptionStatement.replaceWithText(`
 		this._networkManager.setRequestInterception(true);
@@ -42,9 +42,7 @@ export function patchCRPage(project: Project) {
 	crPageClass.addMethod({
 		name: "exposeBinding",
 		isAsync: true,
-		parameters: [
-			{ name: "binding", type: "PageBinding" },
-		],
+		parameters: [{ name: "binding", type: "PageBinding" }],
 	});
 	const crExposeBindingMethod = crPageClass.getMethodOrThrow("exposeBinding");
 	// Initialize binding across all frame sessions and evaluate the binding source in all page frames
@@ -76,8 +74,7 @@ export function patchCRPage(project: Project) {
 	const sessionForFrameMethod = crPageClass.getMethodOrThrow("_sessionForFrame");
 	// Replace the error message for detached frames with a more concise version
 	const methodText = sessionForFrameMethod.getText();
-	sessionForFrameMethod.replaceWithText(methodText.replace('Frame has been detached.', 'Frame was detached'));
-
+	sessionForFrameMethod.replaceWithText(methodText.replace("Frame has been detached.", "Frame was detached"));
 
 	// ------- FrameSession Class -------
 	const frameSessionClass = crPageSourceFile.getClassOrThrow("FrameSession");
@@ -105,20 +102,25 @@ export function patchCRPage(project: Project) {
 
 	// -- _initialize Method --
 	const initializeFrameSessionMethod = frameSessionClass.getMethodOrThrow("_initialize");
-	const initializeFrameSessionMethodBody = initializeFrameSessionMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
+	const initializeFrameSessionMethodBody = initializeFrameSessionMethod
+		.getBodyOrThrow()
+		.asKindOrThrow(SyntaxKind.Block);
 	initializeFrameSessionMethod.insertStatements(0, `const pageEnablePromise = this._client.send('Page.enable');`);
 
 	// Buffer dialog events for main frames so that dialogs on newly opened popups are never missed
 	const addBrowserListenersStatement = assertDefined(
 		initializeFrameSessionMethod
 			.getStatements()
-			.find((statement) => statement.getText().includes("this._addBrowserListeners()"))
+			.find(statement => statement.getText().includes("this._addBrowserListeners()")),
 	);
-	initializeFrameSessionMethodBody.insertStatements(addBrowserListenersStatement.getChildIndex(), `
+	initializeFrameSessionMethodBody.insertStatements(
+		addBrowserListenersStatement.getChildIndex(),
+		`
 		let bufferedDialogEvents: any[] | undefined = this._isMainFrame() ? [] : undefined;
 		if (bufferedDialogEvents)
 			this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.javascriptDialogOpening', (event: any) => bufferedDialogEvents ? bufferedDialogEvents.push(event) : undefined));
-	`);
+	`,
+	);
 
 	const promisesDeclaration = initializeFrameSessionMethod.getVariableDeclarationOrThrow("promises");
 	// Find the initializer array
@@ -126,22 +128,27 @@ export function patchCRPage(project: Project) {
 	// Find the relevant element inside the array that we need to update
 	promisesInitializer
 		.getElements()
-		.filter((element) => 
-			element.getText().includes("this._client.send('Runtime.enable'") ||
-			element.getText().includes("this._client.send('Runtime.addBinding', { name: PageBinding.kPlaywrightBinding })")
+		.filter(
+			element =>
+				element.getText().includes("this._client.send('Runtime.enable'") ||
+				element.getText().includes("this._client.send('Runtime.addBinding', { name: PageBinding.kPlaywrightBinding })"),
 		)
-		.forEach((element) => { promisesInitializer.removeElement(element); });
+		.forEach(element => {
+			promisesInitializer.removeElement(element);
+		});
 	// Replace Page.enable send in promises with the early-started promise
 	promisesInitializer
 		.getElements()
-		.filter((element) => element.getText().trim() === "this._client.send('Page.enable')")
-		.forEach((element) => { element.replaceWithText("pageEnablePromise"); });
-	
+		.filter(element => element.getText().trim() === "this._client.send('Page.enable')")
+		.forEach(element => {
+			element.replaceWithText("pageEnablePromise");
+		});
+
 	// Find the relevant element inside the array that we need to update
 	const pageGetFrameTreeElement = assertDefined(
 		promisesInitializer
 			.getElements()
-			.find((element) => element.getText().startsWith("this._client.send('Page.getFrameTree'"))
+			.find(element => element.getText().startsWith("this._client.send('Page.getFrameTree'")),
 	);
 	const pageGetFrameTreeThenBlock = pageGetFrameTreeElement
 		.asKindOrThrow(SyntaxKind.CallExpression)
@@ -153,16 +160,14 @@ export function patchCRPage(project: Project) {
 		pageGetFrameTreeThenBlock
 			.getStatements()
 			.find(
-				(statement) =>
-					statement.isKind(SyntaxKind.IfStatement) &&
-					statement.getText().includes("this._addRendererListeners()"),
-			)
+				statement =>
+					statement.isKind(SyntaxKind.IfStatement) && statement.getText().includes("this._addRendererListeners()"),
+			),
 	);
 	addRendererListenersIfStatement
 		.asKindOrThrow(SyntaxKind.IfStatement)
 		.getThenStatement()
-		.asKindOrThrow(SyntaxKind.Block)
-		.addStatements(`
+		.asKindOrThrow(SyntaxKind.Block).addStatements(`
 			// Replay any dialog events that arrived before _addRendererListeners
 			const pendingDialogEvents = bufferedDialogEvents || [];
 			bufferedDialogEvents = undefined;
@@ -173,24 +178,21 @@ export function patchCRPage(project: Project) {
 	pageGetFrameTreeThenBlock
 		.getStatements()
 		.filter(
-			(statement) =>
+			statement =>
 				statement.getText().includes("const localFrames = this._isMainFrame() ? this._page.frames()") ||
 				statement.getText().includes("this._client._sendMayFail('Page.createIsolatedWorld', {"),
 		)
-		.forEach((statement) => { statement.remove() });
+		.forEach(statement => {
+			statement.remove();
+		});
 	// Find the non-initial navigation branch and ensure our localFrames setup is present.
 	const lifecycleEventIfStatement = assertDefined(
 		initializeFrameSessionMethodBody
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find((statement) => statement.getText().includes("this._firstNonInitialNavigationCommittedFulfill()"))
+			.find(statement => statement.getText().includes("this._firstNonInitialNavigationCommittedFulfill()")),
 	);
-	const lifecycleEventElseBlock = assertDefined(
-		lifecycleEventIfStatement
-			.getElseStatement()
-	);
-	lifecycleEventElseBlock
-		.asKindOrThrow(SyntaxKind.Block)
-		.insertStatements(0, `
+	const lifecycleEventElseBlock = assertDefined(lifecycleEventIfStatement.getElseStatement());
+	lifecycleEventElseBlock.asKindOrThrow(SyntaxKind.Block).insertStatements(0, `
 			const localFrames = this._isMainFrame() ? this._page.frames() : [this._page.frameManager.frame(this._targetId)!];
 			for (const frame of localFrames) {
 				this._page.frameManager.frame(frame._id)._context("utility").catch(() => {});
@@ -198,15 +200,16 @@ export function patchCRPage(project: Project) {
 					frame.evaluateExpression(binding.source).catch(e => {});
 			}
 		`);
-		
+
 	// Allow focus control on pages https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/issues/137#event-20580557051
 	const focusEmulationIfStatement = assertDefined(
 		initializeFrameSessionMethodBody
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find((statement) => 
-				statement.getText().startsWith("if (this._isMainFrame()") &&
-				statement.getText().includes("Emulation.setFocusEmulationEnabled")
-			)
+			.find(
+				statement =>
+					statement.getText().startsWith("if (this._isMainFrame()") &&
+					statement.getText().includes("Emulation.setFocusEmulationEnabled"),
+			),
 	);
 	focusEmulationIfStatement.replaceWithText(`
 		if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
@@ -215,8 +218,8 @@ export function patchCRPage(project: Project) {
 	// Find and patch the initScript Evaluation Loop to inject pageBindings alongside initScripts for both main and utility contexts
 	initializeFrameSessionMethodBody
 		.getDescendantsOfKind(SyntaxKind.ForOfStatement)
-		.filter((statement) => statement.getText().includes("this._crPage._page.allInitScripts()"))
-		.forEach((statement) => {
+		.filter(statement => statement.getText().includes("this._crPage._page.allInitScripts()"))
+		.forEach(statement => {
 			if (statement.getText().includes("frame.evaluateExpression(initScript.source)"))
 				statement.replaceWithText(`
 					for (const binding of this._crPage._browserContext._pageBindings.values()) frame.evaluateExpression(binding.source).catch(e => {});
@@ -232,7 +235,9 @@ export function patchCRPage(project: Project) {
 	// Find the statement `promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))`
 	const promisePushStatements = initializeFrameSessionMethodBody
 		.getStatements()
-		.filter((statement) => statement.getText().includes("promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))"));
+		.filter(statement =>
+			statement.getText().includes("promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))"),
+		);
 	// Ensure the right statements were found
 	if (promisePushStatements.length === 1) {
 		// Replace the first `promises.push` statement with the new conditional code
@@ -280,7 +285,7 @@ export function patchCRPage(project: Project) {
 		);
 		await Promise.all(evaluationPromises);
 	`);
-			
+
 	// -- _removeExposedBindings Method --
 	frameSessionClass.addMethod({
 		name: "_removeExposedBindings",
@@ -366,18 +371,22 @@ export function patchCRPage(project: Project) {
 		for (const name of this._exposedBindingNames)
 			this._client._sendMayFail('Runtime.addBinding', { name: name, executionContextId: contextPayload.id });
 	`);
-	onExecutionContextCreatedMethod.insertStatements(2, `
+	onExecutionContextCreatedMethod.insertStatements(
+		2,
+		`
 		if (contextPayload.auxData?.type === "worker") throw new Error("ExecutionContext is worker");
-	`);
+	`,
+	);
 	// Replace the legacy worldName branching logic with a direct assignment from contextPayload.name.
 	onExecutionContextCreatedMethod
 		.getStatements()
-		.filter((statement) =>
-			statement.getText().includes("let worldName: types.World|null") ||
-			statement.getText().includes("if (contextPayload.auxData && !!contextPayload.auxData.isDefault)") ||
-			statement.getText().includes("worldName = 'main'") ||
-			statement.getText().includes("else if (contextPayload.name === this._crPage.utilityWorldName)") ||
-			statement.getText().includes("worldName = 'utility'")
+		.filter(
+			statement =>
+				statement.getText().includes("let worldName: types.World|null") ||
+				statement.getText().includes("if (contextPayload.auxData && !!contextPayload.auxData.isDefault)") ||
+				statement.getText().includes("worldName = 'main'") ||
+				statement.getText().includes("else if (contextPayload.name === this._crPage.utilityWorldName)") ||
+				statement.getText().includes("worldName = 'utility'"),
 		)
 		.forEach((statement, index) => {
 			if (index === 0) statement.replaceWithText("let worldName = contextPayload.name;");
@@ -387,7 +396,7 @@ export function patchCRPage(project: Project) {
 	const contextCreatedIfStatement = assertDefined(
 		onExecutionContextCreatedMethod
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find((stmt) => stmt.getText().includes("if (worldName)") && stmt.getText().includes("contextCreated"))
+			.find(stmt => stmt.getText().includes("if (worldName)") && stmt.getText().includes("contextCreated")),
 	);
 	contextCreatedIfStatement.replaceWithText(`
 		if (worldName && (worldName === 'main' || worldName === 'utility'))
@@ -411,11 +420,11 @@ export function patchCRPage(project: Project) {
 	const sessionOnceCall = assertDefined(
 		onAttachedToTargetMethod
 			.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
-			.find((statement) => statement.getText().includes("session.once('Runtime.executionContextCreated'"))
+			.find(statement => statement.getText().includes("session.once('Runtime.executionContextCreated'")),
 	);
-	sessionOnceCall
-		.getParentIfKindOrThrow(SyntaxKind.Block)
-		.insertStatements(sessionOnceCall.getChildIndex() + 1, `
+	sessionOnceCall.getParentIfKindOrThrow(SyntaxKind.Block).insertStatements(
+		sessionOnceCall.getChildIndex() + 1,
+		`
 			var globalThis = await session._sendMayFail('Runtime.evaluate', {
 				expression: "globalThis",
 				serializationOptions: { serialization: "idOnly" }
@@ -427,13 +436,14 @@ export function patchCRPage(project: Project) {
 					worker.createExecutionContext(new CRExecutionContext(session, { id: executionContextId }));
 				}
 			}
-		`);
-		
+		`,
+	);
+
 	// Remove `Runtime.enable` calls
 	const runtimeStatementToRemove = assertDefined(
 		onAttachedToTargetMethod
-		.getStatements()
-		.find((statement) => statement.getText().includes("session._sendMayFail('Runtime.enable');"))
+			.getStatements()
+			.find(statement => statement.getText().includes("session._sendMayFail('Runtime.enable');")),
 	);
 	runtimeStatementToRemove.remove();
 
@@ -443,10 +453,11 @@ export function patchCRPage(project: Project) {
 	const onBindingCalledIfStatement = assertDefined(
 		onBindingCalledMethod
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find((statement) =>
-				statement.getExpression().getText() === "context" &&
+			.find(
+				statement =>
+					statement.getExpression().getText() === "context" &&
 					statement.getText().includes("await this._page.onBindingCalled(event.payload, context)"),
-			)
+			),
 	);
 	onBindingCalledIfStatement.replaceWithText(`
 		if (context) {
@@ -468,9 +479,7 @@ export function patchCRPage(project: Project) {
 	`);
 
 	// -- _evaluateOnNewDocument Method --
-	frameSessionClass
-		.getMethodOrThrow("_evaluateOnNewDocument")
-		.setBodyText(`
+	frameSessionClass.getMethodOrThrow("_evaluateOnNewDocument").setBodyText(`
 			this._evaluateOnNewDocumentScripts.push(initScript);
 			const worldName = world === 'utility' ? this._crPage.utilityWorldName : undefined;
 			const { identifier } = await this._client.send('Page.addScriptToEvaluateOnNewDocument', { source: initScript.source, worldName, runImmediately });
@@ -478,9 +487,7 @@ export function patchCRPage(project: Project) {
 		`);
 
 	// -- _removeEvaluatesOnNewDocument Method --
-	frameSessionClass
-		.getMethodOrThrow("_removeEvaluatesOnNewDocument")
-		.setBodyText(`
+	frameSessionClass.getMethodOrThrow("_removeEvaluatesOnNewDocument").setBodyText(`
 			const toRemove = new Set(initScripts);
 			this._evaluateOnNewDocumentScripts = this._evaluateOnNewDocumentScripts.filter(script => !toRemove.has(script));
 			const ids: string[] = [];
@@ -500,15 +507,15 @@ export function patchCRPage(project: Project) {
 		adoptBackendNodeIdMethod
 			.getVariableStatements()
 			.find(
-				(statement) =>
+				statement =>
 					statement.getText().includes("const result = await this._client._sendMayFail('DOM.resolveNode'") &&
 					statement.getText().includes("executionContextId: (to.delegate as CRExecutionContext)._contextId"),
-			)
+			),
 	);
 	const executionContextIdAssignment = assertDefined(
 		resolveNodeResultStatement
 			.getDescendantsOfKind(SyntaxKind.PropertyAssignment)
-			.find((assignment) => assignment.getName() === "executionContextId")
+			.find(assignment => assignment.getName() === "executionContextId"),
 	);
 	executionContextIdAssignment.setInitializer("to.delegate._contextId");
 }

@@ -6,7 +6,9 @@ import { assertDefined } from "./utils.ts";
 // -----------------------------------
 export function patchCRNetworkManager(project: Project) {
 	// Add source file to the project
-	const crNetworkManagerSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/chromium/crNetworkManager.ts");
+	const crNetworkManagerSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/chromium/crNetworkManager.ts",
+	);
 	// Add the custom import and comment at the start of the file
 	crNetworkManagerSourceFile.addImportDeclaration({
 		moduleSpecifier: "crypto",
@@ -24,36 +26,45 @@ export function patchCRNetworkManager(project: Project) {
 	// Clean up tracked network IDs when sessions are removed to avoid unbounded growth.
 	const removeSessionBody = removeSessionMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
 	const deleteSessionStatement = assertDefined(
-		removeSessionBody
-			.getStatements()
-			.find(s => s.getText().includes("this._sessions.delete(session)"))
+		removeSessionBody.getStatements().find(s => s.getText().includes("this._sessions.delete(session)")),
 	);
-	removeSessionBody.insertStatements(deleteSessionStatement.getChildIndex() + 1, "if (!this._sessions.size) this._alreadyTrackedNetworkIds.clear();")
+	removeSessionBody.insertStatements(
+		deleteSessionStatement.getChildIndex() + 1,
+		"if (!this._sessions.size) this._alreadyTrackedNetworkIds.clear();",
+	);
 
 	// -- _onRequest Method --
 	const onRequestMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
 	// Find the route assignment, whether it is still pristine or already expanded.
 	const routeAssignment = assertDefined(
-		onRequestMethod
-			.getDescendantsOfKind(SyntaxKind.BinaryExpression)
-			.find(expr => {
-				if (expr.getLeft().getText() !== "route")
-					return false;
-				return expr.getRight().getText().startsWith("new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId");
-			})
+		onRequestMethod.getDescendantsOfKind(SyntaxKind.BinaryExpression).find(expr => {
+			if (expr.getLeft().getText() !== "route") return false;
+			return expr
+				.getRight()
+				.getText()
+				.startsWith("new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId");
+		}),
 	);
 	// Adding new parameter to the RouteImpl call
-	routeAssignment.getRight().replaceWithText(
-		"new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId, this._page, requestPausedEvent.networkId ?? requestPausedEvent.requestId, this)",
-	);
+	routeAssignment
+		.getRight()
+		.replaceWithText(
+			"new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId, this._page, requestPausedEvent.networkId ?? requestPausedEvent.requestId, this)",
+		);
 
 	// -- _updateProtocolRequestInterceptionForSession Method --
-	const updateProtocolRequestInterceptionForSessionMethod = crNetworkManagerClass.getMethodOrThrow("_updateProtocolRequestInterceptionForSession");
+	const updateProtocolRequestInterceptionForSessionMethod = crNetworkManagerClass.getMethodOrThrow(
+		"_updateProtocolRequestInterceptionForSession",
+	);
 	// Replace cache disabled logic: keep cache enabled unless user has route interceptors
 	updateProtocolRequestInterceptionForSessionMethod
 		.getStatements()
-		.filter((statement) => statement.getText().includes("const cachePromise = info.session.send('Network.setCacheDisabled', { cacheDisabled: enabled });"))
-		.forEach((statement) => {
+		.filter(statement =>
+			statement
+				.getText()
+				.includes("const cachePromise = info.session.send('Network.setCacheDisabled', { cacheDisabled: enabled });"),
+		)
+		.forEach(statement => {
 			statement.replaceWithText(`
 				const hasHarRecorders = !!this._page?.browserContext?._harRecorders?.size;
 				const userInterception = this._page ? this._page.needsRequestInterception() : false;
@@ -64,14 +75,10 @@ export function patchCRNetworkManager(project: Project) {
 	// -- setRequestInterception Method --
 	// Always update cache state so user-added routes trigger cache bypass
 	const setRequestInterceptionMethod = crNetworkManagerClass.getMethodOrThrow("setRequestInterception");
-	setRequestInterceptionMethod
-		.getBodyOrThrow()
-		.asKindOrThrow(SyntaxKind.Block)
-		.addStatements(`
+	setRequestInterceptionMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block).addStatements(`
 			if (this._page)
 				await this._forEachSession(info => info.session.send('Network.setCacheDisabled', { cacheDisabled: this._page.needsRequestInterception() }));
 		`);
-
 
 	// -- _onRequest Method --
 	const onRequestHandlerMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
@@ -86,31 +93,34 @@ export function patchCRNetworkManager(project: Project) {
 
 	// Move `const isInterceptedOptionsPreflight` up before frame resolution so it's defined before first use
 	const preflightStatementNode = assertDefined(
-		onRequestHandlerMethodBody
-			.getStatements()
-			.find(s => s.getText().includes('const isInterceptedOptionsPreflight'))
+		onRequestHandlerMethodBody.getStatements().find(s => s.getText().includes("const isInterceptedOptionsPreflight")),
 	);
 	const preflightStatementText = preflightStatementNode.getText();
 	preflightStatementNode.remove();
 
 	// Insert before the `let frame` statement so it's defined early enough
 	const frameStatement = assertDefined(
-		onRequestHandlerMethodBody
-			.getStatements()
-			.find(s => s.getText().startsWith('let frame'))
+		onRequestHandlerMethodBody.getStatements().find(s => s.getText().startsWith("let frame")),
 	);
 	const frameIndex = frameStatement.getChildIndex();
 	onRequestHandlerMethodBody.insertStatements(frameIndex, preflightStatementText);
 	// OPTIONS preflight bypass: when Patchright's always-on interception catches OPTIONS but no user routes exist
-	onRequestHandlerMethodBody.insertStatements(frameIndex + 1, `
+	onRequestHandlerMethodBody.insertStatements(
+		frameIndex + 1,
+		`
 		if (isInterceptedOptionsPreflight && !(this._page || this._serviceWorker).needsRequestInterception()) {
 			requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent!.requestId });
 			return;
 		}
-	`);
+	`,
+	);
 	// Guard null page delegate when resolving synthetic main-frame id.
-	onRequestHandlerMethodBody.getStatements().forEach((statement) => {
-		if (statement.getText().includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)"))
+	onRequestHandlerMethodBody.getStatements().forEach(statement => {
+		if (
+			statement
+				.getText()
+				.includes("if (!frame && this._page && requestWillBeSentEvent.frameId === (this._page?.delegate)._targetId)")
+		)
 			statement.replaceWithText(`
 				const pageDelegate = this._page?.delegate;
 				if (!frame && pageDelegate && requestWillBeSentEvent.frameId === pageDelegate._targetId) {
@@ -121,9 +131,15 @@ export function patchCRNetworkManager(project: Project) {
 	const provisionalHeadersStatement = assertDefined(
 		onRequestHandlerMethod
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find(statement => statement.getExpression().getText() === "route" && statement.getText().includes("request.request.setRawRequestHeaders"))
+			.find(
+				statement =>
+					statement.getExpression().getText() === "route" &&
+					statement.getText().includes("request.request.setRawRequestHeaders"),
+			),
 	);
-	provisionalHeadersStatement.getExpression().replaceWithText("route && (this._page?.needsRequestInterception() || !!this._serviceWorker)");
+	provisionalHeadersStatement
+		.getExpression()
+		.replaceWithText("route && (this._page?.needsRequestInterception() || !!this._serviceWorker)");
 
 	// -- _onRequestPaused Method --
 	const onRequestPausedMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestPaused");
@@ -134,17 +150,13 @@ export function patchCRNetworkManager(project: Project) {
 
 	// Cached requests do not produce Fetch.requestPaused, so finish pairing them from the Network event.
 	const onRequestServedFromCacheMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestServedFromCache");
-	onRequestServedFromCacheMethod
-		.getBodyOrThrow()
-		.asKindOrThrow(SyntaxKind.Block)
-		.addStatements(`
+	onRequestServedFromCacheMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block).addStatements(`
 			const requestWillBeSentEvent = this._requestIdToRequestWillBeSentEvent.get(event.requestId);
 			if (requestWillBeSentEvent) {
 				this._onRequest(requestWillBeSentEvent.sessionInfo, requestWillBeSentEvent.event, undefined, undefined);
 				this._requestIdToRequestWillBeSentEvent.delete(event.requestId);
 			}
 		`);
-
 
 	// ------- RouteImpl Class -------
 	const routeImplClass = crNetworkManagerSourceFile.getClassOrThrow("RouteImpl");
@@ -157,31 +169,29 @@ export function patchCRNetworkManager(project: Project) {
 
 	// -- RouteImpl Constructor --
 	const routeImplConstructor = assertDefined(
-		routeImplClass
-			.getConstructors()
-			.find((ctor) => {
-				const params = ctor.getParameters();
-				return params[0]?.getName() === "session" && params[1]?.getName() === "interceptionId";
-			})
+		routeImplClass.getConstructors().find(ctor => {
+			const params = ctor.getParameters();
+			return params[0]?.getName() === "session" && params[1]?.getName() === "interceptionId";
+		}),
 	);
 	// Get current parameters and add the new `page`, `networkId` and `sessionManager` parameter
 	const routeImplConstructorParameters = routeImplConstructor.getParameters();
 	routeImplConstructor.insertParameters(routeImplConstructorParameters.length, [
-		{ name: 'page', type: 'Page | null' },
-		{ name: 'networkId', type: 'string' },
-		{ name: 'sessionManager', type: 'CRNetworkManager' },
+		{ name: "page", type: "Page | null" },
+		{ name: "networkId", type: "string" },
+		{ name: "sessionManager", type: "CRNetworkManager" },
 	]);
 	// Modify the constructor's body to include `this._page = page;` and other properties
 	const routeImplConstructorBody = routeImplConstructor.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
 	routeImplConstructorBody.insertStatements(0, [
-		'this._page = void 0;',
-		'this._networkId = void 0;',
-		'this._sessionManager = void 0;',
+		"this._page = void 0;",
+		"this._networkId = void 0;",
+		"this._sessionManager = void 0;",
 	]);
 	routeImplConstructorBody.addStatements([
-		'this._page = page;',
-		'this._networkId = networkId;',
-		'this._sessionManager = sessionManager;',
+		"this._page = page;",
+		"this._networkId = networkId;",
+		"this._sessionManager = sessionManager;",
 		"eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));",
 	]);
 
@@ -190,9 +200,9 @@ export function patchCRNetworkManager(project: Project) {
 		name: "_fixCSP",
 		isAsync: false,
 		parameters: [
-			{ name: "csp", type: "string | null" }, 
+			{ name: "csp", type: "string | null" },
 			{ name: "scriptNonce", type: "string | null" },
-		]
+		],
 	});
 	const fixCSPMethod = routeImplClass.getMethodOrThrow("_fixCSP");
 	fixCSPMethod.setBodyText(`
@@ -304,9 +314,9 @@ export function patchCRNetworkManager(project: Project) {
 		name: "_injectIntoHead",
 		isAsync: false,
 		parameters: [
-			{ name: "body", type: "string" }, 
+			{ name: "body", type: "string" },
 			{ name: "injectionHTML", type: "string" },
-		]
+		],
 	});
 	const injectIntoHeadMethod = routeImplClass.getMethodOrThrow("_injectIntoHead");
 	injectIntoHeadMethod.setBodyText(`
@@ -490,26 +500,36 @@ export function patchCRNetworkManager(project: Project) {
 	const responseDeclaration = assertDefined(
 		createResponseMethod
 			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
-			.find(declaration => declaration.getName() === "response" && declaration.getInitializer()?.getText().startsWith("new network.Response("))
+			.find(
+				declaration =>
+					declaration.getName() === "response" &&
+					declaration.getInitializer()?.getText().startsWith("new network.Response("),
+			),
 	);
 	const responseConstructor = responseDeclaration.getInitializerOrThrow().asKindOrThrow(SyntaxKind.NewExpression);
 	responseConstructor.getArguments()[3].replaceWithText("responseHeaders");
 	const responseStatement = responseDeclaration.getVariableStatementOrThrow();
 	const createResponseBody = createResponseMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
 	const responseStatementIndex = createResponseBody.getStatements().indexOf(responseStatement);
-	createResponseBody.insertStatements(responseStatementIndex, `
+	createResponseBody.insertStatements(
+		responseStatementIndex,
+		`
 		const responseHeaders = headersObjectToArray(responsePayload.headers);
 		const fulfilledSetCookieHeaders = request._originalRequestRoute?._fulfilledSetCookieHeaders ?? [];
 		if (fulfilledSetCookieHeaders.length && !responseHeaders.some(header => header.name.toLowerCase() === 'set-cookie'))
 			responseHeaders.push(...fulfilledSetCookieHeaders);
-	`);
+	`,
+	);
 	const updatedResponseStatementIndex = createResponseBody
 		.getStatements()
 		.findIndex(statement => statement.getText().startsWith("const response = new network.Response("));
-	createResponseBody.insertStatements(updatedResponseStatementIndex + 1, `
+	createResponseBody.insertStatements(
+		updatedResponseStatementIndex + 1,
+		`
 		if (fulfilledSetCookieHeaders.length)
 			response.setRawResponseHeaders(responseHeaders);
-	`);
+	`,
+	);
 
 	// -- continue Method --
 	const continueMethod = routeImplClass.getMethodOrThrow("continue");
@@ -543,9 +563,7 @@ export function patchCRNetworkManager(project: Project) {
 	routeImplClass.addMethod({
 		name: "_networkRequestIntercepted",
 		isAsync: true,
-		parameters: [
-			{ name: "event", type: "Protocol.Fetch.requestPausedPayload" },
-		]
+		parameters: [{ name: "event", type: "Protocol.Fetch.requestPausedPayload" }],
 	});
 	const networkRequestInterceptedMethod = routeImplClass.getMethodOrThrow("_networkRequestIntercepted");
 	networkRequestInterceptedMethod.setBodyText(`

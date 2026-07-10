@@ -13,5 +13,7 @@ export function patchCredentials(project: Project) {
 	// -- install Method --
 	const installMethod = credentialsClass.getMethodOrThrow("install");
 	const scriptDeclaration = installMethod.getVariableDeclarationOrThrow("script");
-	scriptDeclaration.setInitializer("`(() => {\n      const module = {};\n      ${rawWebAuthnSource.source}\n      const installWebAuthn = () => {\n        if (!globalThis.__pwWebAuthnBinding) {\n          setTimeout(installWebAuthn, 0);\n          return;\n        }\n        module.exports.inject()(globalThis);\n      };\n      installWebAuthn();\n    })();`");
+	scriptDeclaration.setInitializer(
+		"`(() => {\n      const module = {};\n      ${rawWebAuthnSource.source}\n      const installWebAuthn = () => {\n        if (!globalThis.__pwWebAuthnBinding) {\n          setTimeout(installWebAuthn, 0);\n          return;\n        }\n        module.exports.inject()(globalThis);\n      };\n      installWebAuthn();\n    })();`",
+	);
 }

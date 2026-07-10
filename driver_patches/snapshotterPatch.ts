@@ -6,22 +6,22 @@ import { assertDefined } from "./utils.ts";
 // ------------------------------------
 export function patchSnapshotter(project: Project) {
 	// Add source file to the project
-	const snapshotterSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/trace/recorder/snapshotter.ts");
+	const snapshotterSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/trace/recorder/snapshotter.ts",
+	);
 	// Remove unneeded imports
 	const initScriptImport = assertDefined(
 		snapshotterSourceFile
 			.getImportDeclarations()
-			.find(imp => imp.getNamedImports().some(n => n.getName() === "InitScript"))
+			.find(imp => imp.getNamedImports().some(n => n.getName() === "InitScript")),
 	);
 	initScriptImport.remove();
-	
+
 	// ------- Snapshotter Class -------
 	const snapshotterClass = snapshotterSourceFile.getClassOrThrow("Snapshotter");
 
 	// Replace _initScript type, add _initScriptSource, remove InitScript import
-	snapshotterClass
-		.getPropertyOrThrow("_initScript")
-		.setType("boolean | undefined");
+	snapshotterClass.getPropertyOrThrow("_initScript").setType("boolean | undefined");
 	snapshotterClass.addProperty({
 		name: "_initScriptSource",
 		type: "string | undefined",
@@ -31,9 +31,7 @@ export function patchSnapshotter(project: Project) {
 	const resetMethod = snapshotterClass.getMethodOrThrow("reset");
 	// switch from 'main' to 'utility' world
 	const mainWorldLiteral = assertDefined(
-		resetMethod
-			.getDescendantsOfKind(SyntaxKind.StringLiteral)
-			.find(s => s.getLiteralText() === "main")
+		resetMethod.getDescendantsOfKind(SyntaxKind.StringLiteral).find(s => s.getLiteralText() === "main"),
 	);
 	mainWorldLiteral.replaceWithText("'utility'");
 
@@ -69,7 +67,7 @@ export function patchSnapshotter(project: Project) {
 	const rawEvaluateCall = assertDefined(
 		captureFrameMethod
 			.getDescendantsOfKind(SyntaxKind.CallExpression)
-			.find(c => c.getText().includes("nonStallingRawEvaluateInExistingMainContext"))
+			.find(c => c.getText().includes("nonStallingRawEvaluateInExistingMainContext")),
 	);
 	rawEvaluateCall.replaceWithText("frame.nonStallingEvaluateInExistingContext(expression, 'utility')");
 
@@ -77,7 +75,7 @@ export function patchSnapshotter(project: Project) {
 	const onPageMethod = snapshotterClass.getMethodOrThrow("_onPage");
 	// re-inject streamer script on navigation
 	onPageMethod.addStatements(
-		"this._eventListeners.push(eventsHelper.addEventListener(page, Page.Events.InternalFrameNavigatedToNewDocument, (frame: Frame) => this._onFrameNavigated(frame)));"
+		"this._eventListeners.push(eventsHelper.addEventListener(page, Page.Events.InternalFrameNavigatedToNewDocument, (frame: Frame) => this._onFrameNavigated(frame)));",
 	);
 
 	// -- _onFrameNavigated Method --
@@ -100,9 +98,7 @@ export function patchSnapshotter(project: Project) {
 	const annotateMethod = snapshotterClass.getMethodOrThrow("_annotateFrameHierarchy");
 	// use utility context instead of main
 	const mainContextIdentifier = assertDefined(
-		annotateMethod
-			.getDescendantsOfKind(SyntaxKind.Identifier)
-			.find(id => id.getText() === "mainContext")
+		annotateMethod.getDescendantsOfKind(SyntaxKind.Identifier).find(id => id.getText() === "mainContext"),
 	);
 	mainContextIdentifier.replaceWithText("utilityContext");
 }

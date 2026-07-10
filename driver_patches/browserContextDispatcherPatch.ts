@@ -6,7 +6,9 @@ import { assertDefined } from "./utils.ts";
 // ----------------------------------------------
 export function patchBrowserContextDispatcher(project: Project) {
 	// Add source file to the project
-	const contextDispatcherSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/dispatchers/browserContextDispatcher.ts");
+	const contextDispatcherSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/dispatchers/browserContextDispatcher.ts",
+	);
 
 	// ------- BrowserContextDispatcher Class -------
 	const contextDispatcherClass = contextDispatcherSourceFile.getClassOrThrow("BrowserContextDispatcher");
@@ -18,7 +20,7 @@ export function patchBrowserContextDispatcher(project: Project) {
 		contextDispatcherConstructor
 			.getBodyOrThrow()
 			.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
-			.find((stmt) => stmt.getText().startsWith("this._dialogHandler =")),
+			.find(stmt => stmt.getText().startsWith("this._dialogHandler =")),
 	);
 	dialogHandlerAssignment.replaceWithText(`
 		this._dialogHandler = dialog => {

@@ -97,5 +97,7 @@ export function patchPageBinding(project: Project) {
 		}
 	`;
 
-	project.createSourceFile("packages/playwright-core/src/server/pageBinding.ts", pageBindingSourceContent, { overwrite: true });
+	project.createSourceFile("packages/playwright-core/src/server/pageBinding.ts", pageBindingSourceContent, {
+		overwrite: true,
+	});
 }

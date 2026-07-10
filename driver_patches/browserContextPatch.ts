@@ -16,24 +16,25 @@ export function patchBrowserContext(project: Project) {
 	// Getting the service worker registration call
 	const initializeMethodCall = assertDefined(
 		initializeMethod
-		.getDescendantsOfKind(SyntaxKind.CallExpression)
-		.find((call) =>
-			call.getExpression().getText().includes("addInitScript") &&
-			call.getArguments().some((arg) =>
-				arg.getText().includes("navigator.serviceWorker.register")
-			)
-		)
+			.getDescendantsOfKind(SyntaxKind.CallExpression)
+			.find(
+				call =>
+					call.getExpression().getText().includes("addInitScript") &&
+					call.getArguments().some(arg => arg.getText().includes("navigator.serviceWorker.register")),
+			),
 	);
 	const initScriptArgument = assertDefined(
-		initializeMethodCall.getArguments()[1] ?? initializeMethodCall.getArguments()[0]
+		initializeMethodCall.getArguments()[1] ?? initializeMethodCall.getArguments()[0],
 	);
 	// Replace the service worker registration call with a custom one, which is less obvious
-	initScriptArgument.replaceWithText("`if (navigator.serviceWorker) navigator.serviceWorker.register = async () => { };`");
+	initScriptArgument.replaceWithText(
+		"`if (navigator.serviceWorker) navigator.serviceWorker.register = async () => { };`",
+	);
 
 	// -- exposeBinding Method --
 	const exposeBindingMethod = browserContextClass.getMethodOrThrow("exposeBinding");
 	// Remove old loop and logic for localFrames and isolated world creation
-	exposeBindingMethod.getStatements().forEach((statement) => {
+	exposeBindingMethod.getStatements().forEach(statement => {
 		const text = statement.getText();
 		// Check if the statement matches the patterns
 		if (text.includes("this.doAddInitScript(binding.initScript)"))

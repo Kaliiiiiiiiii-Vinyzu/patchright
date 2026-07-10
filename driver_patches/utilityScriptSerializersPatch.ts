@@ -301,6 +301,6 @@ export function patchUtilityScriptSerializers(project: Project) {
 	project.createSourceFile(
 		"packages/playwright-core/src/utils/isomorphic/oldUtilityScriptSerializers.ts",
 		oldUtilityScriptSerializerSourceContent,
-		{ overwrite: true }
+		{ overwrite: true },
 	);
 }
