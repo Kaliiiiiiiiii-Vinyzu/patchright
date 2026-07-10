@@ -355,29 +355,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should seed a known credential and authenticate', 'Patchright driver-mode WebAuthn binding can hang in the upstream library fixture even though the direct credentials API path works.'],
 		['should capture a page-created credential and reuse it in another context', 'Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture.'],
 	]),
-	'tests/page/selectors-css.spec.ts': new Map([
-		['should work with attribute selectors', 'Patchright selector engines are not fully atomic compared to upstream expectations.'],
-	]),
-	'tests/page/selectors-frame.spec.ts': new Map([
-		['should capture after the enter-frame', 'Patchright selector engines are not fully atomic compared to upstream expectations.'],
-		['$ should not wait for frame', 'Patchright selector engines are not fully atomic for missing frame locators.'],
-		['$$ should not wait for frame', 'Patchright selector engines are not fully atomic for missing frame locators.'],
-		['$eval should throw for missing frame', 'Patchright selector engines report a different internal failure for missing frame locators.'],
-		['$$eval should throw for missing frame', 'Patchright selector engines report a different internal failure for missing frame locators.'],
-	]),
-	'tests/page/locator-frame.spec.ts': new Map([
-		['should wait for frame to go', 'Patchright selector engines are not fully atomic for disappearing frame locators.'],
-		['should not wait for frame', 'Patchright selector engines are not fully atomic for missing frame locators.'],
-		['should not wait for frame 2', 'Patchright selector engines are not fully atomic for missing frame locators.'],
-		['should not wait for frame 3', 'Patchright selector engines are not fully atomic for missing frame locators.'],
-		['wait for hidden should succeed when frame is not in dom', 'Patchright selector engines are not fully atomic for detached frame locators.'],
-	]),
-	'tests/page/page-wait-for-selector-1.spec.ts': new Map([
-		['elementHandle.waitForSelector should throw on navigation', 'Patchright scoped selector polling can miss the upstream navigation-cancellation race.'],
-	]),
-	'tests/page/selectors-text.spec.ts': new Map([
-		['should waitForSelector with distributed elements', 'Patchright selector engines are not fully atomic compared to upstream expectations.'],
-	]),
 	'tests/library/browsercontext-events.spec.ts': new Map([
 		['console event should work @smoke', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 		['console event should work with element handles', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
@@ -439,9 +416,6 @@ const FIXME_TARGET_FILES: Record<string, string> = {
 	'tests/page/page-event-console.spec.ts': 'Known Patchright bug: Console CDP domain is disabled, so ConsoleMessage semantics differ from upstream.',
 	'tests/page/page-event-pageerror.spec.ts': 'Known Patchright bug: Console CDP domain is disabled, so PageError/WebError semantics differ from upstream.',
 	'tests/page/workers.spec.ts': 'Known Patchright bug: Console CDP domain is disabled, so worker console/error propagation semantics differ from upstream.',
-	'tests/page/selectors-register.spec.ts': 'Known Patchright bug: selector engines are not fully atomic compared to upstream expectations.',
-	'tests/page/selectors-react.spec.ts': 'Known Patchright bug: selector engines are not fully atomic compared to upstream expectations.',
-	'tests/page/selectors-vue.spec.ts': 'Known Patchright bug: selector engines are not fully atomic compared to upstream expectations.',
 	'tests/library/route-web-socket.spec.ts': 'WebsocketRoutes do not work in Patchright.',
 	'tests/library/trace-viewer.spec.ts': 'I just gave up at this point. Im sorry.'
 };

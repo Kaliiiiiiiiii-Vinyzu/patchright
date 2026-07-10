@@ -681,7 +681,19 @@ export function patchFrames(project: Project) {
 				return continuePolling;
 			}
 		});
-		return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
+		if (!scope)
+			return promise;
+		const onNavigation = new ManualPromise<never>();
+		const navigationListener = (event: NavigationEvent) => {
+			if (event.newDocument)
+				onNavigation.reject(new Error('Execution context was destroyed, most likely because of a navigation'));
+		};
+		this.on(Frame.Events.InternalNavigation, navigationListener);
+		try {
+			return await scope._context.raceAgainstContextDestroyed(Promise.race([promise, onNavigation]));
+		} finally {
+			this.off(Frame.Events.InternalNavigation, navigationListener);
+		}
 	`);
 
 	// -- waitForFunctionExpression Method --
@@ -707,13 +719,17 @@ export function patchFrames(project: Project) {
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");
 	isVisibleInternalMethod.setBodyText(`
 		try {
-			const metadata: any = { internal: false, log: [], method: 'isVisible' };
-			const progress2: any = {
-				log: (message: string) => metadata.log.push(message),
-				metadata,
-				race: (promise: any) => Promise.race(Array.isArray(promise) ? promise : [promise]),
-			};
-			progress2.log(\`waiting for \${this._asLocator(selector)}\`);
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+			if (!resolved)
+				return false;
+			const atomicResult = await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
+				const element = injected.querySelector(info.parsed, root || document, info.strict);
+				return element ? { found: true, visible: injected.elementState(element, 'visible').matches } : { found: false, visible: false };
+			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
+			if (atomicResult.found)
+				return atomicResult.visible;
+
+			progress.log(\`waiting for \${this._asLocator(selector)}\`);
 			if (selector === ':scope') {
 				const scopeParentNode = (scope as any).parentNode || scope;
 				if (scopeParentNode instanceof dom.ElementHandle) {
@@ -728,7 +744,7 @@ export function patchFrames(project: Project) {
 					}, { scope });
 				}
 			} else {
-				return await this._retryWithoutProgress(progress2, selector, { ...options, performActionPreChecks: false }, async (handle) => {
+				return await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false }, async (handle) => {
 					if (!handle)
 						return false;
 					if (handle.parentNode instanceof dom.ElementHandle) {
