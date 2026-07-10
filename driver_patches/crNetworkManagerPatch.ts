@@ -118,6 +118,12 @@ export function patchCRNetworkManager(project: Project) {
 				}
 			`);
 	});
+	const provisionalHeadersStatement = assertDefined(
+		onRequestHandlerMethod
+			.getDescendantsOfKind(SyntaxKind.IfStatement)
+			.find(statement => statement.getExpression().getText() === "route" && statement.getText().includes("request.request.setRawRequestHeaders"))
+	);
+	provisionalHeadersStatement.getExpression().replaceWithText("route && (this._page?.needsRequestInterception() || !!this._serviceWorker)");
 
 	// -- _onRequestPaused Method --
 	const onRequestPausedMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestPaused");

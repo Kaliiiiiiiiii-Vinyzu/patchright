@@ -18,6 +18,7 @@ export * from "./javascriptPatch.ts";
 export * from "./jsHandleDispatcherPatch.ts";
 export * from "./launchAppPatch.ts";
 export * from "./networkDispatchersPatch.ts";
+export * from "./networkPatch.ts";
 export * from "./pageBindingPatch.ts";
 export * from "./pageDispatcherPatch.ts";
 export * from "./pagePatch.ts";

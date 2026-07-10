@@ -310,15 +310,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 	'tests/page/page-add-script-tag.spec.ts': new Map([
 		['should include sourceURL when path is provided', 'Patchright removes sourceURL-style script wrapping for stealth, so stack source paths differ.'],
 	]),
-	'tests/page/page-network-request.spec.ts': new Map([
-		['should get the same headers as the server', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
-		['should not return allHeaders() until they are available', 'Patchright routing can cause client-side header timing/mismatch differences compared to upstream expectations.'],
-		['should get the same headers as the server CORS', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
-		['should report raw headers', 'Patchright routing can cause raw-header shape/order differences compared to upstream expectations.'],
-	]),
-	'tests/page/page-set-extra-http-headers.spec.ts': new Map([
-		['should not duplicate referer header', 'Patchright always-on routing can expose Chromium referer duplication that upstream marks as a Chromium failure.'],
-	]),
 	'tests/page/page-goto.spec.ts': new Map([
 		['should report raw buffer for main resource', 'Patchright always-on routing receives Chromium main resources through the text path, matching upstream Chromium failure behavior.'],
 	]),
@@ -391,9 +382,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 	]),
 	'tests/library/popup.spec.ts': new Map([
 		['should expose function from browser context', 'Patchright inject-route bootstrap can alter init-script timing/order.'],
-	]),
-	'tests/library/resource-timing.spec.ts': new Map([
-		['should work when serving from memory cache', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
 	]),
 	'tests/library/tracing.spec.ts': new Map([
 		['should not flush console events', 'Console CDP domain is disabled in Patchright, so console events are never emitted and the test hangs waiting for them.'],

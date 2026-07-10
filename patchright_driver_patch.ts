@@ -166,6 +166,11 @@ patches.patchFrameDispatcher(project);
 // ----------------------------------------------
 patches.patchBrowserContextDispatcher(project);
 
+// -----------------
+// server/network.ts
+// -----------------
+patches.patchNetwork(project);
+
 // ---------------------------------------------
 // server/dispatchers/networkDispatchers.ts
 // ---------------------------------------------
