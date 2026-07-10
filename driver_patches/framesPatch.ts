@@ -112,6 +112,8 @@ export function patchFrames(project: Project) {
 			}));
 			return;
 		}
+		if (eventInitHandles.some(handle => handle._context?.frame !== this))
+			throw new js.JavaScriptErrorInEvaluate("JSHandles can be evaluated only in the context they were created!");
 		if (eventInitHandles.length === 0) {
 			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 			return;

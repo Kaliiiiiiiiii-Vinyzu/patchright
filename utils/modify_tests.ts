@@ -373,9 +373,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should not wait for frame 3', 'Patchright selector engines are not fully atomic for missing frame locators.'],
 		['wait for hidden should succeed when frame is not in dom', 'Patchright selector engines are not fully atomic for detached frame locators.'],
 	]),
-	'tests/page/page-dispatchevent.spec.ts': new Map([
-		['should throw if argument is from different frame', 'Patchright dispatchEvent cross-context adoption can hang for foreign-frame handles.'],
-	]),
 	'tests/page/page-wait-for-selector-1.spec.ts': new Map([
 		['elementHandle.waitForSelector should throw on navigation', 'Patchright scoped selector polling can miss the upstream navigation-cancellation race.'],
 	]),
