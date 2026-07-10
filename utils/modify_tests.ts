@@ -226,6 +226,20 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 		);
 	}
 
+	if (relativePath === 'tests/page/page-network-response.spec.ts') {
+		replaceOnce(
+			"  it.fail(browserName === 'webkit' || browserName === 'chromium', 'https://github.com/microsoft/playwright/issues/11035');",
+			"  it.fail(browserName === 'webkit', 'https://github.com/microsoft/playwright/issues/11035');"
+		);
+	}
+
+	if (relativePath === 'tests/page/page-request-fulfill.spec.ts') {
+		replaceOnce(
+			"  it.fail(browserName === 'chromium', 'Set-Cookie is missing in response after interception');\n",
+			''
+		);
+	}
+
 	if (relativePath === 'tests/library/popup.spec.ts') {
 		replaceOnce(
 			"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, false);",
@@ -256,9 +270,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 	'tests/page/page-basic.spec.ts': new Map([
 		['has navigator.webdriver set to true', 'Patchright intentionally disables automation fingerprinting.'],
 		['page.press should work for Enter', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
-	]),
-	'tests/page/page-network-response.spec.ts': new Map([
-		['should return set-cookie header after route.fulfill', 'Patchright always-on routing follows Chromium interception behavior where Set-Cookie is not exposed on fulfilled responses.'],
 	]),
 	'tests/page/interception.spec.ts': new Map([
 		['should intercept network activity from worker', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
@@ -306,9 +317,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should not return allHeaders() until they are available', 'Patchright routing can cause client-side header timing/mismatch differences compared to upstream expectations.'],
 		['should get the same headers as the server CORS', 'Patchright routing can cause client-side header mismatch compared to upstream expectations.'],
 		['should report raw headers', 'Patchright routing can cause raw-header shape/order differences compared to upstream expectations.'],
-	]),
-	'tests/page/page-request-fulfill.spec.ts': new Map([
-		['headerValue should return set-cookie from intercepted response', 'Patchright always-on routing follows Chromium interception behavior where Set-Cookie is not exposed on fulfilled responses.'],
 	]),
 	'tests/page/page-set-extra-http-headers.spec.ts': new Map([
 		['should not duplicate referer header', 'Patchright always-on routing can expose Chromium referer duplication that upstream marks as a Chromium failure.'],

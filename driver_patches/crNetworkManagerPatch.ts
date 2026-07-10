@@ -129,6 +129,12 @@ export function patchCRNetworkManager(project: Project) {
 
 	// ------- RouteImpl Class -------
 	const routeImplClass = crNetworkManagerSourceFile.getClassOrThrow("RouteImpl");
+	const fulfilledProperty = routeImplClass.getPropertyOrThrow("_fulfilled");
+	routeImplClass.insertProperty(routeImplClass.getMembers().indexOf(fulfilledProperty) + 1, {
+		name: "_fulfilledSetCookieHeaders",
+		type: "types.HeadersArray",
+		initializer: "[]",
+	});
 
 	// -- RouteImpl Constructor --
 	const routeImplConstructor = assertDefined(
@@ -448,6 +454,7 @@ export function patchCRNetworkManager(project: Project) {
 		this._fulfilled = true;
 		const body = response.isBase64 ? response.body : Buffer.from(response.body).toString("base64");
 		const responseHeaders = splitSetCookieHeader(response.headers);
+		this._fulfilledSetCookieHeaders = responseHeaders.filter(header => header.name.toLowerCase() === 'set-cookie');
 		await catchDisallowedErrors(async () => {
 			await this._session.send("Fetch.fulfillRequest", {
 				requestId: response.interceptionId ? response.interceptionId : this._interceptionId,
@@ -457,6 +464,32 @@ export function patchCRNetworkManager(project: Project) {
 				body
 			});
 		});
+	`);
+
+	// Chromium omits Set-Cookie from Network response events for fulfilled requests.
+	const createResponseMethod = crNetworkManagerClass.getMethodOrThrow("_createResponse");
+	const responseDeclaration = assertDefined(
+		createResponseMethod
+			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+			.find(declaration => declaration.getName() === "response" && declaration.getInitializer()?.getText().startsWith("new network.Response("))
+	);
+	const responseConstructor = responseDeclaration.getInitializerOrThrow().asKindOrThrow(SyntaxKind.NewExpression);
+	responseConstructor.getArguments()[3].replaceWithText("responseHeaders");
+	const responseStatement = responseDeclaration.getVariableStatementOrThrow();
+	const createResponseBody = createResponseMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block);
+	const responseStatementIndex = createResponseBody.getStatements().indexOf(responseStatement);
+	createResponseBody.insertStatements(responseStatementIndex, `
+		const responseHeaders = headersObjectToArray(responsePayload.headers);
+		const fulfilledSetCookieHeaders = request._originalRequestRoute?._fulfilledSetCookieHeaders ?? [];
+		if (fulfilledSetCookieHeaders.length && !responseHeaders.some(header => header.name.toLowerCase() === 'set-cookie'))
+			responseHeaders.push(...fulfilledSetCookieHeaders);
+	`);
+	const updatedResponseStatementIndex = createResponseBody
+		.getStatements()
+		.findIndex(statement => statement.getText().startsWith("const response = new network.Response("));
+	createResponseBody.insertStatements(updatedResponseStatementIndex + 1, `
+		if (fulfilledSetCookieHeaders.length)
+			response.setRawResponseHeaders(responseHeaders);
 	`);
 
 	// -- continue Method --
