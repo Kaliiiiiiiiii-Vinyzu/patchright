@@ -157,7 +157,7 @@ export function patchFrames(project: Project) {
 				return null;
 			const strict = options?.strict ?? this._page.browserContext._options.strictSelectors;
 			if (handles.length > 1 && strict)
-				throw new Error(\`Strict mode: expected one element matching selector "\${selector}", found \${handles.length}\`);
+				throw new Error(\`strict mode violation: expected one element matching selector "\${selector}", found \${handles.length}\`);
 			return handles[0];
 		});
 	`);
@@ -857,7 +857,7 @@ export function patchFrames(project: Project) {
 			progressLog(log);
 		// Note: missingReceived avoids \`unexpected value "undefined"\` when element was not found.
 		if (matches === options.isNot) {
-			lastIntermediateResult.errorMessage = missingReceived ? 'Error: element(s) not found' : undefined;
+			lastIntermediateResult.errorMessage = missingReceived ? 'element(s) not found' : undefined;
 			lastIntermediateResult.received = received;
 			lastIntermediateResult.isSet = true;
 			if (!missingReceived && !Array.isArray(received?.value))

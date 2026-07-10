@@ -16,7 +16,6 @@ type MissingReplacement = {
 };
 
 type FixmeReasonByTitle = Map<string, string>;
-type FixmeReasonByLine = Map<number, string>;
 
 type ChangedFileReport = {
 	file: string;
@@ -447,57 +446,6 @@ const FIXME_TARGET_FILES: Record<string, string> = {
 	'tests/library/trace-viewer.spec.ts': 'I just gave up at this point. Im sorry.'
 };
 
-const FIXME_TARGET_LINES: Record<string, FixmeReasonByLine> = {
-	'tests/page/expect-boolean.spec.ts': new Map([
-		[79, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-		[93, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-		[120, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-		[226, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-		[355, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-		[362, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-		[466, 'Patchright matcher error-message formatting differs from upstream expectations.'],
-	]),
-	'tests/page/expect-matcher-result.spec.ts': new Map([
-		[73, 'Patchright matcher result message formatting differs from upstream expectations.'],
-		[125, 'Patchright matcher result message formatting differs from upstream expectations.'],
-	]),
-	'tests/page/expect-misc.spec.ts': new Map([
-		[588, 'Patchright matcher log formatting differs from upstream expectations.'],
-		[598, 'Patchright matcher log formatting differs from upstream expectations.'],
-		[617, 'Patchright strict-mode error formatting differs from upstream expectations.'],
-	]),
-	'tests/page/expect-timeout.spec.ts': new Map([
-		[20, 'Patchright timeout error formatting differs from upstream expectations.'],
-		[48, 'Patchright timeout error formatting differs from upstream expectations.'],
-	]),
-	'tests/page/expect-to-have-text.spec.ts': new Map([
-		[208, 'Patchright text-matcher error formatting differs from upstream expectations.'],
-		[298, 'Patchright text-matcher error formatting differs from upstream expectations.'],
-	]),
-	'tests/page/matchers.misc.spec.ts': new Map([
-		[28, 'Patchright no-element error formatting differs from upstream expectations.'],
-	]),
-	'tests/page/page-click-scroll.spec.ts': new Map([
-		[81, 'Patchright force-click hidden input error wording differs from upstream expectations.'],
-	]),
-	'tests/page/page-click.spec.ts': new Map([
-		[604, 'Patchright trial-click error wording differs from upstream expectations.'],
-	]),
-	'tests/page/page-select-option.spec.ts': new Map([
-		[349, 'Patchright selectOption timeout error wording differs from upstream expectations.'],
-		[379, 'Patchright selectOption timeout error wording differs from upstream expectations.'],
-	]),
-	'tests/page/page-strict.spec.ts': new Map([
-		[41, 'Patchright strict-mode selector error formatting differs from upstream expectations.'],
-	]),
-	'tests/page/page-wait-for-selector-1.spec.ts': new Map([
-		[171, 'Patchright multi-match click log formatting differs from upstream expectations.'],
-	]),
-	'tests/page/workers.spec.ts': new Map([
-		[338, 'Patchright offline worker error wording differs from upstream expectations.'],
-	]),
-};
-
 function walkFiles(dirPath: string): string[] {
 	const specFiles: string[] = [];
 	for (const entry of fs.readdirSync(dirPath, { withFileTypes: true })) {
@@ -672,7 +620,6 @@ async function main(): Promise<void> {
 		const relativePath = path.relative(playwrightRoot, filePath).replaceAll(path.sep, '/');
 		const fixmeMap = FIXME_TARGETS[relativePath] ?? null;
 		const fileLevelFixmeReason = FIXME_TARGET_FILES[relativePath] ?? null;
-		const fixmeLineMap = FIXME_TARGET_LINES[relativePath] ?? null;
 
 		let isolatedInFile = 0;
 		let normalizedInFile = 0;
@@ -728,31 +675,6 @@ async function main(): Promise<void> {
 
 				const testBaseName = getTestBaseName(callExpr);
 				if (insertFixmeInTest(callExpr, reason, testBaseName)) {
-					fixmesInFile += 1;
-					report.fixmeInsertions += 1;
-				}
-			}
-		}
-
-		if (!fileLevelFixmeReason && fixmeLineMap) {
-			const targets = [...fixmeLineMap.entries()].sort((a, b) => b[0] - a[0]);
-			for (const [targetLine, reason] of targets) {
-				const candidates = sourceFile
-					.getDescendantsOfKind(SyntaxKind.CallExpression)
-					.filter(isTestInvocation)
-					.map(callExpr => ({
-						callExpr,
-						lineDistance: Math.abs(callExpr.getStartLineNumber() - targetLine),
-					}))
-					.filter(candidate => candidate.lineDistance <= 6)
-					.sort((a, b) => a.lineDistance - b.lineDistance || b.callExpr.getStartLineNumber() - a.callExpr.getStartLineNumber());
-
-				if (candidates.length === 0)
-					continue;
-
-				const matchedCall = candidates[0].callExpr;
-				const testBaseName = getTestBaseName(matchedCall);
-				if (insertFixmeInTest(matchedCall, reason, testBaseName)) {
 					fixmesInFile += 1;
 					report.fixmeInsertions += 1;
 				}
