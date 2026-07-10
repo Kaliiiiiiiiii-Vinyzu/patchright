@@ -356,9 +356,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should seed a known credential and authenticate', 'Patchright driver-mode WebAuthn binding can hang in the upstream library fixture even though the direct credentials API path works.'],
 		['should capture a page-created credential and reuse it in another context', 'Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture.'],
 	]),
-	'tests/library/page-close.spec.ts': new Map([
-		['addLocatorHandler should throw when page closes', 'Patchright action retry checkpoints differ when a locator handler closes the page during hit-target retries.'],
-	]),
 	'tests/page/selectors-css.spec.ts': new Map([
 		['should work with attribute selectors', 'Patchright selector engines are not fully atomic compared to upstream expectations.'],
 	]),
@@ -375,9 +372,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should not wait for frame 2', 'Patchright selector engines are not fully atomic for missing frame locators.'],
 		['should not wait for frame 3', 'Patchright selector engines are not fully atomic for missing frame locators.'],
 		['wait for hidden should succeed when frame is not in dom', 'Patchright selector engines are not fully atomic for detached frame locators.'],
-	]),
-	'tests/page/page-add-locator-handler.spec.ts': new Map([
-		['should work when owner frame detaches', 'Patchright action retry checkpoints differ when a locator handler detaches the owner frame.'],
 	]),
 	'tests/page/page-dispatchevent.spec.ts': new Map([
 		['should throw if argument is from different frame', 'Patchright dispatchEvent cross-context adoption can hang for foreign-frame handles.'],
