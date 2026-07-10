@@ -296,7 +296,6 @@ const FIXME_TARGETS: Record<string, FixmeReasonByTitle> = {
 		['should trigger particular events for css transitions', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 		['should trigger particular events for INfinite css animation', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
 		['should trigger particular events for finite css animation', 'Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available.'],
-		['should wait for fonts to load', 'Known Patchright divergence: page.screenshot does not reliably block on webfonts, so the expected timeout/message is not deterministic.'],
 		['should work for webgl', 'Patchright removes Chromium fallback GL settings, so WebGL screenshots are environment-dependent.'],
 	]),
 	'tests/page/page-wait-for-function.spec.ts': new Map([
