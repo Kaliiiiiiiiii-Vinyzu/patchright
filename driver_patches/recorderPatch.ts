@@ -22,5 +22,5 @@ export function patchRecorder(project: Project) {
 	useEffectCall
 		.getArguments()[0]
 		.asKindOrThrow(SyntaxKind.ArrowFunction)
-		.setBodyText(`try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}		`);
+		.setBodyText(`try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}`);
 }
