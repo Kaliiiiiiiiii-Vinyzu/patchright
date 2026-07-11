@@ -14,9 +14,7 @@ export function patchXPathSelectorEngine(project: Project) {
 		.getInitializerIfKindOrThrow(SyntaxKind.ObjectLiteralExpression);
 
 	// -- evaluateExpression Method --
-	const queryAllMethod = assertDefined(
-		xPathEngineLiteral.getProperty("queryAll")
-	);
+	const queryAllMethod = assertDefined(xPathEngineLiteral.getProperty("queryAll"));
 	queryAllMethod.asKindOrThrow(SyntaxKind.MethodDeclaration).insertStatements(0, `
 		if (root.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
 			const result: Element[] = [];

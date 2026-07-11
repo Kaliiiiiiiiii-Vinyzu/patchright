@@ -4,6 +4,7 @@ import YAML from "yaml";
 
 import * as patches from "./driver_patches/index.ts";
 import * as clientPatches from "./patchright-nodejs/index.ts";
+import { formatFiles } from "./utils/format-indentation.ts";
 
 const project = new Project({
 	manipulationSettings: {
@@ -65,6 +66,11 @@ clientPatches.patchWorker(project);
 // server/browserContext.ts
 // ------------------------
 patches.patchBrowserContext(project);
+
+// --------------------
+// utils/build/build.js
+// --------------------
+patches.patchBuild(project);
 
 // ---------------------------
 // server/chromium/chromium.ts
@@ -166,6 +172,11 @@ patches.patchFrameDispatcher(project);
 // ----------------------------------------------
 patches.patchBrowserContextDispatcher(project);
 
+// -----------------
+// server/network.ts
+// -----------------
+patches.patchNetwork(project);
+
 // ---------------------------------------------
 // server/dispatchers/networkDispatchers.ts
 // ---------------------------------------------
@@ -240,5 +251,15 @@ await mutateYaml("packages/protocol/spec/network.yml", protocol => {
 	protocol.Route.commands.continue.parameters.patchrightInitScript = "boolean?";
 });
 
-// Save the changes without reformatting
+// Save and format all patched TypeScript sources before they are built.
 await project.save();
+await formatFiles(
+	project.getSourceFiles().map(sourceFile => sourceFile.getFilePath()),
+	{
+		arrowParens: "avoid",
+		printWidth: 120,
+		singleQuote: true,
+		tabWidth: 2,
+		useTabs: false,
+	},
+);

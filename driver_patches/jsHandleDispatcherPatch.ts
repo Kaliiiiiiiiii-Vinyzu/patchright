@@ -6,7 +6,9 @@ import { assertDefined } from "./utils.ts";
 // ----------------------------------------
 export function patchJSHandleDispatcher(project: Project) {
 	// Add source file to the project
-	const jsHandleDispatcherSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/dispatchers/jsHandleDispatcher.ts");
+	const jsHandleDispatcherSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/dispatchers/jsHandleDispatcher.ts",
+	);
 
 	// ------- workerDispatcher Class -------
 	const jsHandleDispatcherClass = jsHandleDispatcherSourceFile.getClassOrThrow("JSHandleDispatcher");
@@ -19,7 +21,7 @@ export function patchJSHandleDispatcher(project: Project) {
 		const jsHandleDispatcherEvaluateExpressionCall = assertDefined(
 			jsHandleDispatcherEvaluateMethod
 				.getDescendantsOfKind(SyntaxKind.CallExpression)
-				.find(call => call.getExpression().getText().includes("this._object.evaluateExpression"))
+				.find(call => call.getExpression().getText().includes("this._object.evaluateExpression")),
 		);
 		jsHandleDispatcherEvaluateExpressionCall.addArgument("params.isolatedContext");
 	}

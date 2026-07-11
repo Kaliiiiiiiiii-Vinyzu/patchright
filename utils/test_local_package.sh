@@ -2,9 +2,8 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-# Rebuild local package if not yet built
-if [ ! -d playwright/node_modules ]; then
-  echo "Local package not built. Rebuilding..."
+# Rebuild by default so tests never exercise stale patched sources.
+if [ "${PATCHRIGHT_SKIP_REBUILD:-0}" != "1" ]; then
   bash utils/rebuild_local_package.sh
 fi
 

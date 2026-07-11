@@ -10,24 +10,26 @@ export function patchFrames(project: Project) {
 	framesSourceFile.getImportDeclarationOrThrow("./errors").addNamedImport("TargetClosedError");
 	// Add the custom import and comment at the start of the file
 	framesSourceFile.addImportDeclarations([
-		{ moduleSpecifier: './chromium/crExecutionContext', namedImports: ['CRExecutionContext'] },
-		{ moduleSpecifier: './dom', namedImports: ['FrameExecutionContext'] },
-		{ moduleSpecifier: './chromium/crConnection', namedImports: ['CRSession'], isTypeOnly: true },
-		{ moduleSpecifier: 'crypto', defaultImport: 'crypto' },
+		{ moduleSpecifier: "./chromium/crExecutionContext", namedImports: ["CRExecutionContext"] },
+		{ moduleSpecifier: "./dom", namedImports: ["FrameExecutionContext"] },
+		{ moduleSpecifier: "./chromium/crConnection", namedImports: ["CRSession"], isTypeOnly: true },
+		{ moduleSpecifier: "crypto", defaultImport: "crypto" },
 	]);
 
 	// ------- FrameManager Class -------
 	const frameManagerClass = framesSourceFile.getClassOrThrow("FrameManager");
 
 	// -- frameCommittedNewDocumentNavigation Method --
-	const frameCommittedNewDocumentNavigationMethod = frameManagerClass.getMethodOrThrow("frameCommittedNewDocumentNavigation");
+	const frameCommittedNewDocumentNavigationMethod = frameManagerClass.getMethodOrThrow(
+		"frameCommittedNewDocumentNavigation",
+	);
 	const clearLifecycleStatementIndex = frameCommittedNewDocumentNavigationMethod
 		.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
 		.findIndex(stmt => stmt.getText().trim() === "frame._onClearLifecycle();");
 	frameCommittedNewDocumentNavigationMethod.insertStatements(clearLifecycleStatementIndex - 2, [
 		"frame._iframeWorld = undefined;",
 		"frame._mainWorld = undefined;",
-		"frame._isolatedWorld = undefined;"
+		"frame._isolatedWorld = undefined;",
 	]);
 
 	// ------- Frame Class -------
@@ -35,8 +37,8 @@ export function patchFrames(project: Project) {
 	// Add Properties to the Frame Class
 	frameClass.addProperties([
 		{ name: "_isolatedWorld", type: "dom.FrameExecutionContext" },
-		{ name: "_mainWorld",     type: "dom.FrameExecutionContext" },
-		{ name: "_iframeWorld",  type: "dom.FrameExecutionContext" },
+		{ name: "_mainWorld", type: "dom.FrameExecutionContext" },
+		{ name: "_iframeWorld", type: "dom.FrameExecutionContext" },
 	]);
 
 	// -- evalOnSelector Method --
@@ -53,9 +55,9 @@ export function patchFrames(project: Project) {
 	// -- evalOnSelectorAll Method --
 	const evalOnSelectorAllMethod = frameClass.getMethodOrThrow("evalOnSelectorAll");
 	evalOnSelectorAllMethod.addParameter({
-			name: "isolatedContext",
-			type: "boolean",
-			hasQuestionToken: true,
+		name: "isolatedContext",
+		type: "boolean",
+		hasQuestionToken: true,
 	});
 	evalOnSelectorAllMethod.setBodyText(`
 		const maxAttempts = 3;
@@ -112,6 +114,8 @@ export function patchFrames(project: Project) {
 			}));
 			return;
 		}
+		if (eventInitHandles.some(handle => handle._context?.frame !== this))
+			throw new js.JavaScriptErrorInEvaluate("JSHandles can be evaluated only in the context they were created!");
 		if (eventInitHandles.length === 0) {
 			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 			return;
@@ -155,7 +159,7 @@ export function patchFrames(project: Project) {
 				return null;
 			const strict = options?.strict ?? this._page.browserContext._options.strictSelectors;
 			if (handles.length > 1 && strict)
-				throw new Error(\`Strict mode: expected one element matching selector "\${selector}", found \${handles.length}\`);
+				throw new Error(\`strict mode violation: expected one element matching selector "\${selector}", found \${handles.length}\`);
 			return handles[0];
 		});
 	`);
@@ -164,9 +168,7 @@ export function patchFrames(project: Project) {
 	frameClass.addMethod({
 		name: "_getFrameMainFrameContextId",
 		isAsync: true,
-		parameters: [
-			{ name: "client", type: "CRSession" },
-		],
+		parameters: [{ name: "client", type: "CRSession" }],
 		returnType: "Promise<number>",
 	});
 	const getFrameMainFrameContextIdMethod = frameClass.getMethodOrThrow("_getFrameMainFrameContextId");
@@ -260,9 +262,7 @@ export function patchFrames(project: Project) {
 	`);
 	frameClass.insertMethod(contextMethod.getChildIndex() + 1, {
 		name: "context",
-		parameters: [
-			{ name: "world", type: "types.World" },
-		],
+		parameters: [{ name: "world", type: "types.World" }],
 		returnType: "Promise<dom.FrameExecutionContext>",
 		statements: "return this._context(world);",
 	});
@@ -432,8 +432,14 @@ export function patchFrames(project: Project) {
 		parameters: [
 			{ name: "progress", type: "Progress" },
 			{ name: "selector", type: "string" },
-			{ name: "options", type: "{ performActionPreChecks: boolean; strict?: boolean | null; state?: 'attached' | 'detached' | 'visible' | 'hidden'; noAutoWaiting?: boolean; __testHookNoAutoWaiting?: boolean; __patchrightWaitForSelector?: boolean; __patchrightInitialScope?: dom.ElementHandle; __patchrightSkipRetryLogWaiting?: boolean }" },
-			{ name: "action", type: "(result: dom.ElementHandle | [dom.ElementHandle, dom.ElementHandle[]] | null) => Promise<unknown>" },
+			{
+				name: "options",
+				type: "{ performActionPreChecks: boolean; strict?: boolean | null; state?: 'attached' | 'detached' | 'visible' | 'hidden'; noAutoWaiting?: boolean; __testHookNoAutoWaiting?: boolean; __patchrightWaitForSelector?: boolean; __patchrightInitialScope?: dom.ElementHandle; __patchrightSkipRetryLogWaiting?: boolean }",
+			},
+			{
+				name: "action",
+				type: "(result: dom.ElementHandle | [dom.ElementHandle, dom.ElementHandle[]] | null) => Promise<unknown>",
+			},
 			{ name: "returnAction", type: "'returnOnNotResolved' | 'returnAll' | undefined" },
 			{ name: "continuePolling", type: "symbol" },
 		],
@@ -679,25 +685,43 @@ export function patchFrames(project: Project) {
 				return continuePolling;
 			}
 		});
-		return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
+		if (!scope)
+			return promise;
+		const onNavigation = new ManualPromise<never>();
+		const navigationListener = (event: NavigationEvent) => {
+			if (event.newDocument)
+				onNavigation.reject(new Error('Execution context was destroyed, most likely because of a navigation'));
+		};
+		this.on(Frame.Events.InternalNavigation, navigationListener);
+		try {
+			return await scope._context.raceAgainstContextDestroyed(Promise.race([promise, onNavigation]));
+		} finally {
+			this.off(Frame.Events.InternalNavigation, navigationListener);
+		}
 	`);
 
 	// -- waitForFunctionExpression Method --
 	const waitForFunctionExpressionMethod = frameClass.getMethodOrThrow("waitForFunctionExpression");
 	// Race the inner evaluate against _detachedScope so frame detachment immediately cancels the operation
-	const matchingReturnStmts = waitForFunctionExpressionMethod.getDescendantsOfKind(SyntaxKind.ReturnStatement).filter(stmt => stmt.getText().includes('progress.race(handle.evaluateHandle(h => h.result))'));
+	const matchingReturnStmts = waitForFunctionExpressionMethod
+		.getDescendantsOfKind(SyntaxKind.ReturnStatement)
+		.filter(stmt => stmt.getText().includes("progress.race(handle.evaluateHandle(h => h.result))"));
 	// Take the last (innermost) match to avoid replacing the outer
 	// `return this.retryWithProgressAndTimeouts(...)` statement whose
 	// getText() also contains the substring.
 	const targetReturnStmt = matchingReturnStmts[matchingReturnStmts.length - 1];
 	if (targetReturnStmt) {
-		targetReturnStmt.replaceWithText('return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));');
+		targetReturnStmt.replaceWithText(
+			"return await progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)));",
+		);
 	} else {
 		// Upstream may already include _detachedScope wrapping; assert expected shape exists.
 		assertDefined(
 			waitForFunctionExpressionMethod
 				.getDescendantsOfKind(SyntaxKind.ReturnStatement)
-				.find(stmt => stmt.getText().includes('progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)))'))
+				.find(stmt =>
+					stmt.getText().includes("progress.race(this._detachedScope.race(handle.evaluateHandle(h => h.result)))"),
+				),
 		);
 	}
 
@@ -705,13 +729,17 @@ export function patchFrames(project: Project) {
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");
 	isVisibleInternalMethod.setBodyText(`
 		try {
-			const metadata: any = { internal: false, log: [], method: 'isVisible' };
-			const progress2: any = {
-				log: (message: string) => metadata.log.push(message),
-				metadata,
-				race: (promise: any) => Promise.race(Array.isArray(promise) ? promise : [promise]),
-			};
-			progress2.log(\`waiting for \${this._asLocator(selector)}\`);
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+			if (!resolved)
+				return false;
+			const atomicResult = await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
+				const element = injected.querySelector(info.parsed, root || document, info.strict);
+				return element ? { found: true, visible: injected.elementState(element, 'visible').matches } : { found: false, visible: false };
+			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
+			if (atomicResult.found)
+				return atomicResult.visible;
+
+			progress.log(\`waiting for \${this._asLocator(selector)}\`);
 			if (selector === ':scope') {
 				const scopeParentNode = (scope as any).parentNode || scope;
 				if (scopeParentNode instanceof dom.ElementHandle) {
@@ -726,7 +754,7 @@ export function patchFrames(project: Project) {
 					}, { scope });
 				}
 			} else {
-				return await this._retryWithoutProgress(progress2, selector, { ...options, performActionPreChecks: false }, async (handle) => {
+				return await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false }, async (handle) => {
 					if (!handle)
 						return false;
 					if (handle.parentNode instanceof dom.ElementHandle) {
@@ -855,7 +883,7 @@ export function patchFrames(project: Project) {
 			progressLog(log);
 		// Note: missingReceived avoids \`unexpected value "undefined"\` when element was not found.
 		if (matches === options.isNot) {
-			lastIntermediateResult.errorMessage = missingReceived ? 'Error: element(s) not found' : undefined;
+			lastIntermediateResult.errorMessage = missingReceived ? 'element(s) not found' : undefined;
 			lastIntermediateResult.received = received;
 			lastIntermediateResult.isSet = true;
 			if (!missingReceived && !Array.isArray(received?.value))
@@ -1096,7 +1124,10 @@ export function patchFrames(project: Project) {
 		name: "_customFindElementsByParsed",
 		isAsync: true,
 		parameters: [
-			{ name: "resolved", type: "{ injected: js.JSHandle<InjectedScript>, info: { parsed: ParsedSelector, strict: boolean }, frame: Frame, scope?: dom.ElementHandle }" },
+			{
+				name: "resolved",
+				type: "{ injected: js.JSHandle<InjectedScript>, info: { parsed: ParsedSelector, strict: boolean }, frame: Frame, scope?: dom.ElementHandle }",
+			},
 			{ name: "client", type: "CRSession" },
 			{ name: "context", type: "dom.FrameExecutionContext" },
 			{ name: "documentScope", type: "dom.ElementHandle" },

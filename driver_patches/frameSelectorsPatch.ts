@@ -41,18 +41,18 @@ export function patchFrameSelectors(project: Project) {
 	// Update mainWorld property based on isolatedContext parameter
 	const resolveInjectedCall = queryArrayInMainWorldMethod
 		.getDescendantsOfKind(SyntaxKind.CallExpression)
-		.find(callExpr =>
-			callExpr.getExpression().getText() === "this.resolveInjectedForSelector" &&
-			callExpr.getArguments()[1]?.getKind() === SyntaxKind.ObjectLiteralExpression
+		.find(
+			callExpr =>
+				callExpr.getExpression().getText() === "this.resolveInjectedForSelector" &&
+				callExpr.getArguments()[1]?.getKind() === SyntaxKind.ObjectLiteralExpression,
 		);
 	const mainWorldProp = assertDefined(
 		assertDefined(resolveInjectedCall)
 			.getArguments()[1]
 			.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
-			.getProperty("mainWorld")
+			.getProperty("mainWorld"),
 	);
-	if (mainWorldProp.getText() === "mainWorld: true")
-		mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
+	if (mainWorldProp.getText() === "mainWorld: true") mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
 
 	// -- resolveFrameForSelector Method --
 	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveFrameForSelector");
@@ -91,7 +91,9 @@ export function patchFrameSelectors(project: Project) {
 		const maybeFrameStatement = assertDefined(
 			resolveFrameForSelectorMethod
 				.getDescendantsOfKind(SyntaxKind.VariableStatement)
-				.find(statement => statement.getText().includes("const maybeFrame = await frame._page.delegate.getContentFrame(element)"))
+				.find(statement =>
+					statement.getText().includes("const maybeFrame = await frame._page.delegate.getContentFrame(element)"),
+				),
 		);
 		const parentBlock = maybeFrameStatement.getParentIfKindOrThrow(SyntaxKind.Block);
 		parentBlock.insertStatements(
@@ -102,32 +104,34 @@ export function patchFrameSelectors(project: Project) {
 				element.dispose();
 				return null;
 			}
-			`
+			`,
 		);
 	}
 
 	// -- resolveInjectedForSelector Method --
 	const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
 	// Find the statement where 'injected' is assigned from 'context.injectedScript' and add a null check
-	const contextStatement = assertDefined(resolveInjectedForSelectorMethod
-		.getStatements()
-		.find(stmt => {
+	const contextStatement = assertDefined(
+		resolveInjectedForSelectorMethod.getStatements().find(stmt => {
 			const varStmt = stmt.asKind(SyntaxKind.VariableStatement);
-			if (!varStmt)
-				return false;
+			if (!varStmt) return false;
 			const decl = assertDefined(varStmt.getDeclarations()[0]);
 			const callExpr = decl
 				.getInitializerIfKind(SyntaxKind.AwaitExpression)
 				?.getExpressionIfKind(SyntaxKind.CallExpression);
-			if (!callExpr)
-				return false;
+			if (!callExpr) return false;
 
 			const expressionText = callExpr.getExpression().getText();
-			return decl.getName() === "context" && (expressionText.includes("._context") || expressionText.includes(".context"));
-		}));
+			return (
+				decl.getName() === "context" && (expressionText.includes("._context") || expressionText.includes(".context"))
+			);
+		}),
+	);
 	if (!resolveInjectedForSelectorMethod.getText().includes('if (!context) throw new Error("Frame was detached");'))
-		resolveInjectedForSelectorMethod.insertStatements(contextStatement.getChildIndex() + 1, `if (!context) throw new Error("Frame was detached");`);
-
+		resolveInjectedForSelectorMethod.insertStatements(
+			contextStatement.getChildIndex() + 1,
+			`if (!context) throw new Error("Frame was detached");`,
+		);
 
 	// -- _customFindFramesByParsed Method -- progress
 	if (!frameSelectorsClass.getMethod("_customFindFramesByParsed"))

@@ -15,11 +15,12 @@ export function patchRecorder(project: Project) {
 
 	// Add try-catch block around the existing React.useEffect body
 	const useEffectCall = assertDefined(
-		recorderFn.getDescendantsOfKind(SyntaxKind.CallExpression).find(call => call.getExpression().getText() === "React.useEffect")
+		recorderFn
+			.getDescendantsOfKind(SyntaxKind.CallExpression)
+			.find(call => call.getExpression().getText() === "React.useEffect"),
 	);
 	useEffectCall
 		.getArguments()[0]
 		.asKindOrThrow(SyntaxKind.ArrowFunction)
-		.setBodyText(`try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}		`);
-
+		.setBodyText(`try { window.dispatch({ event: 'setAutoExpect', params: { autoExpect } }); } catch {}`);
 }

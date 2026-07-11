@@ -18,7 +18,10 @@ export function patchClock(project: Project) {
 			.getBodyOrThrow()
 			.asKindOrThrow(SyntaxKind.Block)
 			.getStatements()
-			.find((statement) => statement.getKind() === SyntaxKind.IfStatement && statement.getText().includes("this._initScripts.length"))
+			.find(
+				statement =>
+					statement.getKind() === SyntaxKind.IfStatement && statement.getText().includes("this._initScripts.length"),
+			),
 	);
 	installIfNeededGuard.replaceWithText(`
 		if (this._initScripts.length) {

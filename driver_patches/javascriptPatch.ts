@@ -17,7 +17,12 @@ export function patchJavascript(project: Project) {
 		hasQuestionToken: true,
 	});
 	jsHandleEvaluateExpressionMethod.replaceWithText(
-		jsHandleEvaluateExpressionMethod.getText().replace(/this\.internalEvaluateExpression\(expression, options, arg\)/g, "this.internalEvaluateExpression(expression, options, arg)")
+		jsHandleEvaluateExpressionMethod
+			.getText()
+			.replace(
+				/this\.internalEvaluateExpression\(expression, options, arg\)/g,
+				"this.internalEvaluateExpression(expression, options, arg)",
+			),
 	);
 
 	// -- evaluateExpressionHandle Method --
@@ -28,6 +33,11 @@ export function patchJavascript(project: Project) {
 		hasQuestionToken: true,
 	});
 	jsHandleEvaluateExpressionHandleMethod.replaceWithText(
-			jsHandleEvaluateExpressionHandleMethod.getText().replace(/this\._evaluateExpressionHandle\(expression, options, arg\)/g, "this._evaluateExpressionHandle(expression, options, arg)")
+		jsHandleEvaluateExpressionHandleMethod
+			.getText()
+			.replace(
+				/this\._evaluateExpressionHandle\(expression, options, arg\)/g,
+				"this._evaluateExpressionHandle(expression, options, arg)",
+			),
 	);
 }

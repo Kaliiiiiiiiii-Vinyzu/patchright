@@ -5,13 +5,20 @@ import { type Project, SyntaxKind } from "ts-morph";
 // --------------------------------
 export function patchTracing(project: Project) {
 	// Add source file to the project
-	const tracingSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/trace/recorder/tracing.ts");
+	const tracingSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/trace/recorder/tracing.ts",
+	);
 
 	// ------- createBeforeActionTraceEvent Function -------
 	// ------- createInputActionTraceEvent Function -------
 	// ------- createActionLogTraceEvent Function -------
 	// ------- createAfterActionTraceEvent Function -------
-	const eventFunctionNamesToPatch = ["createBeforeActionTraceEvent", "createInputActionTraceEvent", "createActionLogTraceEvent", "createAfterActionTraceEvent"];
+	const eventFunctionNamesToPatch = [
+		"createBeforeActionTraceEvent",
+		"createInputActionTraceEvent",
+		"createActionLogTraceEvent",
+		"createAfterActionTraceEvent",
+	];
 	for (const eventFunctionName of eventFunctionNamesToPatch) {
 		const eventFunction = tracingSourceFile.getFunctionOrThrow(eventFunctionName);
 		// We want to ignore Patchright-Internal Route.continue Calls in the Tracing

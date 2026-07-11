@@ -48,7 +48,6 @@ export function patchPage(project: Project) {
 		return [...this.browserContext._pageBindings.values(), ...this._pageBindings.values()];
 	`);
 
-
 	// ------- PageBinding Class -------
 	const pageBindingClass = pageSourceFile.getClassOrThrow("PageBinding");
 	// Content modified from https://raw.githubusercontent.com/microsoft/playwright/471930b1ceae03c9e66e0eb80c1364a1a788e7db/packages/playwright-core/src/server/page.ts
@@ -134,12 +133,10 @@ export function patchPage(project: Project) {
 	const initScriptClass = pageSourceFile.getClassOrThrow("InitScript");
 	// -- InitScript Constructor --
 	const initScriptConstructorAssignment = assertDefined(
-		initScriptClass.getConstructors()[0]
+		initScriptClass
+			.getConstructors()[0]
 			.getStatements()
-			.find(s =>
-				s.getKind() === SyntaxKind.ExpressionStatement &&
-				s.getText().includes("this.source = `(() => {")
-			)
+			.find(s => s.getKind() === SyntaxKind.ExpressionStatement && s.getText().includes("this.source = `(() => {")),
 	);
 	initScriptConstructorAssignment.replaceWithText("this.source = `(() => { ${source} })();`;");
 
@@ -155,7 +152,7 @@ export function patchPage(project: Project) {
 			hasQuestionToken: true,
 		});
 		workerEvaluateMethod.replaceWithText(
-			workerEvaluateMethod.getText().replace(/await this\._executionContextPromise/g, "context")
+			workerEvaluateMethod.getText().replace(/await this\._executionContextPromise/g, "context"),
 		);
 		// Insert the new line of code after the responseAwaitStatement
 		workerEvaluateMethod.insertStatements(0, `
@@ -173,7 +170,11 @@ export function patchPage(project: Project) {
 	const pagePerformLocatorHandlersCheckpointMethod = pageClass.getMethodOrThrow("_performLocatorHandlersCheckpoint");
 	const waitForHiddenStatement = pagePerformLocatorHandlersCheckpointMethod
 		.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
-		.find(statement => statement.getText() === "await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });");
+		.find(
+			statement =>
+				statement.getText() ===
+				"await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });",
+		);
 	if (waitForHiddenStatement)
 		waitForHiddenStatement.replaceWithText(`
 			const frameChunks = splitSelectorByFrame(handler.selector);

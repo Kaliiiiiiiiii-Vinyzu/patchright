@@ -17,14 +17,18 @@ export function patchScreenshotter(project: Project) {
 	const safeEvalStatement = assertDefined(
 		prepareMethod
 			.getDescendantsOfKind(SyntaxKind.ExpressionStatement)
-			.find((s) => s.getText().includes("safeNonStallingEvaluateInAllFrames") && s.getText().includes("inPagePrepareForScreenshots"))
+			.find(
+				s =>
+					s.getText().includes("safeNonStallingEvaluateInAllFrames") &&
+					s.getText().includes("inPagePrepareForScreenshots"),
+			),
 	);
-	safeEvalStatement
-		.getParentIfKindOrThrow(SyntaxKind.Block)
-		.insertStatements(safeEvalStatement.getChildIndex(), `
+	safeEvalStatement.getParentIfKindOrThrow(SyntaxKind.Block).insertStatements(
+		safeEvalStatement.getChildIndex(),
+		`
 			await Promise.all(this._page.frames().map(async (f: any) => {
 				try { await f.utilityContext(); } catch {}
 			}));
-		`);
-	
+		`,
+	);
 }

@@ -5,7 +5,9 @@ import { type Project, SyntaxKind } from "ts-morph";
 // -------------------------------------
 export function patchFrameDispatcher(project: Project) {
 	// Add source file to the project
-	const frameDispatcherSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/dispatchers/frameDispatcher.ts");
+	const frameDispatcherSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/dispatchers/frameDispatcher.ts",
+	);
 
 	// ------- frameDispatcher Class -------
 	const frameDispatcherClass = frameDispatcherSourceFile.getClassOrThrow("FrameDispatcher");

@@ -80,10 +80,15 @@ jobs:
           cd playwright
           npx playwright install-deps
 
-      - name: Install Chromium Browser
+      - name: Install Chromium and Chrome Browsers
         run: |
           cd playwright
-          npx playwright install chromium
+          npx playwright install chromium chrome
+
+      - name: Run Detection Smoke Test
+        id: test_detection
+        continue-on-error: ${{ github.event_name == 'workflow_call' }}
+        run: xvfb-run -a node utils/detection_smoke_test.mjs
 
       - name: Modify Tests for Patchright
         run: npx tsx utils/modify_tests.ts
@@ -106,7 +111,7 @@ jobs:
         id: set_test_outcome
         if: always()
         run: |
-          if [ "${{ steps.test_page.outcome }}" = "failure" ] || [ "${{ steps.test_library.outcome }}" = "failure" ]; then
+          if [ "${{ steps.test_detection.outcome }}" = "failure" ] || [ "${{ steps.test_page.outcome }}" = "failure" ] || [ "${{ steps.test_library.outcome }}" = "failure" ]; then
             echo "test_outcome=failure" >> "$GITHUB_OUTPUT"
           else
             echo "test_outcome=success" >> "$GITHUB_OUTPUT"

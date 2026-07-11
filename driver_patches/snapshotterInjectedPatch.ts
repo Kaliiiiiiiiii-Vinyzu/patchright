@@ -6,7 +6,9 @@ import { assertDefined } from "./utils.ts";
 // --------------------------------------------
 export function patchSnapshotterInjected(project: Project) {
 	// Add source file to the project
-	const snapshotterInjectedSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/trace/recorder/snapshotterInjected.ts");
+	const snapshotterInjectedSourceFile = project.addSourceFileAtPath(
+		"packages/playwright-core/src/server/trace/recorder/snapshotterInjected.ts",
+	);
 
 	// ------- frameSnapshotStreamer Function -------
 	const frameSnapshotStreamerFunction = snapshotterInjectedSourceFile.getFunctionOrThrow("frameSnapshotStreamer");
@@ -14,7 +16,7 @@ export function patchSnapshotterInjected(project: Project) {
 	const streamerClass = assertDefined(
 		frameSnapshotStreamerFunction
 			.getDescendantsOfKind(SyntaxKind.ClassDeclaration)
-		  .find(c => c.getName() === "Streamer")
+			.find(c => c.getName() === "Streamer"),
 	);
 
 	// Remove CSS monkey-patches from constructor
@@ -29,7 +31,9 @@ export function patchSnapshotterInjected(project: Project) {
 		.getStatements()
 		.filter(stmt => CTOR_STATEMENTS_TO_REMOVE.some(term => stmt.getText().includes(term)))
 		.reverse()
-		.forEach(stmt => { stmt.remove() });
+		.forEach(stmt => {
+			stmt.remove();
+		});
 
 	// Remove properties and methods related to CSS interception
 	streamerClass.getPropertyOrThrow("_staleStyleSheets").remove();
@@ -87,9 +91,7 @@ export function patchSnapshotterInjected(project: Project) {
 	const captureMethod = streamerClass.getMethodOrThrow("captureSnapshot");
 	// iterate document.styleSheets instead of _modifiedStyleSheets
 	const forOfStatement = assertDefined(
-			captureMethod
-			.getStatements()
-			.find(s => s.getText().includes("this._modifiedStyleSheets"))
+		captureMethod.getStatements().find(s => s.getText().includes("this._modifiedStyleSheets")),
 	);
 	forOfStatement.replaceWithText(forOfStatement.getText().replace("this._modifiedStyleSheets", "document.styleSheets"));
 
@@ -97,9 +99,7 @@ export function patchSnapshotterInjected(project: Project) {
 	const resetMethod = streamerClass.getMethodOrThrow("resetHistory");
 	// remove _staleStyleSheets.clear()
 	const staleStylesheetsClearStatement = assertDefined(
-		resetMethod
-			.getStatements()
-			.find(s => s.getText().includes("this._staleStyleSheets.clear();"))
+		resetMethod.getStatements().find(s => s.getText().includes("this._staleStyleSheets.clear();")),
 	);
 	staleStylesheetsClearStatement.remove();
 }
