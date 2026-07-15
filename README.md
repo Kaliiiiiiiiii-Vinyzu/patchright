@@ -95,7 +95,7 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 
 [<img width="60%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/8125db5d-efe5-432a-aca4-fda912f78119" />](https://go.nodemaven.com/VinyzuGH)
 </br>
-#### [NodeMaven](https://go.nodemaven.com/Vinyzu): Your reliable proxy provider with High Quality IPs. </br> Superb solution for automation, web scraping, SEO research, and social media management.
+#### [NodeMaven](https://go.nodemaven.com/VinyzuGH): Your reliable proxy provider with High Quality IPs. </br> Superb solution for automation, web scraping, SEO research, and social media management.
 
 Why [NodeMaven](https://go.nodemaven.com/VinyzuGH)?
 
