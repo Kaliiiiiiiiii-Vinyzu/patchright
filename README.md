@@ -93,11 +93,11 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 
 ---
 
-[<img width="80%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/5db03567-59c6-414f-a9ce-9b662ffa2b02" />](https://go.nodemaven.com/Vinyzu)
+[<img width="60%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/8125db5d-efe5-432a-aca4-fda912f78119" />](https://go.nodemaven.com/VinyzuGH)
 </br>
 #### [NodeMaven](https://go.nodemaven.com/Vinyzu): Your reliable proxy provider with High Quality IPs. </br> Superb solution for automation, web scraping, SEO research, and social media management.
 
-Why [NodeMaven](https://go.nodemaven.com/Vinyzu)?
+Why [NodeMaven](https://go.nodemaven.com/VinyzuGH)?
 
 ✅ 99.9% Uptime
 </br>
@@ -115,7 +115,7 @@ Why [NodeMaven](https://go.nodemaven.com/Vinyzu)?
 </br>
 🔥 **PATCHRIGHT40** - **40% off** to ISP (Static) Proxies
 
-<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Vinyzu).</sup>
+<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/VinyzuGH).</sup>
 
 ---
 
