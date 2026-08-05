@@ -137,6 +137,36 @@ Need reliable proxies for Patchright automation? [ColaProxy](https://colaproxy.c
 
 <sup>Affordable, stable, and built for developers. Start scaling your Patchright projects with [**ColaProxy**](https://colaproxy.com/?utm_source=viny&utm_medium=viny&ref=viny).</sup>
 
+---
+
+<div align="center">
+
+<img src="https://scrappey.com/logo.png" width="56" alt="Scrappey">
+
+### Sponsored by [Scrappey](https://scrappey.com?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme)
+
+</div>
+
+Getting the browser past detection is one problem. Keeping proxies rotating, fingerprints
+current and sessions alive across a few million requests is a different one. **Scrappey**
+takes the second problem: one endpoint, solved pages back.
+
+- **Clearcote** — our own patched Chromium, maintained in-house, not a stock build
+- **Several engines behind one endpoint** — blocked on one stack, routed to another
+- **Click, type, wait and scroll** over the API — a real session, not a fetch proxy
+- **Residential and datacenter proxies** included, or bring your own
+- **Per request**, no monthly minimum
+
+```bash
+curl -X POST "https://publisher.scrappey.com/api/v1?key=YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"cmd": "request.get", "url": "https://example.com"}'
+```
+
+Get 10% off with code `PATCHRIGHT`
+
+[Documentation](https://scrappey.com/docs?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme) · [Discord](https://scrappey.com/discord?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme) · [Get an API key](https://scrappey.com?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme)
+
 </details>
 
 ---
