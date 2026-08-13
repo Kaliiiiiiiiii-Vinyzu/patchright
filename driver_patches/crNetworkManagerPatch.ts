@@ -36,16 +36,17 @@ export function patchCRNetworkManager(project: Project) {
 	// -- _onRequest Method --
 	const onRequestMethod = crNetworkManagerClass.getMethodOrThrow("_onRequest");
 	// Find the route assignment, whether it is still pristine or already expanded.
+	const normalizeWhitespace = (text: string) => text.replace(/\s+/g, " ").trim();
 	const routeAssignment = assertDefined(
 		onRequestMethod.getDescendantsOfKind(SyntaxKind.BinaryExpression).find(expr => {
 			if (expr.getLeft().getText() !== "route") return false;
-			return expr
-				.getRight()
-				.getText()
-				.startsWith("new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId");
+			return normalizeWhitespace(expr.getRight().getText()).startsWith(
+				"new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId",
+			);
 		}),
 	);
-	// Adding new parameter to the RouteImpl call
+	// Adding new parameter to the RouteImpl call. Upstream may already construct RouteImpl with
+	// networkId (e.g. multi-line formatting), in which case this is a no-op replacement.
 	routeAssignment
 		.getRight()
 		.replaceWithText(

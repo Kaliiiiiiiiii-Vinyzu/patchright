@@ -17,7 +17,9 @@ const pageHtml = `<!doctype html>
 const frameHtml = "<!doctype html><p>frame</p>";
 
 function evaluateInMainWorld(target, pageFunction, argument) {
-  return target.evaluate(pageFunction, argument, false);
+  // Since Playwright v1.62, evaluate()'s 3rd positional parameter is the new upstream
+  // `options` argument; Patchright's stealth `isolatedContext` flag was pushed to 4th position.
+  return target.evaluate(pageFunction, argument, undefined, false);
 }
 
 function detectLeaks() {

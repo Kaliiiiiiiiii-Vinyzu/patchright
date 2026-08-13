@@ -30,6 +30,19 @@ export function patchFrameSelectors(project: Project) {
 	// ------- FrameSelectors Class -------
 	const frameSelectorsClass = frameSelectorsSourceFile.getClassOrThrow("FrameSelectors");
 
+	// Since Playwright v1.62, resolveFrameForSelector/resolveInjectedForSelector were made private
+	// (renamed to _resolveFrameForSelector/_resolveInjectedForSelector) and most call sites were
+	// rerouted through the new callOnSelector/callOnSelectorHandle batched API. Patchright's custom
+	// shadow-DOM-piercing logic (both here and in framesPatch.ts) still depends on calling these two
+	// methods directly and publicly from Frame, so restore their original public names/visibility.
+	for (const oldName of ["_resolveFrameForSelector", "_resolveInjectedForSelector"]) {
+		const method = frameSelectorsClass.getMethod(oldName);
+		if (method) {
+			method.setScope(undefined);
+			method.rename(oldName.slice(1));
+		}
+	}
+
 	// -- queryArrayInMainWorld Method --
 	const queryArrayInMainWorldMethod = frameSelectorsClass.getMethodOrThrow("queryArrayInMainWorld");
 	if (!queryArrayInMainWorldMethod.getParameter("isolatedContext"))
@@ -43,7 +56,8 @@ export function patchFrameSelectors(project: Project) {
 		.getDescendantsOfKind(SyntaxKind.CallExpression)
 		.find(
 			callExpr =>
-				callExpr.getExpression().getText() === "this.resolveInjectedForSelector" &&
+				(callExpr.getExpression().getText() === "this.resolveInjectedForSelector" ||
+					callExpr.getExpression().getText() === "this.callOnSelectorHandle") &&
 				callExpr.getArguments()[1]?.getKind() === SyntaxKind.ObjectLiteralExpression,
 		);
 	const mainWorldProp = assertDefined(

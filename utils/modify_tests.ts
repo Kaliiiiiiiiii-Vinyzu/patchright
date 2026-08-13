@@ -34,6 +34,10 @@ const tsConfigPath = path.join(testsRoot, "tsconfig.json");
 const dryRun = process.env.MODIFY_TESTS_DRY_RUN === "1";
 
 const TARGET_METHODS = new Set(["evaluate", "evaluateHandle", "evaluateAll"]);
+// Since Playwright v1.62, `evaluate`/`evaluateHandle` gained a new `options` parameter that sits
+// right before Patchright's appended `isolatedContext` flag, so callers now need an extra
+// placeholder argument for it. `evaluateAll` did not gain such a parameter.
+const METHODS_WITH_OPTIONS_PARAM = new Set(["evaluate", "evaluateHandle"]);
 const TEST_BASE_NAMES = new Set(["it", "test", "playwrightTest"]);
 
 class SourceTextEditor {
@@ -462,13 +466,19 @@ function shouldSkipForSafety(callExpression: CallExpression): boolean {
 }
 
 function insertIsolatedContextArgument(callExpression: CallExpression): boolean {
+	const expression = callExpression.getExpression();
+	const methodName = Node.isPropertyAccessExpression(expression) ? expression.getName() : undefined;
+	const needsOptionsPlaceholder = !!methodName && METHODS_WITH_OPTIONS_PARAM.has(methodName);
+
 	const args = callExpression.getArguments();
 	if (args.length === 1) {
 		callExpression.addArgument("undefined");
+		if (needsOptionsPlaceholder) callExpression.addArgument("undefined");
 		callExpression.addArgument("false");
 		return true;
 	}
 	if (args.length === 2) {
+		if (needsOptionsPlaceholder) callExpression.addArgument("undefined");
 		callExpression.addArgument("false");
 		return true;
 	}

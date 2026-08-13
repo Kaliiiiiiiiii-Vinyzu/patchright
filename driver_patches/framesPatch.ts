@@ -117,14 +117,14 @@ export function patchFrames(project: Project) {
 		if (eventInitHandles.some(handle => handle._context?.frame !== this))
 			throw new js.JavaScriptErrorInEvaluate("JSHandles can be evaluated only in the context they were created!");
 		if (eventInitHandles.length === 0) {
-			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+			await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 			return;
 		}
 		try {
-			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { mainWorld: true, ...options }, scope);
+			await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { mainWorld: true, ...options }, scope);
 		} catch (e) {
 			if ("JSHandles can be evaluated only in the context they were created!" === e.message && canRetryInSecondaryContext) {
-				await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+				await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 				return;
 			}
 			throw e;
@@ -855,7 +855,12 @@ export function patchFrames(project: Project) {
 		// The first expect check, a.k.a. one-shot, always finishes - even when progress is aborted.
 		if (noAbort)
 			progress = nullProgress;
-		const selectorInFrame = selector ? await progress.race(this.selectors.resolveFrameForSelector(selector, { strict: true })) : undefined;
+		// Since Playwright v1.62, expressions with no selector (e.g. to.have.title/to.have.url,
+		// checked directly on the page) fall back to querying ':root' (or 'body' for to.match.aria)
+		// so injected.expect() always receives a real element instead of undefined - matching
+		// upstream's own _expectInternal, whose injected.expect() no longer tolerates a missing one.
+		const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
+		const selectorInFrame = await progress.race(this.selectors.resolveFrameForSelector(effectiveSelector, { strict: true }));
 
 		const { frame, info } = selectorInFrame || { frame: this, info: undefined };
 		const world = options.expression === 'to.have.property' ? 'main' : (info?.world ?? 'utility');
@@ -876,6 +881,24 @@ export function patchFrames(project: Project) {
 				log = "  locator resolved to " + injected.previewNode(elements[0]);
 			if (info)
 				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
+			// Since Playwright v1.62, injected.expect() requires a resolved element and no longer
+			// handles the "selector matched nothing" case itself (that special-casing moved to the
+			// server-side caller upstream, via callOnSelector returning null). Replicate that
+			// fallback here so we don't crash calling expectSingleElement(undefined, ...) below,
+			// e.g. while waiting for an iframe that hasn't loaded/attached yet. Exclude
+			// to.have.title/to.have.url: those read page-level state and never dereference the
+			// element, so they must keep working even when there's no selector (hence no elements).
+			if (!isArray && elements.length === 0 && options.expression !== 'to.have.title' && options.expression !== 'to.have.url') {
+				let matches = options.isNot;
+				let missingReceived = false;
+				if (!options.isNot && options.expression === 'to.be.hidden') matches = true;
+				else if (options.isNot && options.expression === 'to.be.visible') matches = false;
+				else if (!options.isNot && options.expression === 'to.be.detached') matches = true;
+				else if (options.isNot && options.expression === 'to.be.attached') matches = false;
+				else if (options.isNot && options.expression === 'to.be.in.viewport') matches = false;
+				else { matches = options.isNot; missingReceived = true; }
+				return { log, matches, missingReceived };
+			}
 			return { log, ...await injected.expect(elements[0], options, elements) };
 		}, { info, options, callId }));
 
@@ -892,8 +915,8 @@ export function patchFrames(project: Project) {
 		return { matches, received };
 	`);
 
-	// -- _callOnElementOnceMatches Method --
-	const callOnElementOnceMatchesMethod = frameClass.getMethodOrThrow("_callOnElementOnceMatches");
+	// -- _callOnElementOnceMatches Method (renamed to _waitForFunctionOnSelector upstream since v1.62) --
+	const callOnElementOnceMatchesMethod = frameClass.getMethod("_callOnElementOnceMatches") ?? frameClass.getMethodOrThrow("_waitForFunctionOnSelector");
 	callOnElementOnceMatchesMethod.setBodyText(`
 		const callbackText = body.toString();
 		progress.log("waiting for " + this._asLocator(selector));

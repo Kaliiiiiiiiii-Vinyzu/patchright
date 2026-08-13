@@ -1,4 +1,7 @@
 [submodule "patchright-nodejs"]
 	path = patchright-nodejs
-	url = https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-nodejs.git
-	branch = main
+	# TEMPORARY: points at the fork branch containing the companion fix
+	# (Kaliiiiiiiiii-Vinyzu/patchright-nodejs#57) so this branch is checkable on
+	# its own. Revert to the upstream URL once that PR merges.
+	url = https://github.com/maestrojeong/patchright-nodejs.git
+	branch = fix/playwright-1.62-evaluate-isolated-context
