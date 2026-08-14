@@ -1,4 +1,4 @@
-import { type Project, SyntaxKind, VariableDeclarationKind } from "ts-morph";
+import { type Project, Scope, SyntaxKind, VariableDeclarationKind } from "ts-morph";
 import { assertDefined } from "./utils.ts";
 
 // ------------------------
@@ -43,7 +43,7 @@ export function patchFrameSelectors(project: Project) {
 		.getDescendantsOfKind(SyntaxKind.CallExpression)
 		.find(
 			callExpr =>
-				callExpr.getExpression().getText() === "this.resolveInjectedForSelector" &&
+				callExpr.getExpression().getText() === "this.callOnSelectorHandle" &&
 				callExpr.getArguments()[1]?.getKind() === SyntaxKind.ObjectLiteralExpression,
 		);
 	const mainWorldProp = assertDefined(
@@ -55,7 +55,8 @@ export function patchFrameSelectors(project: Project) {
 	if (mainWorldProp.getText() === "mainWorld: true") mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
 
 	// -- resolveFrameForSelector Method --
-	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveFrameForSelector");
+	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("_resolveFrameForSelector");
+	resolveFrameForSelectorMethod.setScope(Scope.Public);
 	// Change 'element' variable declaration from const to let to allow reassignment.
 	resolveFrameForSelectorMethod
 		.getDescendantsOfKind(SyntaxKind.VariableStatement)
@@ -109,7 +110,8 @@ export function patchFrameSelectors(project: Project) {
 	}
 
 	// -- resolveInjectedForSelector Method --
-	const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("resolveInjectedForSelector");
+	const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("_resolveInjectedForSelector");
+	resolveInjectedForSelectorMethod.setScope(Scope.Public);
 	// Find the statement where 'injected' is assigned from 'context.injectedScript' and add a null check
 	const contextStatement = assertDefined(
 		resolveInjectedForSelectorMethod.getStatements().find(stmt => {

@@ -108,8 +108,8 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 			replaceOnce("it('init script should run only once in popup', async ({ context }) => {", "it('init script should run only once in popup', async ({ context, server }) => {");
 
 			replaceOnce(
-				"  const page = await context.newPage();\n\n  expect(await page.evaluate(() => (window as any)['temp'], undefined, false)).toBe(123);",
-				"  const page = await context.newPage();\n  await page.goto(server.EMPTY_PAGE);\n\n  expect(await page.evaluate(() => (window as any)['temp'], undefined, false)).toBe(123);",
+				"  const page = await context.newPage();\n\n  expect(await page.evaluate(() => (window as any)['temp'], undefined, undefined, false)).toBe(123);",
+				"  const page = await context.newPage();\n  await page.goto(server.EMPTY_PAGE);\n\n  expect(await page.evaluate(() => (window as any)['temp'], undefined, undefined, false)).toBe(123);",
 			);
 
 			// In Patchright, bindings might not be available at document start; don't throw before setting temp.
@@ -123,40 +123,40 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 				"  const page = await context.newPage();\n  await page.goto(server.EMPTY_PAGE);\n  const [popup] = await Promise.all([",
 			);
 			replaceOnce(
-				"    page.evaluate(() => (window as any)['win'] = window.open(), undefined, false),",
-				"    page.evaluate(url => (window as any)['win'] = window.open(url), server.EMPTY_PAGE, false),",
+				"    page.evaluate(() => (window as any)['win'] = window.open(), undefined, undefined, false),",
+				"    page.evaluate(url => (window as any)['win'] = window.open(url), server.EMPTY_PAGE, undefined, false),",
 			);
 			replaceOnce(
-				"  ]);\n  expect(await popup.evaluate(() => (window as any)['temp'], undefined, false)).toBe(123);",
-				"  ]);\n  await popup.waitForLoadState();\n  expect(await popup.evaluate(() => (window as any)['temp'], undefined, false)).toBe(123);",
+				"  ]);\n  expect(await popup.evaluate(() => (window as any)['temp'], undefined, undefined, false)).toBe(123);",
+				"  ]);\n  await popup.waitForLoadState();\n  expect(await popup.evaluate(() => (window as any)['temp'], undefined, undefined, false)).toBe(123);",
 			);
 
-			replaceOnce("    page.evaluate(() => window.open('about:blank'), undefined, false),", "    page.evaluate(url => window.open(url), server.EMPTY_PAGE, false),");
+			replaceOnce("    page.evaluate(() => window.open('about:blank'), undefined, undefined, false),", "    page.evaluate(url => window.open(url), server.EMPTY_PAGE, undefined, false),");
 			replaceOnce(
-				"  ]);\n  expect(await popup.evaluate('callCount', undefined, false)).toEqual(1);",
-				"  ]);\n  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, false));",
+				"  ]);\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(1);",
+				"  ]);\n  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
 			);
 			replaceAll(
-				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, false)).toEqual(1);",
-				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, false));",
+				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(1);",
+				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
 			);
 			replaceAll(
-				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, false)).toEqual(3);",
-				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, false));",
+				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(3);",
+				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
 			);
 			replaceAll(
-				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, false)).toEqual(2);",
-				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, false));",
+				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(2);",
+				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
 			);
 			break;
 		}
 
 		case "tests/library/page-clock.spec.ts": {
 			replaceAll("await page.goto('data:text/html,');", "await page.goto(server.EMPTY_PAGE);");
-			replaceAll("page.evaluate(() => window.open('about:blank'), undefined, false),", "page.evaluate(url => window.open(url), server.EMPTY_PAGE, false),");
+			replaceAll("page.evaluate(() => window.open('about:blank'), undefined, undefined, false),", "page.evaluate(url => window.open(url), server.EMPTY_PAGE, undefined, false),");
 			replaceAll(
-				"]);\n    const popupTime = await popup.evaluate(() => Date.now(), undefined, false);",
-				"]);\n    await popup.waitForLoadState();\n    const popupTime = await popup.evaluate(() => Date.now(), undefined, false);",
+				"]);\n    const popupTime = await popup.evaluate(() => Date.now(), undefined, undefined, false);",
+				"]);\n    await popup.waitForLoadState();\n    const popupTime = await popup.evaluate(() => Date.now(), undefined, undefined, false);",
 			);
 
 			// Ensure tests in this file that now use server have it in fixtures.
@@ -180,29 +180,29 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 			// Test: should not affect mouse event target page
 			replaceOnce(
 				"page.evaluate(clickCounter),\n    page2.evaluate(clickCounter),",
-				"page.evaluate(clickCounter, undefined, false),\n    page2.evaluate(clickCounter, undefined, false),",
+				"page.evaluate(clickCounter, undefined, undefined, false),\n    page2.evaluate(clickCounter, undefined, undefined, false),",
 			);
 
 			// Test: should change focused iframe
-			replaceOnce("frame1.evaluate(logger),\n    frame2.evaluate(logger),", "frame1.evaluate(logger, undefined, false),\n    frame2.evaluate(logger, undefined, false),");
+			replaceOnce("frame1.evaluate(logger),\n    frame2.evaluate(logger),", "frame1.evaluate(logger, undefined, undefined, false),\n    frame2.evaluate(logger, undefined, undefined, false),");
 			break;
 		}
 
 		case "tests/library/hit-target.spec.ts": {
 			// Patchright runs $eval in the utility/isolated world. These tests set window properties
 			// from $eval callbacks, then read them from the main world via evaluate(..., false).
-			// Convert $eval('button', ...) to evaluate(() => { querySelector + ... }, undefined, false).
+			// Convert $eval('button', ...) to evaluate(() => { querySelector + ... }, undefined, undefined, false).
 
 			// Test: should block click when mousedown fails
 			replaceOnce(
 				"await page.$eval('button', button => {\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  });",
-				"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  }, undefined, false);",
+				"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    for (const name of ['mousemove', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup'])\n      button.addEventListener(name, e => allEvents.push(e.type));\n  }, undefined, undefined, false);",
 			);
 
 			// Test: should click when element detaches in mousedown
 			replaceOnce(
 				"await page.$eval('button', button => {\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  });",
-				"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  }, undefined, false);",
+				"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousedown', () => {\n      (window as any).result = 'Mousedown';\n      button.remove();\n    });\n  }, undefined, undefined, false);",
 			);
 
 			// Test: should block all events when hit target is wrong and element detaches
@@ -212,21 +212,21 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 			);
 			replaceOnce(
 				"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  });",
-				"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  }, undefined, false);",
+				"      blocker.addEventListener(name, e => allEvents.push(e.type));\n    }\n  }, undefined, undefined, false);",
 			);
 
 			// Test: should not block programmatic events
 			replaceOnce(
 				"await page.$eval('button', button => {\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  });",
-				"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  }, undefined, false);",
+				"await page.evaluate(() => {\n    const button = document.querySelector('button')!;\n    button.addEventListener('mousemove', () => {\n      button.style.marginLeft = '100px';\n      button.dispatchEvent(new MouseEvent('click'));\n    });\n\n    const allEvents = [];\n    (window as any).allEvents = allEvents;\n    button.addEventListener('click', e => {\n      if (!e.isTrusted)\n        allEvents.push(e.type);\n    });\n  }, undefined, undefined, false);",
 			);
 			break;
 		}
 
 		case "tests/page/page-click.spec.ts": {
 			replaceOnce(
-				"  await page.evaluate(() => {\n    const logEvent = e => console.log(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, false);\n  const entries = [];\n  page.on('console', message => entries.push(message.text()));\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });",
-				"  await page.evaluate(() => {\n    window['entries'] = [];\n    const logEvent = e => window['entries'].push(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, false);\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });\n  const entries = await page.evaluate(() => window['entries'], undefined, false);",
+				"  await page.evaluate(() => {\n    const logEvent = e => console.log(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, undefined, false);\n  const entries = [];\n  page.on('console', message => entries.push(message.text()));\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });",
+				"  await page.evaluate(() => {\n    window['entries'] = [];\n    const logEvent = e => window['entries'].push(e.type);\n    document.addEventListener('mousedown', logEvent);\n    document.addEventListener('mouseup', logEvent);\n    document.addEventListener('contextmenu', logEvent);\n  }, undefined, undefined, false);\n  await page.getByRole('button', { name: 'Click me' }).click({ button: 'right' });\n  const entries = await page.evaluate(() => window['entries'], undefined, undefined, false);",
 			);
 			break;
 		}
@@ -246,12 +246,12 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 
 		case "tests/library/popup.spec.ts": {
 			replaceOnce(
-				"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, false);",
-				"  const injected = await page.evaluate(async url => {\n    const win = window.open(url);\n    await new Promise(f => win.onload = f);\n    return win['injected'];\n  }, server.EMPTY_PAGE, false);",
+				"  const injected = await page.evaluate(() => {\n    const win = window.open('about:blank');\n    return win['injected'];\n  }, undefined, undefined, false);",
+				"  const injected = await page.evaluate(async url => {\n    const win = window.open(url);\n    await new Promise(f => win.onload = f);\n    return win['injected'];\n  }, server.EMPTY_PAGE, undefined, false);",
 			);
 			replaceOnce(
-				"  await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(async () => {\n      const win = window.open('about:blank');\n      win['add'](9, 4);\n      win.close();\n    }, undefined, false),\n  ]);",
-				"  const [popup] = await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(url => window.open(url), server.EMPTY_PAGE, false),\n  ]);\n  await popup.waitForLoadState();\n  await Promise.all([\n    popup.waitForEvent('close'),\n    popup.evaluate(() => { window['add'](9, 4); window.close(); }, undefined, false),\n  ]);",
+				"  await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(async () => {\n      const win = window.open('about:blank');\n      win['add'](9, 4);\n      win.close();\n    }, undefined, undefined, false),\n  ]);",
+				"  const [popup] = await Promise.all([\n    page.waitForEvent('popup'),\n    page.evaluate(url => window.open(url), server.EMPTY_PAGE, undefined, false),\n  ]);\n  await popup.waitForLoadState();\n  await Promise.all([\n    popup.waitForEvent('close'),\n    popup.evaluate(() => { window['add'](9, 4); window.close(); }, undefined, undefined, false),\n  ]);",
 			);
 			break;
 		}
@@ -359,6 +359,7 @@ const FIXME_TARGETS: Partial<Record<string, FixmeReasonByTitle>> = {
 			"should capture a page-created credential and reuse it in another context",
 			"Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture.",
 		],
+		["should reuse a page-created credential via the storageState option", "Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture."],
 	]),
 	"tests/library/browsercontext-events.spec.ts": new Map([
 		["console event should work @smoke", "Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available."],
@@ -446,13 +447,22 @@ function isStringLikeEvaluateExpressionArg(node: Node): boolean {
 	return Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node) || Node.isTemplateExpression(node);
 }
 
+function evaluateHasOptions(callExpression: CallExpression): boolean {
+	const expression = callExpression.getExpression();
+	if (!Node.isPropertyAccessExpression(expression)) return false;
+	if (expression.getName() === "evaluateAll") return false;
+	const receiverType = expression.getExpression().getType().getSymbol()?.getName();
+	return receiverType !== "Worker" && expression.getExpression().getText() !== "worker";
+}
+
 function shouldSkipForSafety(callExpression: CallExpression): boolean {
 	const expression = callExpression.getExpression();
 	if (!Node.isPropertyAccessExpression(expression)) return true;
 	if (!TARGET_METHODS.has(expression.getName())) return true;
 
+	const hasOptions = evaluateHasOptions(callExpression);
 	const args = callExpression.getArguments();
-	if (args.length === 0 || args.length >= 3) return true;
+	if (args.length === 0 || args.length >= (hasOptions ? 4 : 3)) return true;
 	if (args.some(arg => Node.isSpreadElement(arg))) return true;
 
 	const firstArg = args[0];
@@ -462,13 +472,20 @@ function shouldSkipForSafety(callExpression: CallExpression): boolean {
 }
 
 function insertIsolatedContextArgument(callExpression: CallExpression): boolean {
+	const hasOptions = evaluateHasOptions(callExpression);
 	const args = callExpression.getArguments();
 	if (args.length === 1) {
 		callExpression.addArgument("undefined");
+		if (hasOptions) callExpression.addArgument("undefined");
 		callExpression.addArgument("false");
 		return true;
 	}
 	if (args.length === 2) {
+		if (hasOptions) callExpression.addArgument("undefined");
+		callExpression.addArgument("false");
+		return true;
+	}
+	if (args.length === 3 && hasOptions) {
 		callExpression.addArgument("false");
 		return true;
 	}
@@ -479,19 +496,36 @@ function normalizeIsolatedContextArgument(callExpression: CallExpression): boole
 	const expression = callExpression.getExpression();
 	if (!Node.isPropertyAccessExpression(expression) || !TARGET_METHODS.has(expression.getName())) return false;
 
+	const hasOptions = evaluateHasOptions(callExpression);
 	const args = callExpression.getArguments();
 	if (args.length < 3) return false;
+	if (!hasOptions) {
+		const isolatedContextArg = args[2];
+		if (!Node.isObjectLiteralExpression(isolatedContextArg)) return false;
+		const isolatedContextProp = isolatedContextArg.getProperty("isolatedContext");
+		if (!isolatedContextProp || !Node.isPropertyAssignment(isolatedContextProp)) return false;
+		if (isolatedContextProp.getInitializer()?.getText() !== "false") return false;
+		isolatedContextArg.replaceWithText("false");
+		return true;
+	}
 
-	const lastArg = args[args.length - 1];
-	if (!Node.isObjectLiteralExpression(lastArg)) return false;
+	const optionsArg = args[2];
+	if (args.length === 3 && optionsArg.getText() === "false") {
+		optionsArg.replaceWithText("undefined");
+		callExpression.addArgument("false");
+		return true;
+	}
+	if (!Node.isObjectLiteralExpression(optionsArg)) return false;
 
-	const isolatedContextProp = lastArg.getProperty("isolatedContext");
+	const isolatedContextProp = optionsArg.getProperty("isolatedContext");
 	if (!isolatedContextProp || !Node.isPropertyAssignment(isolatedContextProp)) return false;
 
 	const initializer = isolatedContextProp.getInitializer();
 	if (!initializer || initializer.getText() !== "false") return false;
 
-	lastArg.replaceWithText("false");
+	if (optionsArg.getProperties().length === 1) optionsArg.replaceWithText("undefined");
+	else isolatedContextProp.remove();
+	callExpression.addArgument("false");
 	return true;
 }
 

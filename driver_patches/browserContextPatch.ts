@@ -33,21 +33,33 @@ export function patchBrowserContext(project: Project) {
 
 	// -- exposeBinding Method --
 	const exposeBindingMethod = browserContextClass.getMethodOrThrow("exposeBinding");
-	// Remove old loop and logic for localFrames and isolated world creation
-	exposeBindingMethod.getStatements().forEach(statement => {
+	exposeBindingMethod.getDescendantsOfKind(SyntaxKind.ExpressionStatement).forEach(statement => {
 		const text = statement.getText();
-		// Check if the statement matches the patterns
 		if (text.includes("this.doAddInitScript(binding.initScript)"))
-			statement.replaceWithText(`
-				await this.doExposeBinding(binding);
-				return binding;
-			`);
+			statement.replaceWithText("if (!binding.noGlobal)\n\tawait this.doExposeBinding(binding);");
 		else if (
 			text.includes("this.safeNonStallingEvaluateInAllFrames(binding.initScript.source, 'main')") ||
 			text.includes("this.exposePlaywrightBindingIfNeeded()")
 		)
 			statement.remove();
 	});
+
+	// -- removeExposedBinding Method --
+	const removeExposedBindingMethod = browserContextClass.getMethodOrThrow("removeExposedBinding");
+	const deleteBindingStatement = assertDefined(
+		removeExposedBindingMethod
+			.getStatements()
+			.find(statement => statement.getText().includes("this._pageBindings.delete")),
+	);
+	removeExposedBindingMethod.insertStatements(
+		deleteBindingStatement.getChildIndex() + 1,
+		`
+		if (binding.noGlobal) {
+			await binding.disposeFunctionCallbacks();
+			return;
+		}
+	`,
+	);
 
 	// -- defaultNewContextParamValues ClassVar --
 	const defaultContextExpression = browserContextSourceFile

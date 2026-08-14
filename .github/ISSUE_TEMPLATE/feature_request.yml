@@ -18,6 +18,8 @@ body:
       options:
         - label: I have searched for [similar issues](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright/issues?q=sort%3Arelevance%20is%3Aissue) and didn't find a duplicate.
           required: true
+        - label: I confirm that i did not use any AI tools for direct communitation. This includes any Messages, Text, Code Comments or any other form of human to human communication. Translations, Formatting, Summarizing etc. using LLMs is also not allowed.
+          required: true
 
   - type: textarea
     id: problem

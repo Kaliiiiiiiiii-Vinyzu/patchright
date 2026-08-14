@@ -106,6 +106,7 @@ export function patchFrames(project: Project) {
 		const canRetryInSecondaryContext = allHandlesFromSameFrame && (handlesFrame !== this || !selector.includes("internal:control=enter-frame"));
 		const callback = (injectedScript, element, data) => {
 			injectedScript.dispatchEvent(element, data.type, data.eventInit);
+			return { result: undefined };
 		};
 		if (eventInitHandles.length > 0 && selector !== ":scope") {
 			dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, { strict: options.strict, performActionPreChecks: false }, async (progress, handle) => {
@@ -117,14 +118,14 @@ export function patchFrames(project: Project) {
 		if (eventInitHandles.some(handle => handle._context?.frame !== this))
 			throw new js.JavaScriptErrorInEvaluate("JSHandles can be evaluated only in the context they were created!");
 		if (eventInitHandles.length === 0) {
-			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+			await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 			return;
 		}
 		try {
-			await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { mainWorld: true, ...options }, scope);
+			await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { mainWorld: true, ...options }, scope);
 		} catch (e) {
 			if ("JSHandles can be evaluated only in the context they were created!" === e.message && canRetryInSecondaryContext) {
-				await this._callOnElementOnceMatches(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+				await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { ...options }, scope);
 				return;
 			}
 			throw e;
@@ -175,7 +176,7 @@ export function patchFrames(project: Project) {
 	getFrameMainFrameContextIdMethod.setBodyText(`
 		try {
 		  const frameOwner = await client._sendMayFail("DOM.getFrameOwner", { frameId: this._id });
-		  if (!frameOwner?.nodeId)
+		  if (!frameOwner?.backendNodeId)
 		    return 0;
 
 		  const describedNode = await client._sendMayFail("DOM.describeNode", { backendNodeId: frameOwner.backendNodeId });
@@ -267,6 +268,14 @@ export function patchFrames(project: Project) {
 		statements: "return this._context(world);",
 	});
 
+	// -- hideHighlight Method --
+	frameClass.getMethodOrThrow("hideHighlight").setBodyText(`
+		return this.raceAgainstEvaluationStallingEvents(async () => {
+			const injectedScript = await this._isolatedWorld?.injectedScript();
+			await injectedScript?.evaluate(injected => injected.hideHighlight());
+		});
+	`);
+
 	// -- _setContext Method --
 	const setContentMethod = frameClass.getMethodOrThrow("setContent");
 	setContentMethod.setBodyText(`
@@ -305,7 +314,7 @@ export function patchFrames(project: Project) {
 				if (performActionPreChecks)
 					await this._page.performActionPreChecks(progress);
 
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
+				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, { strict: options.strict }));
 				if (!resolved) {
 					if (noAutoWaiting)
 						throw new dom.NonRecoverableDOMError('Element(s) not found');
@@ -368,7 +377,7 @@ export function patchFrames(project: Project) {
 				if (performChecks)
 					await this._page.performActionPreChecks(progress);
 
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict }));
+				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, { strict }));
 				if (!resolved) {
 					if (noAutoWaiting)
 						throw new dom.NonRecoverableDOMError('Element(s) not found');
@@ -449,7 +458,7 @@ export function patchFrames(project: Project) {
 		if (options.performActionPreChecks)
 			await this._page.performActionPreChecks(progress);
 
-		const resolved = await this.selectors.resolveInjectedForSelector(
+		const resolved = await this.selectors._resolveInjectedForSelector(
 			selector,
 			{ strict: options.strict },
 			 (options as any).__patchrightInitialScope
@@ -604,7 +613,7 @@ export function patchFrames(project: Project) {
 		const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 			if (performActionPreChecksAndLog)
 				await this._page.performActionPreChecks(progress);
-			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+			const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
 			if (!resolved) {
 				if (state === 'hidden' || state === 'detached')
 					return null;
@@ -729,7 +738,7 @@ export function patchFrames(project: Project) {
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");
 	isVisibleInternalMethod.setBodyText(`
 		try {
-			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+			const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
 			if (!resolved)
 				return false;
 			const atomicResult = await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
@@ -838,63 +847,24 @@ export function patchFrames(project: Project) {
 	// -- queryCount Method --
 	const queryCountMethod = frameClass.getMethodOrThrow("queryCount");
 	queryCountMethod.setBodyText(`
-		const continuePolling = Symbol("continuePolling");
-		const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false }, async (result) => {
-			if (!result || !result[0])
-				return 0;
-			return Array.isArray(result[1]) ? result[1].length : 0;
-		}, 'returnAll', continuePolling);
-		return result === continuePolling ? await this.selectors.queryCount(selector, options) : result;
-	`);
-
-	// -- _expectInternal Method --
-	const expectInternalMethod = frameClass.getMethodOrThrow("_expectInternal");
-	expectInternalMethod.setBodyText(`
-		const progressLog = (text: string) => progress.log(text);
-		const callId = progress.metadata.id;
-		// The first expect check, a.k.a. one-shot, always finishes - even when progress is aborted.
-		if (noAbort)
-			progress = nullProgress;
-		const selectorInFrame = selector ? await progress.race(this.selectors.resolveFrameForSelector(selector, { strict: true })) : undefined;
-
-		const { frame, info } = selectorInFrame || { frame: this, info: undefined };
-		const world = options.expression === 'to.have.property' ? 'main' : (info?.world ?? 'utility');
-		const context = await progress.race(frame.context(world));
-		const injected = await progress.race(context.injectedScript());
-
-		const { log, matches, received, missingReceived } = await progress.race(injected.evaluate(async (injected, { info, options, callId }) => {
-			const elements = info ? injected.querySelectorAll(info.parsed, document) : [];
-			if (callId)
-				injected.markTargetElements(new Set(elements), callId);
-			const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
-			let log = '';
-			if (isArray)
-				log = "  locator resolved to " + elements.length + " element" + (elements.length === 1 ? "" : "s");
-			else if (elements.length > 1)
-				throw injected.strictModeViolationError(info!.parsed, elements);
-			else if (elements.length)
-				log = "  locator resolved to " + injected.previewNode(elements[0]);
-			if (info)
-				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
-			return { log, ...await injected.expect(elements[0], options, elements) };
-		}, { info, options, callId }));
-
-		if (log)
-			progressLog(log);
-		// Note: missingReceived avoids \`unexpected value "undefined"\` when element was not found.
-		if (matches === options.isNot) {
-			lastIntermediateResult.errorMessage = missingReceived ? 'element(s) not found' : undefined;
-			lastIntermediateResult.received = received;
-			lastIntermediateResult.isSet = true;
-			if (!missingReceived && !Array.isArray(received?.value))
-				progressLog('  unexpected value "' + renderUnexpectedValue(options.expression, received?.value) + '"');
+		try {
+			const continuePolling = Symbol("continuePolling");
+			const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false }, async (result) => {
+				if (!result || !result[0])
+					return 0;
+				return Array.isArray(result[1]) ? result[1].length : 0;
+			}, 'returnAll', continuePolling);
+			return result === continuePolling ? await this.selectors.queryCount(selector) : result;
+		} catch (e) {
+			if (this.isNonRetriableError(e))
+				throw e;
+			return 0;
 		}
-		return { matches, received };
 	`);
 
-	// -- _callOnElementOnceMatches Method --
-	const callOnElementOnceMatchesMethod = frameClass.getMethodOrThrow("_callOnElementOnceMatches");
-	callOnElementOnceMatchesMethod.setBodyText(`
+	// -- _waitForFunctionOnSelector Method --
+	const waitForFunctionOnSelectorMethod = frameClass.getMethodOrThrow("_waitForFunctionOnSelector");
+	waitForFunctionOnSelectorMethod.setBodyText(`
 		const callbackText = body.toString();
 		progress.log("waiting for " + this._asLocator(selector));
 		const eventInit = (taskData as any)?.eventInit;
@@ -927,6 +897,28 @@ export function patchFrames(project: Project) {
 			}
 			return null;
 		};
+		if (!eventInitContainsHandle(eventInit)) {
+			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
+				const resolved = await progress.race(this.selectors.callOnSelector(selector, { ...options, scope, markTargets: "first" }, ({ injected, elements }, { callbackText, taskData }) => {
+					const callback = injected.eval(callbackText) as ElementCallback<T, R>;
+					const element = elements[0];
+					const value = callback(injected, element, taskData);
+					if (!value)
+						return { success: false };
+					const log = "  locator resolved to " + injected.previewNode(element);
+					return { log, success: true, value };
+				}, { callbackText, taskData }));
+				if (!resolved)
+					return continuePolling;
+				const { log, success, value } = resolved.result;
+				if (log)
+					progress.log(log);
+				if (!success)
+					return continuePolling;
+				return value!;
+			});
+			return scope ? scope._context.raceAgainstContextDestroyed(promise) : promise;
+		}
 		if (selector === ":scope" && scope instanceof dom.ElementHandle) {
 			const taskScope = firstEventInitHandle(eventInit);
 			if (taskScope) {
@@ -952,7 +944,7 @@ export function patchFrames(project: Project) {
 		}
 		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
 				if (!resolved)
 					return continuePolling;
 				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
@@ -998,7 +990,7 @@ export function patchFrames(project: Project) {
 		}
 		if (options?.mainWorld && eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
 				if (!resolved)
 					return continuePolling;
 				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {

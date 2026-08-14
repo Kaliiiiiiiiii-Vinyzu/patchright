@@ -47,6 +47,8 @@ export function patchCRPage(project: Project) {
 	const crExposeBindingMethod = crPageClass.getMethodOrThrow("exposeBinding");
 	// Initialize binding across all frame sessions and evaluate the binding source in all page frames
 	crExposeBindingMethod.setBodyText(`
+		if (binding.noGlobal)
+			return;
 		await this._forAllFrameSessions(frame => frame._initBinding(binding));
 		await Promise.all(this._page.frames().map(frame => frame.evaluateExpression(binding.source).catch(e => {})));
 	`);
@@ -264,6 +266,8 @@ export function patchCRPage(project: Project) {
 	});
 	const initBindingMethod = frameSessionClass.getMethodOrThrow("_initBinding");
 	initBindingMethod.setBodyText(`
+		if (binding.noGlobal)
+			return;
 		// Remember this binding so future execution contexts get it in _onExecutionContextCreated.
 		this._exposedBindingNames.push(binding.name);
 		this._exposedBindingScripts.push(binding.source);
@@ -345,6 +349,14 @@ export function patchCRPage(project: Project) {
 	onFrameNavigatedMethod.setIsAsync(true);
 	onFrameNavigatedMethod.addStatements(`
 		await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
+		const functionBindings = this._page.allBindings().filter(binding => binding.noGlobal);
+		if (functionBindings.length) {
+			try {
+				const context = await this._page.frameManager.frame(framePayload.id)._context('main');
+				for (const binding of functionBindings)
+					binding.dispatchFunction(this._page, context).catch(() => {});
+			} catch { }
+		}
 		// patchright: For non-initial navigations, skip DOM cleanup since the document just changed
 		// and init script tags haven't been re-added yet. The _onLifecycleEvent("load") handler
 		// will perform cleanup after the page finishes loading.
