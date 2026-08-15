@@ -87,14 +87,14 @@ export function patchPage(project: Project) {
 			private _functionCallbacksDisposed = false;
 			forClient?: unknown;
 
-			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, noGlobal: boolean) {
+			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, noGlobal?: boolean) {
 				super(parent);
 				this.name = name;
 				this.playwrightFunction = playwrightFunction;
-				this.noGlobal = noGlobal;
-				this.initScript = new InitScript(parent, noGlobal ? '' : createPageBindingScript(name, false));
-				this.source = noGlobal ? '' : this.initScript.source;
-				this.cleanupScript = noGlobal ? '' : \`delete globalThis[\${JSON.stringify(name)}];\`;
+				this.noGlobal = !!noGlobal;
+				this.initScript = new InitScript(parent, this.noGlobal ? '' : createPageBindingScript(name, false));
+				this.source = this.noGlobal ? '' : this.initScript.source;
+				this.cleanupScript = this.noGlobal ? '' : \`delete globalThis[\${JSON.stringify(name)}];\`;
 			}
 
 			async dispatchFunction(page: Page, context: js.ExecutionContext) {

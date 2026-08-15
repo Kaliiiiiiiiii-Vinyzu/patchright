@@ -23,7 +23,7 @@ body:
           required: true
         - label: I have verified that this issue does not occur when using [Playwright](https://github.com/microsoft/playwright/) directly.
           required: true
-        - label: I confirm that i did not use any AI tools for direct communitation. This includes any Messages, Text, Code Comments or any other form of human to human communication. Translations, Formatting, Summarizing etc. is also not allowed.
+        - label: I confirm that I did not use any AI tools for direct communitation. This includes any Messages, Text, Code Comments or any other form of human-to-human communication. Translations, Formatting, Summarizing etc. using LLMs are also not allowed.
           required: true
 
   - type: input

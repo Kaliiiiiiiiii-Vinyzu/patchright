@@ -14,7 +14,7 @@
 
 ## AI Assistance Disclosure
 
-> **Communication Policy**: Youre not allowed to use any AI tools for direct communitation. This includes any Messages, Text, Code Comments or any other form of human to human communication. Translations, Formatting, Summarizing etc. is also not allowed. Any Usage of Any LLMs for direct communication will result in a Ban.
+> **Communication Policy**: You're not allowed to use any AI tools for direct communication. This includes any Messages, Text, Code Comments or any other form of human-to-human communication. Translations, Formatting, Summarizing etc. are also not allowed. Any Usage of any LLMs for direct communication will result in a Ban.
 
 > **Code Policy**: AI-assisted code contributions are welcome, but you must understand, test, and take full responsibility for your code. Pasting AI-generated code or PR descriptions without genuine human review and understanding will result in your PR being closed and may result in a ban from contributing. You have to ensure that you own any contributed Code and it can be Licensed Apache 2.0.
 

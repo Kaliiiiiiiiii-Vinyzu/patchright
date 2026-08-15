@@ -492,7 +492,6 @@ export function patchCRPage(project: Project) {
 
 	// -- _evaluateOnNewDocument Method --
 	frameSessionClass.getMethodOrThrow("_evaluateOnNewDocument").setBodyText(`
-			this._evaluateOnNewDocumentScripts.push(initScript);
 			const worldName = world === 'utility' ? this._crPage.utilityWorldName : undefined;
 			const { identifier } = await this._client.send('Page.addScriptToEvaluateOnNewDocument', { source: initScript.source, worldName, runImmediately });
 			this._initScriptIds.set(initScript, identifier);
