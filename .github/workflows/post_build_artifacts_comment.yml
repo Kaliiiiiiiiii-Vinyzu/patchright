@@ -60,20 +60,20 @@ jobs:
               per_page: 100,
             });
 
-            const artifact = artifacts.find(a => a.name === 'build-artifacts' && !a.expired);
+            const artifact = artifacts.find(a => a.name === 'patchright-packages' && !a.expired);
             if (!artifact) {
-              core.setFailed(`Artifact 'build-artifacts' not found (or expired) for run ${runId}`);
+              core.setFailed(`Artifact 'patchright-packages' not found (or expired) for run ${runId}`);
               return;
             }
 
             const marker = '<!-- patchright-artifacts -->';
             const body = [
               marker,
-              '**Patchright Driver Build**',
+              '**Patchright Package Build**',
               '__Do not download or use these artifacts in production! They are only for testing purposes on this Pull Request.__',
               '',
               '**Download**',
-              `- Download the PRs driver build via \`build-artifacts\`:\n  [Download Driver Build Artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}/artifacts/${artifact.id})`,
+              `- Download the PR's npm package builds via \`patchright-packages\`:\n  [Download Package Build Artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}/artifacts/${artifact.id})`,
               '',
               '**Debug info**',
               `- Artifact ID: \`${artifact.id}\``,

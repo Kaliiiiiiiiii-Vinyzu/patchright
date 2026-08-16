@@ -71,17 +71,25 @@ jobs:
           cd playwright
           node utils/generate_channels.js
 
-      - name: Build Patchright Driver
+      - name: Build Patchright Packages
         run: |
           cd playwright
           npm run build
-          npx playwright install-deps
-          chmod +x utils/build/build-playwright-driver.sh
-          utils/build/build-playwright-driver.sh
+
+      - name: Rebrand Patchright Packages
+        run: |
+          cd playwright
+          npx tsx ../patchright-nodejs/patchright_rebranding.ts
+
+      - name: Pack Patchright Packages
+        run: |
+          mkdir -p artifacts
+          npm pack ./playwright/packages/patchright-core --pack-destination artifacts
+          npm pack ./playwright/packages/patchright --pack-destination artifacts
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v6
         id: upload_build_artifacts
         with:
-          name: build-artifacts
-          path: playwright/utils/build/output/playwright-*.zip
+          name: patchright-packages
+          path: artifacts/*.tgz
