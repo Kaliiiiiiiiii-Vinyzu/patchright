@@ -166,7 +166,13 @@ export function patchPage(project: Project) {
 			}
 
 			static async dispatch(page: Page, payload: string, context: dom.FrameExecutionContext) {
-				const { name, seq, serializedArgs } = JSON.parse(payload) as BindingPayload;
+				let bindingPayload: BindingPayload;
+				try {
+					bindingPayload = JSON.parse(payload) as BindingPayload;
+				} catch {
+					return;
+				}
+				const { name, seq, serializedArgs } = bindingPayload;
 
 				const deliver = async (deliverPayload: any) => {
 					let deliveryError: any;

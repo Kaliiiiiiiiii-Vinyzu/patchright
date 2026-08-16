@@ -30,6 +30,9 @@ export function patchFrames(project: Project) {
 		"frame._iframeWorld = undefined;",
 		"frame._mainWorld = undefined;",
 		"frame._isolatedWorld = undefined;",
+		"frame._iframeWorldContextPromise = undefined;",
+		"frame._mainWorldContextPromise = undefined;",
+		"frame._isolatedWorldContextPromise = undefined;",
 	]);
 
 	// ------- Frame Class -------
@@ -39,6 +42,9 @@ export function patchFrames(project: Project) {
 		{ name: "_isolatedWorld", type: "dom.FrameExecutionContext" },
 		{ name: "_mainWorld", type: "dom.FrameExecutionContext" },
 		{ name: "_iframeWorld", type: "dom.FrameExecutionContext" },
+		{ name: "_isolatedWorldContextPromise", type: "Promise<number | undefined>" },
+		{ name: "_mainWorldContextPromise", type: "Promise<number | undefined>" },
+		{ name: "_iframeWorldContextPromise", type: "Promise<number | undefined>" },
 	]);
 
 	// -- evalOnSelector Method --
@@ -208,7 +214,6 @@ export function patchFrames(project: Project) {
 			client = this._page.delegate._mainFrameSession._client;
 		}
 
-		var iframeExecutionContextId = await this._getFrameMainFrameContextId(client);
 		const isMainFrame = this === this._page.mainFrame();
 		const session = this._page.delegate._sessionForFrame(this);
 
@@ -225,35 +230,56 @@ export function patchFrames(project: Project) {
 		};
 
 		if (world === "main") {
-			// Iframe Only
-			if (!isMainFrame && iframeExecutionContextId && this._iframeWorld === undefined) {
-				this._iframeWorld = registerContext(iframeExecutionContextId, world);
-			} else if (this._mainWorld === undefined) {
-				const globalThis = await client._sendMayFail('Runtime.evaluate', {
-					expression: "globalThis",
-					serializationOptions: { serialization: "idOnly" },
-				});
-				if (!globalThis || !globalThis?.result?.objectId) {
-					if (this._isDetached()) throw new Error('Frame was detached');
+			if (!isMainFrame && this._iframeWorld === undefined) {
+				const contextPromise = this._iframeWorldContextPromise ??= this._getFrameMainFrameContextId(client).then(id => id || undefined);
+				const executionContextId = await contextPromise;
+				if (this._iframeWorldContextPromise !== contextPromise)
+					return this._context(world);
+				if (!executionContextId) {
+					this._iframeWorldContextPromise = undefined;
 					return;
 				}
-				const executionContextId = parseInt(globalThis.result.objectId.split('.')[1], 10);
-				if (!isNaN(executionContextId)) {
-					this._mainWorld = registerContext(executionContextId, world);
+				if (this._iframeWorld === undefined)
+					this._iframeWorld = registerContext(executionContextId, world);
+			} else if (isMainFrame && this._mainWorld === undefined) {
+				const contextPromise = this._mainWorldContextPromise ??= client._sendMayFail('Runtime.evaluate', {
+					expression: "globalThis",
+					serializationOptions: { serialization: "idOnly" },
+				}).then(globalThis => {
+					const objectId = globalThis?.result?.objectId;
+					if (!objectId)
+						return undefined;
+					const executionContextId = parseInt(objectId.split('.')[1], 10);
+					return isNaN(executionContextId) ? undefined : executionContextId;
+				});
+				const executionContextId = await contextPromise;
+				if (this._mainWorldContextPromise !== contextPromise)
+					return this._context(world);
+				if (!executionContextId) {
+					this._mainWorldContextPromise = undefined;
+					return;
 				}
+				if (this._mainWorld === undefined)
+					this._mainWorld = registerContext(executionContextId, world);
 			}
 		}
 
 		if (world !== "main" && this._isolatedWorld === undefined) {
-			const result = await client._sendMayFail('Page.createIsolatedWorld', {
+			const contextPromise = this._isolatedWorldContextPromise ??= client._sendMayFail('Page.createIsolatedWorld', {
 				frameId: this._id, grantUniveralAccess: true, worldName: world,
-			});
-				if (!result) {
-					if (this._isDetached()) throw new Error("Frame was detached");
-					return;
-				}
-			this._isolatedWorld = registerContext(result.executionContextId, "utility");
+			}).then(result => result?.executionContextId);
+			const executionContextId = await contextPromise;
+			if (this._isolatedWorldContextPromise !== contextPromise)
+				return this._context(world);
+			if (!executionContextId) {
+				this._isolatedWorldContextPromise = undefined;
+				return;
+			}
+			if (this._isolatedWorld === undefined)
+				this._isolatedWorld = registerContext(executionContextId, "utility");
 		}
+		if (this._isDetached())
+			throw new Error('Frame was detached');
 
 		if (world !== "main")
 			return this._isolatedWorld;

@@ -279,15 +279,8 @@ export function patchCRPage(project: Project) {
 			...contextIds.map(executionContextId => this._client._sendMayFail('Runtime.addBinding', { name: binding.name, executionContextId })),
 		]);
 
-		// Evaluate binding bootstrap in all existing execution contexts.
-		const evaluationPromises = contextIds.map(contextId =>
-			this._client._sendMayFail('Runtime.evaluate', {
-				expression: binding.source,
-				contextId,
-				awaitPromise: true,
-			}).catch(e => { }),
-		);
-		await Promise.all(evaluationPromises);
+		// Install the wrapper before later init scripts and in all existing contexts.
+		await this._evaluateOnNewDocument(binding.initScript, 'main', true);
 	`);
 
 	// -- _removeExposedBindings Method --
