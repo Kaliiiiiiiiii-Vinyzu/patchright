@@ -271,11 +271,16 @@ export function patchFrameSelectors(project: Project) {
 							const resolvedElement = await client.send("DOM.describeNode", { objectId: element._objectId, depth: -1 });
 							element.backendNodeId = resolvedElement.node.backendNodeId;
 							element.nodePosition = await this._findElementPositionInDomTree(element, describedScope.node, context, "");
+							element.nodePositionScopeIsDocument = describedScope.node.nodeName === "#document";
 							elements.push(element);
 						}
 					}
 				}
 			}
+
+			// A missing position means the DOM changed after describeNode. Retry with a fresh snapshot.
+			if (elements.some(element => element.nodePosition === null && element.nodePositionScopeIsDocument))
+				return [];
 
 			// Sorting elements by their nodePosition, which is a index to the Element in the DOM tree
 			const getParts = (pos) => (pos || '').split('.').filter(Boolean).map(Number);

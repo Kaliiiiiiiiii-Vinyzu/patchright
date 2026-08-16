@@ -237,11 +237,13 @@ export function patchFrames(project: Project) {
 					return this._context(world);
 				if (!executionContextId) {
 					this._iframeWorldContextPromise = undefined;
-					return;
-				}
-				if (this._iframeWorld === undefined)
+					if (this._isDetached())
+						throw new Error('Frame was detached');
+				} else if (this._iframeWorld === undefined) {
 					this._iframeWorld = registerContext(executionContextId, world);
-			} else if (isMainFrame && this._mainWorld === undefined) {
+				}
+			}
+			if (!this._iframeWorld && this._mainWorld === undefined) {
 				const contextPromise = this._mainWorldContextPromise ??= client._sendMayFail('Runtime.evaluate', {
 					expression: "globalThis",
 					serializationOptions: { serialization: "idOnly" },
@@ -257,7 +259,9 @@ export function patchFrames(project: Project) {
 					return this._context(world);
 				if (!executionContextId) {
 					this._mainWorldContextPromise = undefined;
-					return;
+					if (this._isDetached())
+						throw new Error('Frame was detached');
+					return this._context(world);
 				}
 				if (this._mainWorld === undefined)
 					this._mainWorld = registerContext(executionContextId, world);
@@ -273,7 +277,9 @@ export function patchFrames(project: Project) {
 				return this._context(world);
 			if (!executionContextId) {
 				this._isolatedWorldContextPromise = undefined;
-				return;
+				if (this._isDetached())
+					throw new Error('Frame was detached');
+				return this._context(world);
 			}
 			if (this._isolatedWorld === undefined)
 				this._isolatedWorld = registerContext(executionContextId, "utility");
@@ -1274,11 +1280,16 @@ export function patchFrames(project: Project) {
 							const resolvedElement = await client.send("DOM.describeNode", { objectId: element._objectId, depth: -1 });
 							element.backendNodeId = resolvedElement.node.backendNodeId;
 							element.nodePosition = await this.selectors._findElementPositionInDomTree(element, describedScope.node, context, "");
+							element.nodePositionScopeIsDocument = describedScope.node.nodeName === "#document";
 							elements.push(element);
 						}
 					}
 				}
 			}
+
+			// A missing position means the DOM changed after describeNode. Retry with a fresh snapshot.
+			if (elements.some(element => element.nodePosition === null && element.nodePositionScopeIsDocument))
+				return [];
 
 			// Sorting elements by their nodePosition, which is a index to the Element in the DOM tree
 			const getParts = (pos) => (pos || '').split('.').filter(Boolean).map(Number);

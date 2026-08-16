@@ -15,6 +15,16 @@ export function patchCRPage(project: Project) {
 
 	// ------- CRPage Class -------
 	const crPageClass = crPageSourceFile.getClassOrThrow("CRPage");
+	crPageClass.addProperty({
+		name: "_reportAsNewPromise",
+		type: "Promise<void> | undefined",
+	});
+	crPageClass.addMethod({
+		name: "_reportAsNew",
+		returnType: "Promise<void>",
+		parameters: [{ name: "error", type: "Error", hasQuestionToken: true }],
+		statements: "return this._reportAsNewPromise ??= this._page.reportAsNew(this._opener?._page, error);",
+	});
 
 	// -- CRPage Constructor --
 	const crPageConstructor = assertDefined(
@@ -37,6 +47,17 @@ export function patchCRPage(project: Project) {
 		this._networkManager.setRequestInterception(true);
 		this.initScriptTag = crypto.randomBytes(20).toString('hex');
 	`);
+	const initializePageStatement = assertDefined(
+		crPageConstructor
+			.getStatements()
+			.find(statement => statement.getText().includes("this._mainFrameSession._initialize")),
+	);
+	initializePageStatement.replaceWithText(
+		initializePageStatement
+			.getText()
+			.replace("this._page.reportAsNew(this._opener?._page, undefined)", "this._reportAsNew()")
+			.replace("this._page.reportAsNew(this._opener?._page, error)", "this._reportAsNew(error)"),
+	);
 
 	// -- exposeBinding Method --
 	crPageClass.addMethod({
@@ -107,22 +128,19 @@ export function patchCRPage(project: Project) {
 	const initializeFrameSessionMethodBody = initializeFrameSessionMethod
 		.getBodyOrThrow()
 		.asKindOrThrow(SyntaxKind.Block);
-	initializeFrameSessionMethod.insertStatements(0, `const pageEnablePromise = this._client.send('Page.enable');`);
-
-	// Buffer dialog events for main frames so that dialogs on newly opened popups are never missed
-	const addBrowserListenersStatement = assertDefined(
-		initializeFrameSessionMethod
-			.getStatements()
-			.find(statement => statement.getText().includes("this._addBrowserListeners()")),
-	);
-	initializeFrameSessionMethodBody.insertStatements(
-		addBrowserListenersStatement.getChildIndex(),
-		`
-		let bufferedDialogEvents: any[] | undefined = this._isMainFrame() ? [] : undefined;
-		if (bufferedDialogEvents)
-			this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.javascriptDialogOpening', (event: any) => bufferedDialogEvents ? bufferedDialogEvents.push(event) : undefined));
-	`,
-	);
+	initializeFrameSessionMethod.insertStatements(0, `
+		// Page.enable can immediately emit a dialog for a newly opened popup, so handle it before enabling.
+		let initializingDialogs = this._isMainFrame();
+		if (initializingDialogs)
+			this._eventListeners.push(eventsHelper.addEventListener(this._client, 'Page.javascriptDialogOpening', (event: any) => {
+				if (!initializingDialogs)
+					return;
+				this._firstNonInitialNavigationCommittedFulfill();
+				this._page.frameManager.createDummyMainFrameIfNeeded();
+				this._crPage._reportAsNew().then(() => this._onDialog(event));
+			}));
+		const pageEnablePromise = this._client.send('Page.enable');
+	`);
 
 	const promisesDeclaration = initializeFrameSessionMethod.getVariableDeclarationOrThrow("promises");
 	// Find the initializer array
@@ -157,7 +175,7 @@ export function patchCRPage(project: Project) {
 		.getFirstDescendantByKindOrThrow(SyntaxKind.ArrowFunction)
 		.getBody()
 		.asKindOrThrow(SyntaxKind.Block);
-	// Replay buffered dialog events after _addRendererListeners()
+	// Stop the early dialog listener after _addRendererListeners().
 	const addRendererListenersIfStatement = assertDefined(
 		pageGetFrameTreeThenBlock
 			.getStatements()
@@ -170,12 +188,8 @@ export function patchCRPage(project: Project) {
 		.asKindOrThrow(SyntaxKind.IfStatement)
 		.getThenStatement()
 		.asKindOrThrow(SyntaxKind.Block).addStatements(`
-			// Replay any dialog events that arrived before _addRendererListeners
-			const pendingDialogEvents = bufferedDialogEvents || [];
-			bufferedDialogEvents = undefined;
-			for (const event of pendingDialogEvents)
-				this._onDialog(event);
-		`);
+			initializingDialogs = false;
+	`);
 	// Remove old loop and logic for localFrames and isolated world creation
 	pageGetFrameTreeThenBlock
 		.getStatements()
@@ -191,7 +205,7 @@ export function patchCRPage(project: Project) {
 	const lifecycleEventIfStatement = assertDefined(
 		initializeFrameSessionMethodBody
 			.getDescendantsOfKind(SyntaxKind.IfStatement)
-			.find(statement => statement.getText().includes("this._firstNonInitialNavigationCommittedFulfill()")),
+			.find(statement => statement.getText().startsWith("if (isInitialEmptyPage)")),
 	);
 	const lifecycleEventElseBlock = assertDefined(lifecycleEventIfStatement.getElseStatement());
 	lifecycleEventElseBlock.asKindOrThrow(SyntaxKind.Block).insertStatements(0, `
@@ -242,7 +256,6 @@ export function patchCRPage(project: Project) {
 		);
 	// Ensure the right statements were found
 	if (promisePushStatements.length === 1) {
-		// Replace the first `promises.push` statement with the new conditional code
 		promisePushStatements[0].replaceWithText(`
 			if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
 				promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
@@ -252,6 +265,26 @@ export function patchCRPage(project: Project) {
 				await this._client.send('Runtime.runIfWaitingForDebugger');
 		`);
 	}
+
+	// A dialog can block the first navigation from committing, so allow the initialized page to be reported and handled.
+	frameSessionClass.getMethodOrThrow("_onDialog").insertStatements(0, `
+		if (this._isMainFrame() && !this._page.initializedOrUndefined())
+			this._firstNonInitialNavigationCommittedFulfill();
+	`);
+	const onDialogMethod = frameSessionClass.getMethodOrThrow("_onDialog");
+	const missingDialogFrameStatement = assertDefined(
+		onDialogMethod
+			.getStatements()
+			.find(statement => statement.getText().includes("!this._page.frameManager.frame(this._targetId)")),
+	);
+	missingDialogFrameStatement.replaceWithText(
+		missingDialogFrameStatement
+			.getText()
+			.replace(
+				"!this._page.frameManager.frame(this._targetId)",
+				"!this._page.frameManager.frame(this._targetId) && !this._isMainFrame()",
+			),
+	);
 
 	// -- _initBinding Method --
 	frameSessionClass.addMethod({
