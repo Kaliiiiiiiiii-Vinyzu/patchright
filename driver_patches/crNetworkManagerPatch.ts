@@ -538,7 +538,7 @@ export function patchCRNetworkManager(project: Project) {
 		this._alreadyContinuedParams = {
 			requestId: this._interceptionId,
 			url: overrides.url,
-			headers: overrides.headers,
+			headers: overrides.headers && removeCookieHeader(overrides.headers),
 			method: overrides.method,
 			postData: overrides.postData?.toString('base64'),
 		};

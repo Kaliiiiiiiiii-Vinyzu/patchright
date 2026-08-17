@@ -92,6 +92,11 @@ patches.patchCRBrowser(project);
 // -----------------------------
 patches.patchCRDevTools(project);
 
+// ------------------------------------
+// server/chromium/crExecutionContext.ts
+// ------------------------------------
+patches.patchCRExecutionContext(project);
+
 // -----------------------------------
 // server/chromium/crNetworkManager.ts
 // -----------------------------------
@@ -136,6 +141,11 @@ patches.patchPage(project);
 // utils/isomorphic/utilityScriptSerializers.ts
 // --------------------------------------------
 patches.patchUtilityScriptSerializers(project);
+
+// -----------------------------
+// injected/src/utilityScript.ts
+// -----------------------------
+patches.patchUtilityScript(project);
 
 // ---------------------
 // server/pageBinding.ts

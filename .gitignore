@@ -170,3 +170,7 @@ playwright/
 
 # MCP
 .playwright-mcp/
+
+# Agents
+AGENTS.md
+.agents/

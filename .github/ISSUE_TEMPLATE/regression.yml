@@ -23,6 +23,8 @@ body:
           required: true
         - label: I have verified that this regression does not occur when using [Playwright](https://github.com/microsoft/playwright/) directly.
           required: true
+        - label: I confirm that I did not use any AI tools for direct communitation. This includes any Messages, Text, Code Comments or any other form of human-to-human communication. Translations, Formatting, Summarizing etc. using LLMs are also not allowed.
+          required: true
 
   - type: input
     id: good_patchright_version
@@ -102,4 +104,3 @@ body:
       placeholder: In 1.57.0, navigation fails with... (stack trace)
     validations:
       required: true
-

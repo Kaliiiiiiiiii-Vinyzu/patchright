@@ -1,9 +1,123 @@
-import type { Project } from "ts-morph";
+import { type Project, SyntaxKind } from "ts-morph";
+import { assertDefined } from "./utils.ts";
 
 // --------------------------------------------
 // utils/isomorphic/utilityScriptSerializers.ts
 // --------------------------------------------
 export function patchUtilityScriptSerializers(project: Project) {
+	const serializerSourceFile = project.addSourceFileAtPath("packages/isomorphic/utilityScriptSerializers.ts");
+	for (const name of ["kFunctionBindingPrefix", "kBindingsControllerProperty"])
+		serializerSourceFile.getVariableDeclarationOrThrow(name).getVariableStatementOrThrow().remove();
+
+	const parseEvaluationResultValueFunction = serializerSourceFile.getFunctionOrThrow("parseEvaluationResultValue");
+	parseEvaluationResultValueFunction.addParameter({
+		name: "functionRegistry",
+		type: "(name: string, callback: Function) => void",
+		hasQuestionToken: true,
+	});
+	for (const call of parseEvaluationResultValueFunction
+		.getDescendantsOfKind(SyntaxKind.CallExpression)
+		.filter(call => call.getExpression().getText() === "parseEvaluationResultValue"))
+		call.addArgument("functionRegistry");
+	const functionValueIfStatement = assertDefined(
+		parseEvaluationResultValueFunction
+			.getDescendantsOfKind(SyntaxKind.IfStatement)
+			.find(statement => statement.getExpression().getText() === "'fn' in value"),
+	);
+	functionValueIfStatement.replaceWithText(`
+		if ('fn' in value) {
+			if (!/^f[0-9a-f]{32}$/.test(value.fn))
+				return undefined;
+			const calls: any[] = [];
+			const callbacks = new Map<number, { resolve: (result: any) => void, reject: (error: any) => void }>();
+			let callResolver: ((call: any) => void) | undefined;
+			let keepAlive: { signal: AbortSignal, listener: () => void } | undefined;
+			let claimed = false;
+			let disposed = false;
+			let lastSeq = 0;
+			const dispatch = (command: any) => {
+				if (command.type === 'claim') {
+					if (claimed)
+						return false;
+					claimed = true;
+					if (keepAlive) {
+						keepAlive.signal.removeEventListener('abort', keepAlive.listener);
+						keepAlive = undefined;
+					}
+					return true;
+				}
+				if (command.type === 'dispose') {
+					disposed = true;
+					const error = new Error('Function is no longer exposed');
+					for (const callback of callbacks.values())
+						callback.reject(error);
+					callbacks.clear();
+					calls.length = 0;
+					callResolver?.(undefined);
+					callResolver = undefined;
+					return;
+				}
+				if (command.type === 'resolve' || command.type === 'reject') {
+					const callback = callbacks.get(command.seq);
+					if (!callback)
+						return;
+					callbacks.delete(command.seq);
+					if (command.type === 'reject')
+						callback.reject(command.error);
+					else
+						callback.resolve(command.result);
+					return;
+				}
+				if (command.type === 'call') {
+					if (callResolver) {
+						const resolve = callResolver;
+						callResolver = undefined;
+						resolve(command.call);
+					} else {
+						calls.push(command.call);
+					}
+					return;
+				}
+				if (calls.length)
+					return calls.shift();
+				return new Promise(resolve => callResolver = resolve);
+			};
+			const bridge = function callbackBridge(command: any) {
+				return dispatch(command);
+			};
+			(bridge as any)[value.fn] = true;
+			functionRegistry?.(value.fn, bridge);
+			if ((value as any).init) {
+				const signal = AbortSignal.timeout(5000);
+				const listener = () => bridge;
+				signal.addEventListener('abort', listener, { once: true });
+				keepAlive = { signal, listener };
+			}
+			return function(...args: any[]) {
+				if (disposed)
+					return Promise.reject(new Error('Function is no longer exposed'));
+				const seq = ++lastSeq;
+				const promise = new Promise((resolve, reject) => callbacks.set(seq, { resolve, reject }));
+				const call = {
+					seq,
+					serializedArgs: args.map(arg => serializeAsCallArgument(arg, value => ({ fallThrough: value }))),
+				};
+				bridge({ type: 'call', call });
+				return promise;
+			};
+		}
+	`);
+
+	const functionSerializationIfStatement = assertDefined(
+		serializerSourceFile
+			.getFunctionOrThrow("innerSerialize")
+			.getDescendantsOfKind(SyntaxKind.IfStatement)
+			.find(statement => statement.getExpression().getText().includes("value.name.startsWith")),
+	);
+	functionSerializationIfStatement
+		.getExpression()
+		.replaceWithText("typeof value === 'function' && /^f[0-9a-f]{32}$/.test(value.name)");
+
 	// Create oldUtilityScriptSerializers.ts with custom code for use in pageBinding.ts
 	// Content is modified from https://raw.githubusercontent.com/microsoft/playwright/471930b1ceae03c9e66e0eb80c1364a1a788e7db/packages/playwright-core/src/utils/isomorphic/utilityScriptSerializers.ts
 	const oldUtilityScriptSerializerSourceContent = `;

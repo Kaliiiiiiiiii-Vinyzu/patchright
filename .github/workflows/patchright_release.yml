@@ -362,7 +362,7 @@ jobs:
             }
 
   patchright-workflow:
-    name: "Patchright Release: Install, Patch, Build and Publish Patchright Driver"
+    name: "Patchright Release: Install, Patch, Build and Publish Patchright Packages"
     needs: [check-release-version, check-patch-impact, run-patchright-tests]
     if: needs.check-release-version.outputs.proceed == 'true' && needs.run-patchright-tests.result == 'success' && needs.run-patchright-tests.outputs.test_outcome == 'success'
     runs-on: ubuntu-latest
@@ -404,13 +404,10 @@ jobs:
           cd playwright
           node utils/generate_channels.js
 
-      - name: Build Patchright Driver
+      - name: Build Patchright Packages
         run: |
           cd playwright
           npm run build
-          npx playwright install-deps
-          chmod +x utils/build/build-playwright-driver.sh
-          utils/build/build-playwright-driver.sh
 
       - name: Rebrand Patchright Package
         run: |
@@ -441,10 +438,11 @@ jobs:
             npm publish --access=public --provenance
           fi
 
-      - name: Publish Patchright Driver
+      - name: Create Patchright Release
         if: env.patchright_release == '' || needs.check-release-version.outputs.previous_playwright_version != needs.check-release-version.outputs.playwright_version
         env:
           PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
-          chmod +x utils/release_driver.sh
-          utils/release_driver.sh
+          gh release create "$PLAYWRIGHT_VERSION" \
+            --title "$PLAYWRIGHT_VERSION" \
+            --notes "This is an automatic deployment in response to a new release of [microsoft/playwright](https://github.com/microsoft/playwright). The original release can be seen [here](https://github.com/microsoft/playwright/releases/tag/$PLAYWRIGHT_VERSION)."

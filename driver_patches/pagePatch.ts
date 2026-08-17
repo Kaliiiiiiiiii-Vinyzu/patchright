@@ -17,7 +17,7 @@ export function patchPage(project: Project) {
 	// Add the custom import and comment at the start of the file
 	pageSourceFile.addImportDeclaration({
 		moduleSpecifier: "./pageBinding",
-		namedImports: ["createPageBindingScript", "deliverBindingResult", "takeBindingHandle"],
+		namedImports: ["createPageBindingScript", "deliverBindingResult"],
 	});
 
 	// ------- Page Class -------
@@ -30,11 +30,35 @@ export function patchPage(project: Project) {
 			throw new Error(\`Function "\${name}" has been already registered\`);
 		if (this.browserContext._pageBindings.has(name))
 			throw new Error(\`Function "\${name}" has been already registered in the browser context\`);
-		const binding = new PageBinding(this, name, playwrightBinding, false);
+		const binding = new PageBinding(this, name, playwrightBinding, !!noGlobal);
 		this._pageBindings.set(name, binding);
-		await this.delegate.exposeBinding(binding);
+		if (binding.noGlobal) {
+			for (const frame of this.frames()) {
+				for (const context of [frame.mainContext(), frame.utilityContext()])
+					context.then(context => binding.dispatchFunction(this, context)).catch(() => {});
+			}
+		} else {
+			await this.delegate.exposeBinding(binding);
+		}
 		return binding;
 	`);
+
+	// -- removeExposedBinding Method --
+	const removeExposedBindingMethod = pageClass.getMethodOrThrow("removeExposedBinding");
+	const deleteBindingStatement = assertDefined(
+		removeExposedBindingMethod
+			.getStatements()
+			.find(statement => statement.getText().includes("this._pageBindings.delete")),
+	);
+	removeExposedBindingMethod.insertStatements(
+		deleteBindingStatement.getChildIndex() + 1,
+		`
+		if (binding.noGlobal) {
+			await binding.disposeFunctionCallbacks();
+			return;
+		}
+	`,
+	);
 
 	// -- allInitScripts Method --
 	pageClass.getMethodOrThrow("allInitScripts").remove();
@@ -57,22 +81,98 @@ export function patchPage(project: Project) {
 			readonly name: string;
 			readonly playwrightFunction: frames.FunctionWithSource;
 			readonly initScript: InitScript;
-			readonly needsHandle: boolean;
+			readonly noGlobal: boolean;
 			readonly cleanupScript: string;
+			private _callbackBridges = new Set<js.JSHandle>();
+			private _functionCallbacksDisposed = false;
 			forClient?: unknown;
 
-			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, needsHandle: boolean) {
+			constructor(parent: BrowserContext | Page, name: string, playwrightFunction: frames.FunctionWithSource, noGlobal?: boolean) {
 				super(parent);
 				this.name = name;
 				this.playwrightFunction = playwrightFunction;
-				this.initScript = new InitScript(parent, createPageBindingScript(name, needsHandle));
-				this.source = this.initScript.source;
-				this.cleanupScript = \`delete globalThis[\${JSON.stringify(name)}];\`;
-				this.needsHandle = needsHandle;
+				this.noGlobal = !!noGlobal;
+				this.initScript = new InitScript(parent, this.noGlobal ? '' : createPageBindingScript(name, false));
+				this.source = this.noGlobal ? '' : this.initScript.source;
+				this.cleanupScript = this.noGlobal ? '' : \`delete globalThis[\${JSON.stringify(name)}];\`;
+			}
+
+			async dispatchFunction(page: Page, context: js.ExecutionContext) {
+				for (let retryDelay = 10; !this._functionCallbacksDisposed && page.getBinding(this.name) === this; retryDelay = Math.min(retryDelay * 2, 1000)) {
+					const bridges = await context.findFunctions(this.name).catch(() => []);
+					let installed = false;
+					for (const bridge of bridges) {
+						const claimed = await bridge.evaluate((bridge: any) => bridge({ type: 'claim' })).catch(() => false);
+						if (!claimed) {
+							bridge.dispose();
+							continue;
+						}
+						if (this._functionCallbacksDisposed || page.getBinding(this.name) !== this) {
+							await bridge.evaluate((bridge: any) => bridge({ type: 'dispose' })).catch(() => {});
+							bridge.dispose();
+							continue;
+						}
+						installed = true;
+						this._callbackBridges.add(bridge);
+						this._dispatchFunctionCalls(page, context, bridge).catch(() => {});
+					}
+					if (installed)
+						return;
+					const retry = await context.raceAgainstContextDestroyed(
+						new Promise<boolean>(resolve => setTimeout(() => resolve(true), retryDelay))
+					).catch(() => false);
+					if (!retry)
+						return;
+				}
+			}
+
+			private async _dispatchFunctionCalls(page: Page, context: js.ExecutionContext, bridge: js.JSHandle) {
+				try {
+					while (page.getBinding(this.name) === this) {
+						const call = await bridge.evaluate((bridge: any) => bridge({ type: 'next' }));
+						if (!call)
+							break;
+						this._dispatchFunctionCall(page, context, bridge, call).catch(() => {});
+					}
+				} finally {
+					this._callbackBridges.delete(bridge);
+					bridge.dispose();
+				}
+			}
+
+			private async _dispatchFunctionCall(page: Page, context: js.ExecutionContext, bridge: js.JSHandle, call: any) {
+				try {
+					if (!Array.isArray(call.serializedArgs))
+						throw new Error('serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly');
+					const frame = context.attribution.frame;
+					if (!frame)
+						throw new Error('Function callback must run in a frame');
+					const args = call.serializedArgs.map((arg: any) => parseEvaluationResultValue(arg));
+					const result = await this.playwrightFunction({ frame, page, context: page.browserContext }, ...args);
+					await bridge.evaluate((bridge: any, { seq, result }) => bridge({ type: 'resolve', seq, result }), { seq: call.seq, result });
+				} catch (error) {
+					await bridge.evaluate((bridge: any, { seq, error }) => bridge({ type: 'reject', seq, error }), { seq: call.seq, error }).catch(() => {});
+				}
+			}
+
+			async disposeFunctionCallbacks() {
+				this._functionCallbacksDisposed = true;
+				const bridges = [...this._callbackBridges];
+				this._callbackBridges.clear();
+				await Promise.all(bridges.map(async bridge => {
+					await bridge.evaluate((bridge: any) => bridge({ type: 'dispose' })).catch(() => {});
+					bridge.dispose();
+				}));
 			}
 
 			static async dispatch(page: Page, payload: string, context: dom.FrameExecutionContext) {
-				const { name, seq, serializedArgs } = JSON.parse(payload) as BindingPayload;
+				let bindingPayload: BindingPayload;
+				try {
+					bindingPayload = JSON.parse(payload) as BindingPayload;
+				} catch {
+					return;
+				}
+				const { name, seq, serializedArgs } = bindingPayload;
 
 				const deliver = async (deliverPayload: any) => {
 					let deliveryError: any;
@@ -107,16 +207,10 @@ export function patchPage(project: Project) {
 					if (!binding)
 						throw new Error(\`Function "\${name}" is not exposed\`);
 
-					let result: any;
-					if (binding.needsHandle) {
-						const handle = await context.evaluateHandle(takeBindingHandle, { name, seq }).catch(e => null);
-						result = await binding.playwrightFunction({ frame: context.frame, page, context: page._browserContext }, handle);
-					} else {
-						if (!Array.isArray(serializedArgs))
-							throw new Error(\`serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly\`);
-						const args = serializedArgs!.map(a => parseEvaluationResultValue(a));
-						result = await binding.playwrightFunction({ frame: context.frame, page, context: page._browserContext }, ...args);
-					}
+					if (!Array.isArray(serializedArgs))
+						throw new Error(\`serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly\`);
+					const args = serializedArgs.map(a => parseEvaluationResultValue(a));
+					const result = await binding.playwrightFunction({ frame: context.frame, page, context: page.browserContext }, ...args);
 					await deliver({ name, seq, result });
 				} catch (error) {
 					await deliver({ name, seq, error });

@@ -17,7 +17,7 @@ const pageHtml = `<!doctype html>
 const frameHtml = "<!doctype html><p>frame</p>";
 
 function evaluateInMainWorld(target, pageFunction, argument) {
-  return target.evaluate(pageFunction, argument, false);
+  return target.evaluate(pageFunction, argument, undefined, false);
 }
 
 function detectLeaks() {
