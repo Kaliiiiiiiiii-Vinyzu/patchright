@@ -51,12 +51,38 @@
 
 ---
 
-<details open>
+<details open id="sponsors">
     <summary><h3>Sponsors</h1></summary>
 
 <sup>Want to Sponsor this Project? Contact [@vinyzu](https://discordapp.com/users/935224495126487150) on Discord!</sup>
 
 </br>
+
+[<img width="50%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/a7cd2301-393e-4c41-8714-abc258a6194e" />](https://go.nodemaven.com/Patchrightaugust)
+</br>
+#### [NodeMaven](https://go.nodemaven.com/Patchrightaugust): Your efficient proxy provider for Web Scraping and Automation with High Quality IPs. 
+
+Why [NodeMaven](https://go.nodemaven.com/Patchrightaugust)?
+
+🎯 ZIP targeting
+</br>
+✅ 99.9% Uptime
+</br>
+🔍 IP Filtering: Proxies are guaranteed to have fraud score <97%
+</br>
+🔰 No KYC required
+</br>
+🎉 Unique free tools: Proxy Bandwidth Checker, Meta Tag Checker, IP Lookup and others!
+
+**Special codes** for Patchright users:
+</br>
+🔥 **PATCHRIGHT35** - **35% off** to Mobile and Residential Proxies
+</br>
+🔥 **PATCHRIGHT40** - **40% off** to ISP (Static) Proxies
+
+<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Patchrightaugust).</sup>
+
+---
 
 [<img height="100" alt="swiftproxy banner" src="https://github.com/user-attachments/assets/123ac558-f99f-4c59-b826-b86822f2c92a" />](https://www.swiftproxy.net/?ref=Vinyzu)
 
@@ -90,32 +116,6 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 - 🔥 Special Offer: Use code **RAPID10** to get **10% off**
 
 <sup> Start fast. Scale globally. Stay stable with [RapidProxy](https://www.rapidproxy.io/?ref=Vinyzu). </sup>
-
----
-
-[<img width="60%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/8125db5d-efe5-432a-aca4-fda912f78119" />](https://go.nodemaven.com/VinyzuGH)
-</br>
-#### [NodeMaven](https://go.nodemaven.com/VinyzuGH): Your reliable proxy provider with High Quality IPs. </br> Superb solution for automation, web scraping, SEO research, and social media management.
-
-Why [NodeMaven](https://go.nodemaven.com/VinyzuGH)?
-
-✅ 99.9% Uptime
-</br>
-🎯 Sticky sessions up to 7 days
-</br>
-🔍 IP Filtering: Proxies are guaranteed to have fraud score <97%
-</br>
-🔰 No KYC required
-</br>
-💸 Cashback on Traffic - Burn GB and earn up to 10% back
-
-**Special codes** for Patchright users:
-</br>
-🔥 **PATCHRIGHT35** - **35% off** to Mobile and Residential Proxies
-</br>
-🔥 **PATCHRIGHT40** - **40% off** to ISP (Static) Proxies
-
-<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/VinyzuGH).</sup>
 
 ---
 
