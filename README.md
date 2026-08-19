@@ -56,9 +56,7 @@
 
 <sup>Want to Sponsor this Project? Contact [@vinyzu](https://discordapp.com/users/935224495126487150) on Discord!</sup>
 
-</br>
-
-[<img width="50%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/a7cd2301-393e-4c41-8714-abc258a6194e" />](https://go.nodemaven.com/Patchrightaugust)
+[<img width="60%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/2d193b6a-64ae-4f7e-b8dc-ab2f42356f45" />](https://go.nodemaven.com/Patchrightaugust)
 </br>
 #### [NodeMaven](https://go.nodemaven.com/Patchrightaugust): Your efficient proxy provider for Web Scraping and Automation with High Quality IPs. 
 
