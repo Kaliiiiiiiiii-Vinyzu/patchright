@@ -30,6 +30,64 @@ export function patchFrameSelectors(project: Project) {
 	// ------- FrameSelectors Class -------
 	const frameSelectorsClass = frameSelectorsSourceFile.getClassOrThrow("FrameSelectors");
 
+	// -- _hasClosedShadowRoots Method --
+	frameSelectorsClass.addMethod({ name: "_hasClosedShadowRoots", isAsync: true });
+	frameSelectorsClass.getMethodOrThrow("_hasClosedShadowRoots").setBodyText(`
+		const client = this.frame._page.delegate._sessionForFrame(this.frame)._client;
+		const { root } = await client.send("DOM.getDocument", { depth: -1, pierce: true });
+		const nodes = [root];
+		while (nodes.length) {
+			const node = nodes.pop()!;
+			if (node.shadowRoots?.some(root => root.shadowRootType === "closed"))
+				return true;
+			nodes.push(...node.children || [], ...node.shadowRoots || []);
+		}
+		return false;
+	`);
+
+	// -- callOnSelector Method --
+	const callOnSelectorMethod = frameSelectorsClass.getMethodOrThrow("callOnSelector");
+	callOnSelectorMethod.setBodyText(`
+		const resolved = await this._resolveInjectedForSelector(selector, options, options.scope);
+		if (!resolved)
+			return null;
+		let result = await resolved.injected.evaluate(callMatchedElements, {
+			info: resolved.info,
+			scope: resolved.scope,
+			functionText: String(pageFunction),
+			arg,
+			callWithoutMatches: !!options.callWithoutMatches,
+			markTargets: options.markTargets,
+		}) as R | undefined;
+		const useCustomSelector = options.markTargets === "all" && !options.callWithoutMatches && !options.mainWorld && !resolved.scope && await resolved.frame.selectors._hasClosedShadowRoots();
+		if ((result !== undefined && !useCustomSelector) || options.callWithoutMatches)
+			return { frame: resolved.frame, info: resolved.info, result };
+		if (resolved.scope)
+			return null;
+
+		const elements = await resolved.frame.querySelectorAll(nullProgress, stringifySelector(resolved.info.parsed));
+		try {
+			if (!elements.length)
+				return null;
+			const customResult = await elements[0].evaluateInUtility(([injected, node, { info, elements, functionText, arg, markTargets }]) => {
+				if (markTargets === "all") injected.markTargetElements(new Set(elements));
+				else if (markTargets === "first") injected.markTargetElements(new Set([elements[0]]));
+				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
+				if (info.strict && elements.length > 1)
+					throw injected.strictModeViolationError(info.parsed, elements);
+				const callback = injected.eval("(" + functionText + ")");
+				return callback({ injected, elements, info }, arg);
+			}, { info: resolved.info, elements, functionText: String(pageFunction), arg, markTargets: options.markTargets });
+			if (customResult === "error:notconnected")
+				return null;
+			result = customResult as R;
+			return { frame: resolved.frame, info: resolved.info, result };
+		} finally {
+			for (const element of elements)
+				element.dispose();
+		}
+	`);
+
 	// -- queryArrayInMainWorld Method --
 	const queryArrayInMainWorldMethod = frameSelectorsClass.getMethodOrThrow("queryArrayInMainWorld");
 	if (!queryArrayInMainWorldMethod.getParameter("isolatedContext"))

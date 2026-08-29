@@ -44,14 +44,21 @@ export function patchJavascript(project: Project) {
 		type: "boolean",
 		hasQuestionToken: true,
 	});
-	jsHandleEvaluateExpressionMethod.replaceWithText(
-		jsHandleEvaluateExpressionMethod
-			.getText()
-			.replace(
-				/this\.internalEvaluateExpression\(expression, options, arg\)/g,
-				"this.internalEvaluateExpression(expression, options, arg)",
-			),
-	);
+	jsHandleEvaluateExpressionMethod.setBodyText(`
+		const frame = (this as any)._frame;
+		if (frame && isolatedContext !== undefined) {
+			const context = isolatedContext ? await frame.utilityContext() : await frame.mainContext();
+			if (context !== this._context) {
+				const adopted = await frame._page.delegate.adoptElementHandle(this as any, context);
+				try {
+					return await progress.race(adopted.internalEvaluateExpression(expression, options, arg));
+				} finally {
+					adopted.dispose();
+				}
+			}
+		}
+		return await progress.race(this.internalEvaluateExpression(expression, options, arg));
+	`);
 
 	// -- evaluateExpressionHandle Method --
 	const jsHandleEvaluateExpressionHandleMethod = jsHandleClass.getMethodOrThrow("evaluateExpressionHandle");
@@ -60,12 +67,19 @@ export function patchJavascript(project: Project) {
 		type: "boolean",
 		hasQuestionToken: true,
 	});
-	jsHandleEvaluateExpressionHandleMethod.replaceWithText(
-		jsHandleEvaluateExpressionHandleMethod
-			.getText()
-			.replace(
-				/this\._evaluateExpressionHandle\(expression, options, arg\)/g,
-				"this._evaluateExpressionHandle(expression, options, arg)",
-			),
-	);
+	jsHandleEvaluateExpressionHandleMethod.setBodyText(`
+		const frame = (this as any)._frame;
+		if (frame && isolatedContext !== undefined) {
+			const context = isolatedContext ? await frame.utilityContext() : await frame.mainContext();
+			if (context !== this._context) {
+				const adopted = await frame._page.delegate.adoptElementHandle(this as any, context);
+				try {
+					return await progress.race(adopted._evaluateExpressionHandle(expression, options, arg));
+				} finally {
+					adopted.dispose();
+				}
+			}
+		}
+		return await progress.race(this._evaluateExpressionHandle(expression, options, arg));
+	`);
 }
