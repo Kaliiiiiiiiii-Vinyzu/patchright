@@ -66,19 +66,28 @@ export function patchFrames(project: Project) {
 		hasQuestionToken: true,
 	});
 	evalOnSelectorAllMethod.setBodyText(`
-		const maxAttempts = 3;
-		for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-			try {
-				isolatedContext = this.selectors._parseSelector(selector, { strict: false }).world !== "main" && isolatedContext;
-				const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
-				const result = await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
-				arrayHandle.dispose();
-				return result;
-			} catch (e) {
-				// Retry only on specific context mismatch errors, and only a bounded number of times.
-				if ("JSHandles can be evaluated only in the context they were created!" !== e.message || attempt === maxAttempts) throw e;
-				await new Promise(resolve => setTimeout(resolve, 50 * attempt));
-			}
+		isolatedContext = this.selectors._parseSelector(selector, { strict: false }).world !== "main" && isolatedContext;
+		const injectedArrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
+		const count = await injectedArrayHandle.evaluate(elements => elements.length);
+		if ((count && !await this.selectors._hasClosedShadowRoots()) || scope) {
+			const result = await injectedArrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
+			injectedArrayHandle.dispose();
+			return result;
+		}
+		injectedArrayHandle.dispose();
+
+		const context = isolatedContext ? await this.utilityContext() : await this.mainContext();
+		const handles = await this.querySelectorAll(progress, selector);
+		const adoptedHandles = await Promise.all(handles.map(handle =>
+			handle._context === context ? handle : this._page.delegate.adoptElementHandle(handle, context)
+		));
+		const arrayHandle = await context.evaluateHandle(elements => elements, adoptedHandles);
+		try {
+			return await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
+		} finally {
+			arrayHandle.dispose();
+			for (const handle of new Set([...handles, ...adoptedHandles]))
+				handle.dispose();
 		}
 	`);
 
@@ -929,7 +938,7 @@ export function patchFrames(project: Project) {
 			}
 			return null;
 		};
-		if (!eventInitContainsHandle(eventInit)) {
+		if (typeof (taskData as any)?.expression === "string") {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 				const resolved = await progress.race(this.selectors.callOnSelector(selector, { ...options, scope, markTargets: "first" }, ({ injected, elements }, { callbackText, taskData }) => {
 					const callback = injected.eval(callbackText) as ElementCallback<T, R>;

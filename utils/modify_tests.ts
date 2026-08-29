@@ -19,6 +19,7 @@ type FileModification = Omit<ChangedFileReport, "file"> & {
 type ModifyTestsReport = {
 	filesVisited: number;
 	filesChanged: number;
+	customTestsInjected: number;
 	isolatedContextInsertions: number;
 	isolatedContextNormalizations: number;
 	fixmeInsertions: number;
@@ -31,6 +32,8 @@ const repoRoot = process.cwd();
 const playwrightRoot = path.join(repoRoot, "playwright");
 const testsRoot = path.join(playwrightRoot, "tests");
 const tsConfigPath = path.join(testsRoot, "tsconfig.json");
+const customTestsRoot = path.join(repoRoot, "utils", "custom_tests");
+const customTestsTarget = path.join(testsRoot, "library", "patchright");
 const dryRun = process.env.MODIFY_TESTS_DRY_RUN === "1";
 
 const TARGET_METHODS = new Set(["evaluate", "evaluateHandle", "evaluateAll"]);
@@ -89,6 +92,23 @@ function assertPrerequisites(): void {
 		console.error("[modify_tests] Missing tests tsconfig at", tsConfigPath);
 		process.exit(1);
 	}
+	if (!fs.existsSync(customTestsRoot)) {
+		console.error("[modify_tests] Missing custom tests at", customTestsRoot);
+		process.exit(1);
+	}
+}
+
+function customTestFiles(): string[] {
+	return fs.readdirSync(customTestsRoot).filter(file => file.endsWith(".spec.ts")).sort();
+}
+
+function injectCustomTests(files: string[]): void {
+	if (dryRun) return;
+
+	fs.rmSync(customTestsTarget, { recursive: true, force: true });
+	fs.mkdirSync(customTestsTarget, { recursive: true });
+	for (const file of files)
+		fs.copyFileSync(path.join(customTestsRoot, file), path.join(customTestsTarget, file));
 }
 
 // Patchright limitation: init scripts don't run on about:blank/data: URLs.
@@ -652,6 +672,7 @@ function logReport(report: ModifyTestsReport): void {
 	console.log(`[modify_tests] isolatedContextNormalizations=${report.isolatedContextNormalizations}`);
 	console.log(`[modify_tests] patchrightWorkaroundFiles=${report.patchrightWorkaroundFiles}`);
 	console.log(`[modify_tests] skippedUnsafeEvaluateCalls=${report.skippedUnsafeEvaluateCalls}`);
+	console.log(`[modify_tests] customTestsInjected=${report.customTestsInjected}`);
 
 	for (const changed of report.changedFiles) {
 		console.log(
@@ -663,7 +684,10 @@ function logReport(report: ModifyTestsReport): void {
 async function main(): Promise<void> {
 	assertPrerequisites();
 
-	const targetSpecFiles = [...findSpecFiles(path.join(testsRoot, "page")), ...findSpecFiles(path.join(testsRoot, "library"))].sort();
+	const customTests = customTestFiles();
+	const targetSpecFiles = [...findSpecFiles(path.join(testsRoot, "page")), ...findSpecFiles(path.join(testsRoot, "library"))]
+		.filter(filePath => !filePath.startsWith(customTestsTarget + path.sep))
+		.sort();
 
 	const project = new Project({
 		tsConfigFilePath: tsConfigPath,
@@ -673,6 +697,7 @@ async function main(): Promise<void> {
 	const report: ModifyTestsReport = {
 		filesVisited: 0,
 		filesChanged: 0,
+		customTestsInjected: customTests.length,
 		isolatedContextInsertions: 0,
 		isolatedContextNormalizations: 0,
 		fixmeInsertions: 0,
@@ -691,6 +716,7 @@ async function main(): Promise<void> {
 	}
 
 	if (!dryRun) await project.save();
+	injectCustomTests(customTests);
 
 	logReport(report);
 }
