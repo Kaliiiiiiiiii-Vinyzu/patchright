@@ -16020,7 +16020,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +        // Check if any Elements are currently scoped, else return empty array to continue polling
 +        if (currentScopingElements.length == 0) return [];
 +
-+        if (partNth > currentScopingElements.length - 1 || partNth < -(currentScopingElements.length - 1)) {
++        if (partNth > currentScopingElements.length - 1 || partNth < -currentScopingElements.length) {
 +          if (parsed.capture !== undefined) throw new Error("Can't query n-th element in a request with the capture.");
 +          return [];
 +        }
@@ -39424,7 +39424,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +        // Check if any Elements are currently scoped, else return empty array to continue polling
 +        if (currentScopingElements.length == 0) return [];
 +
-+        if (partNth > currentScopingElements.length - 1 || partNth < -(currentScopingElements.length - 1)) {
++        if (partNth > currentScopingElements.length - 1 || partNth < -currentScopingElements.length) {
 +          if (parsed.capture !== undefined) throw new Error("Can't query n-th element in a request with the capture.");
 +          return [];
 +        }
