@@ -309,13 +309,21 @@ export function patchFrames(project: Project) {
 		statements: "return this._context(world);",
 	});
 
-	// -- hideHighlight Method --
-	frameClass.getMethodOrThrow("hideHighlight").setBodyText(`
-		return this.raceAgainstEvaluationStallingEvents(async () => {
-			const injectedScript = await this._isolatedWorld?.injectedScript();
-			await injectedScript?.evaluate(injected => injected.hideHighlight());
-		});
+	// -- existingContext Method --
+	frameClass.getMethodOrThrow("existingContext").setBodyText(`
+		if (this._isDetached())
+			return null;
+		return (world === "main" ? this._iframeWorld || this._mainWorld : this._isolatedWorld) || null;
 	`);
+
+	// Highlight resolution must initialize Patchright's lazy utility context when needed.
+	const highlightSourceFile = project.addSourceFileAtPath("packages/playwright-core/src/server/highlightController.ts");
+	const resolveHighlightsMethod = highlightSourceFile
+		.getClassOrThrow("HighlightController")
+		.getMethodOrThrow("_resolve");
+	assertDefined(
+		resolveHighlightsMethod.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "context"),
+	).setInitializer("highlights.length ? await frame.context('utility') : frame.existingContext('utility')");
 
 	// -- _setContext Method --
 	const setContentMethod = frameClass.getMethodOrThrow("setContent");
@@ -355,7 +363,7 @@ export function patchFrames(project: Project) {
 				if (performActionPreChecks)
 					await this._page.performActionPreChecks(progress);
 
-				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, { strict: options.strict }));
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
 				if (!resolved) {
 					if (noAutoWaiting)
 						throw new dom.NonRecoverableDOMError('Element(s) not found');
@@ -418,7 +426,7 @@ export function patchFrames(project: Project) {
 				if (performChecks)
 					await this._page.performActionPreChecks(progress);
 
-				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, { strict }));
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict }));
 				if (!resolved) {
 					if (noAutoWaiting)
 						throw new dom.NonRecoverableDOMError('Element(s) not found');
@@ -499,7 +507,7 @@ export function patchFrames(project: Project) {
 		if (options.performActionPreChecks)
 			await this._page.performActionPreChecks(progress);
 
-		const resolved = await this.selectors._resolveInjectedForSelector(
+		const resolved = await this.selectors.resolveInjectedForSelector(
 			selector,
 			{ strict: options.strict },
 			 (options as any).__patchrightInitialScope
@@ -654,7 +662,7 @@ export function patchFrames(project: Project) {
 		const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 			if (performActionPreChecksAndLog)
 				await this._page.performActionPreChecks(progress);
-			const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 			if (!resolved) {
 				if (state === 'hidden' || state === 'detached')
 					return null;
@@ -779,7 +787,7 @@ export function patchFrames(project: Project) {
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");
 	isVisibleInternalMethod.setBodyText(`
 		try {
-			const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 			if (!resolved)
 				return false;
 			const atomicResult = await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
@@ -985,7 +993,7 @@ export function patchFrames(project: Project) {
 		}
 		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 				if (!resolved)
 					return continuePolling;
 				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
@@ -1031,7 +1039,7 @@ export function patchFrames(project: Project) {
 		}
 		if (options?.mainWorld && eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors._resolveInjectedForSelector(selector, options, scope));
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
 				if (!resolved)
 					return continuePolling;
 				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {

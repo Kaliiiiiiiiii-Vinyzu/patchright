@@ -248,23 +248,6 @@ export function patchCRPage(project: Project) {
 					  for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
 				`);
 		});
-	// Find the statement `promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))`
-	const promisePushStatements = initializeFrameSessionMethodBody
-		.getStatements()
-		.filter(statement =>
-			statement.getText().includes("promises.push(this._client.send('Runtime.runIfWaitingForDebugger'))"),
-		);
-	// Ensure the right statements were found
-	if (promisePushStatements.length === 1) {
-		promisePushStatements[0].replaceWithText(`
-			if (!(this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size))
-				promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
-		`);
-		initializeFrameSessionMethodBody.addStatements(`
-			if (this._crPage._page._pageBindings.size || this._crPage._browserContext._pageBindings.size)
-				await this._client.send('Runtime.runIfWaitingForDebugger');
-		`);
-	}
 
 	// A dialog can block the first navigation from committing, so allow the initialized page to be reported and handled.
 	frameSessionClass.getMethodOrThrow("_onDialog").insertStatements(0, `

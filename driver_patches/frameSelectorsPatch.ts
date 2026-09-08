@@ -1,4 +1,4 @@
-import { type Project, Scope, SyntaxKind, VariableDeclarationKind } from "ts-morph";
+import { type Project, SyntaxKind, VariableDeclarationKind } from "ts-morph";
 import { assertDefined } from "./utils.ts";
 
 // ------------------------
@@ -41,49 +41,49 @@ export function patchFrameSelectors(project: Project) {
 			if (node.shadowRoots?.some(root => root.shadowRootType === "closed"))
 				return true;
 			nodes.push(...node.children || [], ...node.shadowRoots || []);
+			if (node.contentDocument)
+				nodes.push(node.contentDocument);
 		}
 		return false;
 	`);
 
-	// -- callOnSelector Method --
-	const callOnSelectorMethod = frameSelectorsClass.getMethodOrThrow("callOnSelector");
-	callOnSelectorMethod.setBodyText(`
-		const resolved = await this._resolveInjectedForSelector(selector, options, options.scope);
-		if (!resolved)
-			return null;
-		let result = await resolved.injected.evaluate(callMatchedElements, {
-			info: resolved.info,
-			scope: resolved.scope,
-			functionText: String(pageFunction),
-			arg,
-			callWithoutMatches: !!options.callWithoutMatches,
-			markTargets: options.markTargets,
-		}) as R | undefined;
-		const useCustomSelector = options.markTargets === "all" && !options.callWithoutMatches && !options.mainWorld && !resolved.scope && await resolved.frame.selectors._hasClosedShadowRoots();
-		if ((result !== undefined && !useCustomSelector) || options.callWithoutMatches)
-			return { frame: resolved.frame, info: resolved.info, result };
-		if (resolved.scope)
-			return null;
-
-		const elements = await resolved.frame.querySelectorAll(nullProgress, stringifySelector(resolved.info.parsed));
+	// Keep upstream's multi-frame resolution and handle/value semantics for closed shadow roots.
+	const callOnSelectorInternalMethod = frameSelectorsClass.getMethodOrThrow("_callOnSelectorInternal");
+	const getResultDeclaration = assertDefined(
+		callOnSelectorInternalMethod
+			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+			.find(d => d.getName() === "getResult"),
+	);
+	const getResultFunction = getResultDeclaration.getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction);
+	const elementsDeclaration = assertDefined(
+		getResultFunction
+			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+			.find(
+				d =>
+					d.getName() === "elements" &&
+					d.getInitializerIfKind(SyntaxKind.CallExpression)?.getExpression().getText() === "injected.querySelectorAll",
+			),
+	);
+	elementsDeclaration.setInitializer(`params.elements || ${elementsDeclaration.getInitializerOrThrow().getText()}`);
+	const evaluationParams = assertDefined(
+		getResultFunction
+			.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)
+			.find(o => o.getProperty("functionText") && o.getProperty("returnByValue")),
+	);
+	evaluationParams.addShorthandPropertyAssignment({ name: "elements" });
+	const getResultBody = getResultFunction
+		.getBody()
+		.asKindOrThrow(SyntaxKind.Block)
+		.getStatements()
+		.map(s => s.getText())
+		.join("\n");
+	getResultFunction.setBodyText(`
+		const elements = !scope && !options.mainWorld && await frame.selectors._hasClosedShadowRoots()
+			? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed)) : undefined;
 		try {
-			if (!elements.length)
-				return null;
-			const customResult = await elements[0].evaluateInUtility(([injected, node, { info, elements, functionText, arg, markTargets }]) => {
-				if (markTargets === "all") injected.markTargetElements(new Set(elements));
-				else if (markTargets === "first") injected.markTargetElements(new Set([elements[0]]));
-				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
-				if (info.strict && elements.length > 1)
-					throw injected.strictModeViolationError(info.parsed, elements);
-				const callback = injected.eval("(" + functionText + ")");
-				return callback({ injected, elements, info }, arg);
-			}, { info: resolved.info, elements, functionText: String(pageFunction), arg, markTargets: options.markTargets });
-			if (customResult === "error:notconnected")
-				return null;
-			result = customResult as R;
-			return { frame: resolved.frame, info: resolved.info, result };
+			${getResultBody}
 		} finally {
-			for (const element of elements)
+			for (const element of elements || [])
 				element.dispose();
 		}
 	`);
@@ -113,12 +113,11 @@ export function patchFrameSelectors(project: Project) {
 	if (mainWorldProp.getText() === "mainWorld: true") mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
 
 	// -- resolveFrameForSelector Method --
-	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("_resolveFrameForSelector");
-	resolveFrameForSelectorMethod.setScope(Scope.Public);
+	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("_resolveChainedSelector");
 	// Change 'element' variable declaration from const to let to allow reassignment.
 	resolveFrameForSelectorMethod
 		.getDescendantsOfKind(SyntaxKind.VariableStatement)
-		.find(s => s.getText().includes("const element = handle.asElement()"))
+		.find(s => s.getText().includes("const element = handle?.asElement()"))
 		?.setDeclarationKind(VariableDeclarationKind.Let);
 	// Handle the case when element is not found - fetch it from the document using the parsed selector
 	const resolveFrameForSelectorIfStatement = resolveFrameForSelectorMethod
@@ -141,7 +140,7 @@ export function patchFrameSelectors(project: Project) {
 					contextId: mainContext.delegate._contextId
 				});
 				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-				var check = await this._customFindFramesByParsed(injectedScript, client, mainContext, documentScope, undefined, info.parsed);
+				var check = await this._customFindFramesByParsed(await context.injectedScript(), client, mainContext, documentScope, undefined, info.parsed);
 				if (check.length === 0) return null;
 				element = check[0];
 			}
@@ -167,31 +166,62 @@ export function patchFrameSelectors(project: Project) {
 		);
 	}
 
-	// -- resolveInjectedForSelector Method --
-	const resolveInjectedForSelectorMethod = frameSelectorsClass.getMethodOrThrow("_resolveInjectedForSelector");
-	resolveInjectedForSelectorMethod.setScope(Scope.Public);
-	// Find the statement where 'injected' is assigned from 'context.injectedScript' and add a null check
-	const contextStatement = assertDefined(
-		resolveInjectedForSelectorMethod.getStatements().find(stmt => {
-			const varStmt = stmt.asKind(SyntaxKind.VariableStatement);
-			if (!varStmt) return false;
-			const decl = assertDefined(varStmt.getDeclarations()[0]);
-			const callExpr = decl
-				.getInitializerIfKind(SyntaxKind.AwaitExpression)
-				?.getExpressionIfKind(SyntaxKind.CallExpression);
-			if (!callExpr) return false;
-
-			const expressionText = callExpr.getExpression().getText();
-			return (
-				decl.getName() === "context" && (expressionText.includes("._context") || expressionText.includes(".context"))
-			);
-		}),
-	);
-	if (!resolveInjectedForSelectorMethod.getText().includes('if (!context) throw new Error("Frame was detached");'))
-		resolveInjectedForSelectorMethod.insertStatements(
-			contextStatement.getChildIndex() + 1,
-			`if (!context) throw new Error("Frame was detached");`,
+	// Lazy contexts must be created even when searching multiple frames, without waiting on stalled frames.
+	for (const method of [resolveFrameForSelectorMethod, callOnSelectorInternalMethod]) {
+		const contextDeclaration = assertDefined(
+			method.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "context"),
 		);
+		const world = method === resolveFrameForSelectorMethod ? "info.world" : "world";
+		contextDeclaration.setInitializer(`noStall ? await frame.raceAgainstEvaluationStallingEvents(() => frame.context(${world})).catch(e => {
+			if (e instanceof EvaluationStalledError)
+				return null;
+			throw e;
+		}) : await frame.context(${world})`);
+	}
+
+	// Resolve a single matching frame for Patchright's custom selector operations.
+	frameSelectorsClass.addMethod({
+		name: "resolveInjectedForSelector",
+		isAsync: true,
+		parameters: [
+			{ name: "selector", type: "string" },
+			{ name: "options", type: "types.StrictOptions & { mainWorld?: boolean }" },
+			{ name: "scope", type: "ElementHandle", hasQuestionToken: true },
+		],
+		statements: `
+			const frames = await this.resolveFramesForSelector(selector, options, scope);
+			let result: { frame: Frame, info: SelectorInfo, injected: JSHandle<InjectedScript>, scope?: ElementHandle } | null = null;
+			for (const resolved of frames) {
+				const getMatch = async () => {
+					const context = await resolved.frame.context(options.mainWorld ? 'main' : resolved.info.world);
+					const injected = await context.injectedScript();
+					if (frames.length > 1) {
+						let count = await injected.evaluate((injected, { info, scope }) => injected.querySelectorAll(info.parsed, scope || document).length, { info: resolved.info, scope: resolved.scope });
+						if (!count && !resolved.scope) {
+							const elements = await resolved.frame.querySelectorAll(nullProgress, stringifySelector(resolved.info.parsed));
+							count = elements.length;
+							for (const element of elements)
+								element.dispose();
+						}
+						if (!count)
+							return null;
+					}
+					return { ...resolved, injected };
+				};
+				const match = frames.length > 1 ? await resolved.frame.raceAgainstEvaluationStallingEvents(getMatch).catch(e => {
+					if (e instanceof EvaluationStalledError)
+						return null;
+					throw e;
+				}) : await getMatch();
+				if (!match)
+					continue;
+				if (result)
+					throw new NonRecoverableDOMError('frameLocator() matched elements in multiple frames.');
+				result = match;
+			}
+			return result;
+		`,
+	});
 
 	// -- _customFindFramesByParsed Method -- progress
 	if (!frameSelectorsClass.getMethod("_customFindFramesByParsed"))
