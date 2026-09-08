@@ -55,17 +55,28 @@ export function patchFrameSelectors(project: Project) {
 			.find(d => d.getName() === "getResult"),
 	);
 	const getResultFunction = getResultDeclaration.getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction);
+	const elementsDeclaration = assertDefined(
+		getResultFunction
+			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+			.find(
+				d =>
+					d.getName() === "elements" &&
+					d.getInitializerIfKind(SyntaxKind.CallExpression)?.getExpression().getText() === "injected.querySelectorAll",
+			),
+	);
+	elementsDeclaration.setInitializer(`params.elements || ${elementsDeclaration.getInitializerOrThrow().getText()}`);
+	const evaluationParams = assertDefined(
+		getResultFunction
+			.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)
+			.find(o => o.getProperty("functionText") && o.getProperty("returnByValue")),
+	);
+	evaluationParams.addShorthandPropertyAssignment({ name: "elements" });
 	const getResultBody = getResultFunction
 		.getBody()
 		.asKindOrThrow(SyntaxKind.Block)
 		.getStatements()
 		.map(s => s.getText())
-		.join("\n")
-		.replace(
-			"injected.querySelectorAll(params.info.parsed, params.scope || document)",
-			"params.elements || injected.querySelectorAll(params.info.parsed, params.scope || document)",
-		)
-		.replace("{ info, scope, functionText:", "{ info, scope, elements, functionText:");
+		.join("\n");
 	getResultFunction.setBodyText(`
 		const elements = !scope && !options.mainWorld && await frame.selectors._hasClosedShadowRoots()
 			? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed)) : undefined;
