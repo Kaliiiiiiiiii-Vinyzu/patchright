@@ -166,6 +166,11 @@ export function patchCRNetworkManager(project: Project) {
 		type: "types.HeadersArray",
 		initializer: "[]",
 	});
+	routeImplClass.insertProperty(routeImplClass.getMembers().indexOf(fulfilledProperty) + 2, {
+		name: "_responseListeners",
+		type: "RegisteredListener[]",
+		initializer: "[]",
+	});
 
 	// -- RouteImpl Constructor --
 	const routeImplConstructor = assertDefined(
@@ -192,7 +197,6 @@ export function patchCRNetworkManager(project: Project) {
 		"this._page = page;",
 		"this._networkId = networkId;",
 		"this._sessionManager = sessionManager;",
-		"eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));",
 	]);
 
 	// -- _fixCSP Method --
@@ -545,10 +549,12 @@ export function patchCRNetworkManager(project: Project) {
 		if (patchrightInitScript) {
 			await catchDisallowedErrors(async () => {
 				this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
+				this._responseListeners.push(eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e)));
 				try {
 					await this._session.send('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
 				} catch (e) {
 					this._sessionManager._alreadyTrackedNetworkIds.delete(this._networkId);
+					eventsHelper.removeEventListeners(this._responseListeners);
 					throw e;
 				}
 			});
@@ -596,6 +602,7 @@ export function patchCRNetworkManager(project: Project) {
 			}
 		} finally {
 			this._sessionManager._alreadyTrackedNetworkIds.delete(trackedNetworkId);
+			eventsHelper.removeEventListeners(this._responseListeners);
 		}
 	`);
 }
