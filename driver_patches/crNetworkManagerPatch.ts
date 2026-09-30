@@ -146,7 +146,10 @@ export function patchCRNetworkManager(project: Project) {
 	onRequestPausedMethod
 		.getBodyOrThrow()
 		.asKindOrThrow(SyntaxKind.Block)
-		.insertStatements(0, "if (this._alreadyTrackedNetworkIds.has(event.networkId)) return;");
+		.insertStatements(0, `
+			if (this._alreadyTrackedNetworkIds.has(event.networkId))
+				return this._requestIdToRequest.get(event.networkId)?._originalRequestRoute?._networkRequestIntercepted(event);
+		`);
 
 	// Cached requests do not produce Fetch.requestPaused, so finish pairing them from the Network event.
 	const onRequestServedFromCacheMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestServedFromCache");
@@ -192,7 +195,6 @@ export function patchCRNetworkManager(project: Project) {
 		"this._page = page;",
 		"this._networkId = networkId;",
 		"this._sessionManager = sessionManager;",
-		"eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));",
 	]);
 
 	// -- _fixCSP Method --
