@@ -223,6 +223,10 @@ export function patchFrames(project: Project) {
 			client = this._page.delegate._mainFrameSession._client;
 		}
 
+		const rethrowSessionClosedError = (error: Error) => {
+			if (isSessionClosedError(error)) throw error;
+		};
+
 		const isMainFrame = this === this._page.mainFrame();
 		const session = this._page.delegate._sessionForFrame(this);
 
@@ -253,10 +257,10 @@ export function patchFrames(project: Project) {
 				}
 			}
 			if (!this._iframeWorld && this._mainWorld === undefined) {
-				const contextPromise = this._mainWorldContextPromise ??= client._sendMayFail('Runtime.evaluate', {
+				const contextPromise = this._mainWorldContextPromise ??= client.send('Runtime.evaluate', {
 					expression: "globalThis",
 					serializationOptions: { serialization: "idOnly" },
-				}).then(globalThis => {
+				}).catch(rethrowSessionClosedError).then(globalThis => {
 					const objectId = globalThis?.result?.objectId;
 					if (!objectId)
 						return undefined;
@@ -278,9 +282,9 @@ export function patchFrames(project: Project) {
 		}
 
 		if (world !== "main" && this._isolatedWorld === undefined) {
-			const contextPromise = this._isolatedWorldContextPromise ??= client._sendMayFail('Page.createIsolatedWorld', {
+			const contextPromise = this._isolatedWorldContextPromise ??= client.send('Page.createIsolatedWorld', {
 				frameId: this._id, grantUniveralAccess: true, worldName: world,
-			}).then(result => result?.executionContextId);
+			}).catch(rethrowSessionClosedError).then(result => result?.executionContextId);
 			const executionContextId = await contextPromise;
 			if (this._isolatedWorldContextPromise !== contextPromise)
 				return this._context(world);

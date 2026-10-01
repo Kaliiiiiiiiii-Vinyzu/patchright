@@ -143,6 +143,21 @@ export function patchCRPage(project: Project) {
 	`);
 
 	const promisesDeclaration = initializeFrameSessionMethod.getVariableDeclarationOrThrow("promises");
+	// An opener can block renderer setup while window.open() waits for the popup to resume.
+	const resumeTargetStatement = assertDefined(
+		initializeFrameSessionMethod
+			.getStatements()
+			.find(
+				statement => statement.getText() === "promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));",
+			),
+	);
+	initializeFrameSessionMethod.insertStatements(
+		resumeTargetStatement.getChildIndex(),
+		`
+		if (this._isMainFrame() && !this._crPage._opener)
+			await Promise.all(promises);
+	`,
+	);
 	// Find the initializer array
 	const promisesInitializer = promisesDeclaration.getInitializerIfKindOrThrow(SyntaxKind.ArrayLiteralExpression);
 	// Find the relevant element inside the array that we need to update
@@ -319,12 +334,8 @@ export function patchCRPage(project: Project) {
 	onLifecycleEventMethod.setIsAsync(true);
 	onLifecycleEventMethod.addStatements(`
 		// Only do full init script cleanup on load to reduce CDP round-trip pressure.
-		// Other lifecycle events just get a minimal runIfWaitingForDebugger call.
-		if (event.name !== "load") {
-		  await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
+		if (event.name !== "load")
 		  return;
-		}
-		await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 		var document = await this._client._sendMayFail("DOM.getDocument");
 		if (!document) return
 		var query = await this._client._sendMayFail("DOM.querySelectorAll", {
@@ -333,7 +344,6 @@ export function patchCRPage(project: Project) {
 		});
 		if (!query) return
 		for (const nodeId of query.nodeIds) await this._client._sendMayFail("DOM.removeNode", { nodeId: nodeId });
-		await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 		// ensuring execution context
 		try { await this._page.frameManager.frame(this._targetId)._context("utility") } catch { };
 	`);
@@ -357,7 +367,6 @@ export function patchCRPage(project: Project) {
 	const onFrameNavigatedMethod = frameSessionClass.getMethodOrThrow("_onFrameNavigated");
 	onFrameNavigatedMethod.setIsAsync(true);
 	onFrameNavigatedMethod.addStatements(`
-		await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 		const functionBindings = this._page.allBindings().filter(binding => binding.noGlobal);
 		if (functionBindings.length) {
 			try {
@@ -381,7 +390,6 @@ export function patchCRPage(project: Project) {
 		});
 		if (!query) return
 		for (const nodeId of query.nodeIds) await this._client._sendMayFail("DOM.removeNode", { nodeId: nodeId });
-		await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 		// ensuring execution context
 		try { await this._page.frameManager.frame(this._targetId)._context("utility") } catch { };
 	`);

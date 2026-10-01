@@ -1,4 +1,4 @@
-import { type Project, SyntaxKind } from "ts-morph";
+import { type Project, SyntaxKind, VariableDeclarationKind } from "ts-morph";
 import { assertDefined } from "./utils.ts";
 
 // -----------------------------------
@@ -146,7 +146,10 @@ export function patchCRNetworkManager(project: Project) {
 	onRequestPausedMethod
 		.getBodyOrThrow()
 		.asKindOrThrow(SyntaxKind.Block)
-		.insertStatements(0, "if (this._alreadyTrackedNetworkIds.has(event.networkId)) return;");
+		.insertStatements(0, `
+			if (this._alreadyTrackedNetworkIds.has(event.networkId))
+				return this._requestIdToRequest.get(event.networkId)?._originalRequestRoute?._networkRequestIntercepted(event);
+		`);
 
 	// Cached requests do not produce Fetch.requestPaused, so finish pairing them from the Network event.
 	const onRequestServedFromCacheMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestServedFromCache");
@@ -165,6 +168,10 @@ export function patchCRNetworkManager(project: Project) {
 		name: "_fulfilledSetCookieHeaders",
 		type: "types.HeadersArray",
 		initializer: "[]",
+	});
+	routeImplClass.addProperty({
+		name: "_fulfilledResponse",
+		type: 'Pick<Protocol.Network.Response, "status" | "statusText" | "headers"> | undefined',
 	});
 
 	// -- RouteImpl Constructor --
@@ -192,7 +199,6 @@ export function patchCRNetworkManager(project: Project) {
 		"this._page = page;",
 		"this._networkId = networkId;",
 		"this._sessionManager = sessionManager;",
-		"eventsHelper.addEventListener(this._session, 'Fetch.requestPaused', async e => await this._networkRequestIntercepted(e));",
 	]);
 
 	// -- _fixCSP Method --
@@ -484,6 +490,12 @@ export function patchCRNetworkManager(project: Project) {
 		const body = response.isBase64 ? response.body : Buffer.from(response.body).toString("base64");
 		const responseHeaders = splitSetCookieHeader(response.headers);
 		this._fulfilledSetCookieHeaders = responseHeaders.filter(header => header.name.toLowerCase() === 'set-cookie');
+		if (!this._page)
+			this._fulfilledResponse = {
+				status: response.status,
+				statusText: network.statusText(response.status),
+				headers: headersArrayToObject(responseHeaders),
+			};
 		await catchDisallowedErrors(async () => {
 			await this._session.send("Fetch.fulfillRequest", {
 				requestId: response.interceptionId ? response.interceptionId : this._interceptionId,
@@ -518,6 +530,27 @@ export function patchCRNetworkManager(project: Project) {
 		const fulfilledSetCookieHeaders = request._originalRequestRoute?._fulfilledSetCookieHeaders ?? [];
 		if (fulfilledSetCookieHeaders.length && !responseHeaders.some(header => header.name.toLowerCase() === 'set-cookie'))
 			responseHeaders.push(...fulfilledSetCookieHeaders);
+	`,
+	);
+
+	// Chromium can finish a fulfilled service worker request without emitting its response.
+	const onLoadingFinishedMethod = crNetworkManagerClass.getMethodOrThrow("_onLoadingFinished");
+	const finishedResponseDeclaration = onLoadingFinishedMethod.getVariableDeclarationOrThrow("response");
+	const finishedResponseStatement = finishedResponseDeclaration.getVariableStatementOrThrow();
+	finishedResponseStatement.setDeclarationKind(VariableDeclarationKind.Let);
+	onLoadingFinishedMethod.insertStatements(
+		finishedResponseStatement.getChildIndex() + 1,
+		`
+		const fulfilledResponse = this._serviceWorker && request._originalRequestRoute?._fulfilledResponse;
+		if (!response && fulfilledResponse) {
+			response = this._createResponse(request, {
+				...fulfilledResponse,
+				url: request.request.url(),
+				mimeType: '', charset: '', connectionReused: false, connectionId: 0,
+				encodedDataLength: event.encodedDataLength, securityState: 'unknown',
+			}, false);
+			this._serviceWorker!.requestReceivedResponse(response);
+		}
 	`,
 	);
 	const updatedResponseStatementIndex = createResponseBody
