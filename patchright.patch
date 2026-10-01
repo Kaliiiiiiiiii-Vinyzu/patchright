@@ -7472,11 +7472,13 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onRequestWillBeSentExtraInfo(event: Protocol.Network.requestWillBeSentExtraInfoPayload) {
-@@ -242,14 +316,14 @@
+@@ -242,14 +316,16 @@
    }
  
    _onRequestPaused(sessionInfo: SessionInfo, event: Protocol.Fetch.requestPausedPayload) {
-+    if (this._alreadyTrackedNetworkIds.has(event.networkId)) return;
++    if (this._alreadyTrackedNetworkIds.has(event.networkId))
++      return this._requestIdToRequest.get(event.networkId)?._originalRequestRoute?._networkRequestIntercepted(event);
++
      if (!event.networkId) {
        // Fetch without networkId means that request was not recognized by inspector, and
        // it will never receive Network.requestWillBeSent. Continue the request to not affect it.
@@ -7489,7 +7491,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
      const requestId = event.networkId;
      const requestWillBeSentEvent = this._requestIdToRequestWillBeSentEvent.get(requestId);
-@@ -279,19 +353,44 @@
+@@ -279,19 +355,44 @@
      }
    }
  
@@ -7539,7 +7541,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // Requests from workers lack frameId, because we receive Network.requestWillBeSent
      // on the worker target. However, we receive Fetch.requestPaused on the page target,
      // and lack workerFrame there. Luckily, Fetch.requestPaused provides a frameId.
-@@ -310,16 +409,21 @@
+@@ -310,16 +411,21 @@
      // we accept all CORS options, assuming that this was intended when setting route.
      //
      // Note: it would be better to match the URL against interception patterns.
@@ -7565,7 +7567,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        requestPausedSessionInfo!.session._sendMayFail('Fetch.fulfillRequest', {
          requestId: requestPausedEvent.requestId,
          responseCode: 204,
-@@ -333,7 +437,9 @@
+@@ -333,7 +439,9 @@
      // Non-service-worker requests MUST have a frame—if they don't, we pretend there was no request
      if (!frame && !this._serviceWorker) {
        if (requestPausedEvent)
@@ -7576,7 +7578,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return;
      }
  
-@@ -345,15 +451,29 @@
+@@ -345,15 +453,29 @@
          // Chromium does not preserve header overrides between redirects, so we have to do it ourselves.
          headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
          if (headersOverride) {
@@ -7610,7 +7612,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const documentId = isNavigationRequest ? requestWillBeSentEvent.loaderId : undefined;
      const request = new InterceptableRequest({
        session: requestWillBeSentSessionInfo.session,
-@@ -369,7 +489,7 @@
+@@ -369,7 +491,7 @@
      });
      this._requestIdToRequest.set(requestWillBeSentEvent.requestId, request);
  
@@ -7619,7 +7621,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        // We may not receive extra info when intercepting the request.
        // Use the headers from the Fetch.requestPausedPayload and release the allHeaders()
        // right away, so that client can call it from the route handler.
-@@ -378,7 +498,11 @@
+@@ -378,7 +500,11 @@
      (this._page?.frameManager || this._serviceWorker)!.requestStarted(request.request, route || undefined);
    }
  
@@ -7632,7 +7634,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const getResponseBody = InterceptableRequest.createResponseBodyCallback(request.request);
      const timingPayload = responsePayload.timing!;
      let timing: network.ResourceTiming;
-@@ -405,7 +529,24 @@
+@@ -405,7 +531,24 @@
          responseStart: -1,
        };
      }
@@ -7658,7 +7660,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      response._setHttpVersion(responsePayload?.protocol ?? null);
      if (responsePayload?.remoteIPAddress && typeof responsePayload?.remotePort === 'number') {
        response._serverAddrFinished({
-@@ -428,11 +569,15 @@
+@@ -428,11 +571,15 @@
  
    _deleteRequest(request: InterceptableRequest) {
      this._requestIdToRequest.delete(request._requestId);
@@ -7677,7 +7679,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const response = this._createResponse(request, responsePayload, hasExtraInfo);
      response.setTransferSize(null);
      response.setEncodedBodySize(null);
-@@ -460,8 +605,7 @@
+@@ -460,8 +607,7 @@
        }
      }
      // FileUpload sends a response without a matching request.
@@ -7687,7 +7689,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const response = this._createResponse(request, event.response, event.hasExtraInfo);
      (this._page?.frameManager || this._serviceWorker)!.requestReceivedResponse(response);
    }
-@@ -472,8 +616,7 @@
+@@ -472,13 +618,32 @@
      const request = this._requestIdToRequest.get(event.requestId);
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -7697,7 +7699,33 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._maybeUpdateRequestSession(sessionInfo, request);
  
      // Under certain conditions we never get the Network.responseReceived
-@@ -507,8 +650,7 @@
+     // event from protocol. @see https://crbug.com/883475
+-    const response = request.request._existingResponse();
++    let response = request.request._existingResponse();
++
++    const fulfilledResponse = this._serviceWorker && request._originalRequestRoute?._fulfilledResponse;
++    if (!response && fulfilledResponse) {
++      response = this._createResponse(
++        request,
++        {
++          ...fulfilledResponse,
++          url: request.request.url(),
++          mimeType: '',
++          charset: '',
++          connectionReused: false,
++          connectionId: 0,
++          encodedDataLength: event.encodedDataLength,
++          securityState: 'unknown',
++        },
++        false,
++      );
++      this._serviceWorker!.requestReceivedResponse(response);
++    }
++
+     if (response) {
+       response.setTransferSize(event.encodedDataLength);
+       response.responseHeadersSize().then(size => response.setEncodedBodySize(event.encodedDataLength - size));
+@@ -507,8 +672,7 @@
  
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -7707,7 +7735,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._maybeUpdateRequestSession(sessionInfo, request);
      const response = request.request._existingResponse();
      if (response) {
-@@ -552,15 +694,27 @@
+@@ -552,15 +716,27 @@
      //
      // In theory, we can always update the session. However, we try to be conservative here
      // to make sure we understand all the scenarios where the session should be updated.
@@ -7737,7 +7765,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  ]);
  
  const kInterceptableRequest = Symbol('InterceptableRequest');
-@@ -582,8 +736,7 @@
+@@ -582,8 +758,7 @@
    }
  
    static detachIfNeeded(request: network.Request, session: CRSession) {
@@ -7747,7 +7775,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    static createResponseBodyCallback(request: network.Request): () => Promise<Buffer> {
-@@ -591,8 +744,7 @@
+@@ -591,8 +766,7 @@
        // Lookup the request lazily, so that the response does not retain the
        // InterceptableRequest and its session after detachIfNeeded().
        const interceptable = InterceptableRequest.from(request);
@@ -7757,7 +7785,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const contentLength = request._existingResponse()?.headerValue('content-length');
        const expectedLength = contentLength ? +contentLength : undefined;
  
-@@ -602,21 +754,24 @@
+@@ -602,21 +776,24 @@
          return Buffer.from(response.body, response.base64Encoded ? 'base64' : 'utf8');
  
        // Make sure no network requests sent while reading the body for fulfilled requests.
@@ -7790,7 +7818,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const chunks: Buffer[] = [];
        while (resource.resource.stream) {
          const chunk = await session.send('IO.read', { handle: resource.resource.stream });
-@@ -631,7 +786,7 @@
+@@ -631,7 +808,7 @@
    }
  
    constructor(options: {
@@ -7799,7 +7827,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      context: contexts.BrowserContext;
      frame: frames.Frame | null;
      serviceWorker: CRServiceWorker | null;
-@@ -642,7 +797,18 @@
+@@ -642,7 +819,18 @@
      redirectedFrom: InterceptableRequest | null;
      headersOverride: types.HeadersArray | null;
    }) {
@@ -7819,7 +7847,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this.session = session;
      this._timestamp = requestWillBeSentEvent.timestamp;
      this._wallTime = requestWillBeSentEvent.wallTime;
-@@ -662,7 +828,19 @@
+@@ -662,7 +850,19 @@
      if (entries && entries.length)
        postDataBuffer = Buffer.concat(entries.map(entry => Buffer.from(entry.bytes!, 'base64')));
  
@@ -7840,7 +7868,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      (this.request as any)[kInterceptableRequest] = this;
    }
  }
-@@ -672,33 +850,154 @@
+@@ -672,33 +872,155 @@
    private _interceptionId: string;
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
@@ -7862,11 +7890,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    this._page = page;
 +    this._networkId = networkId;
 +    this._sessionManager = sessionManager;
-+    eventsHelper.addEventListener(
-+      this._session,
-+      'Fetch.requestPaused',
-+      async e => await this._networkRequestIntercepted(e),
-+    );
    }
  
    async continue(overrides: types.NormalizedContinueOverrides): Promise<void> {
@@ -7996,6 +8019,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -
      const responseHeaders = splitSetCookieHeader(response.headers);
 +    this._fulfilledSetCookieHeaders = responseHeaders.filter(header => header.name.toLowerCase() === 'set-cookie');
++    if (!this._page)
++      this._fulfilledResponse = {
++        status: response.status,
++        statusText: network.statusText(response.status),
++        headers: headersArrayToObject(responseHeaders),
++      };
      await catchDisallowedErrors(async () => {
        await this._session.send('Fetch.fulfillRequest', {
 -        requestId: this._interceptionId!,
@@ -8003,7 +8032,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          responseCode: response.status,
          responsePhrase: network.statusText(response.status),
          responseHeaders,
-@@ -713,10 +1012,215 @@
+@@ -713,10 +1035,217 @@
      await catchDisallowedErrors(async () => {
        await this._session.send('Fetch.failRequest', {
          requestId: this._interceptionId!,
@@ -8012,6 +8041,8 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        });
      });
    }
++
++  _fulfilledResponse: Pick<Protocol.Network.Response, 'status' | 'statusText' | 'headers'> | undefined;
 +
 +  _fixCSP(csp: string | null, scriptNonce: string | null) {
 +    if (!csp || typeof csp !== 'string') return csp;
@@ -8220,7 +8251,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  // In certain cases, protocol will return error if the request was already canceled
-@@ -725,14 +1229,11 @@
+@@ -725,14 +1254,11 @@
    try {
      return await callback();
    } catch (e) {
@@ -8237,7 +8268,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  // Never forward the `cookie` header to Fetch.continueRequest: since Chromium 145 it overrides
  // the cookie store, which leaks the value captured at interception time. Omitting it lets the
  // network stack source the cookie from the store. https://github.com/microsoft/playwright/issues/41428
-@@ -742,47 +1243,45 @@
+@@ -742,47 +1268,45 @@
  
  function splitSetCookieHeader(headers: types.HeadersArray): types.HeadersArray {
    const index = headers.findIndex(({ name }) => name.toLowerCase() === 'set-cookie');
@@ -8308,7 +8339,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  };
  
  // This class aligns responses with response headers from extra info:
-@@ -845,16 +1344,14 @@
+@@ -845,16 +1369,14 @@
  
    loadingFinished(event: Protocol.Network.loadingFinishedPayload) {
      const info = this._requests.get(event.requestId);
@@ -8327,7 +8358,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      info.loadingFailed = event;
      this._checkFinished(info);
    }
-@@ -889,8 +1386,7 @@
+@@ -889,8 +1411,7 @@
    }
  
    private _checkFinished(info: RequestInfo) {
@@ -8861,7 +8892,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -540,37 +643,35 @@
+@@ -540,38 +643,39 @@
        this._client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }),
      ];
      if (!this._page.isStorageStatePage) {
@@ -8918,9 +8949,13 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +      for (const initScript of this._crPage._page.initScripts)
 +        promises.push(this._evaluateOnNewDocument(initScript, 'main'));
      }
++
++    if (this._isMainFrame() && !this._crPage._opener) await Promise.all(promises);
++
      promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
      promises.push(this._firstNonInitialNavigationCommittedPromise);
-@@ -581,8 +682,7 @@
+     await Promise.all(promises);
+@@ -581,8 +685,7 @@
        // without replaying the pre-existing execution contexts. Cycle
        // Runtime.disable/enable until the default context is reported.
        for (let attempt = 0; attempt < 10; ++attempt) {
@@ -8930,7 +8965,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          await this._client._sendMayFail('Runtime.disable');
          await this._client._sendMayFail('Runtime.enable');
          await new Promise(f => setTimeout(f, 250));
-@@ -592,12 +692,9 @@
+@@ -592,12 +695,9 @@
  
    dispose() {
      this._firstNonInitialNavigationCommittedReject(new TargetClosedError(this._page.closeReason()));
@@ -8946,7 +8981,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      eventsHelper.removeEventListeners(this._eventListeners);
      this._crPage._networkManager.removeSession(this._client);
      this._crPage._sessions.delete(this._targetId);
-@@ -605,43 +702,63 @@
+@@ -605,43 +705,57 @@
    }
  
    async _navigate(frame: frames.Frame, url: string, referrer: string | undefined): Promise<frames.GotoResult> {
@@ -8977,12 +9012,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        this._page.frameManager.frameLifecycleEvent(event.frameId, 'domcontentloaded');
 +
 +    // Only do full init script cleanup on load to reduce CDP round-trip pressure.
-+    // Other lifecycle events just get a minimal runIfWaitingForDebugger call.
-+    if (event.name !== 'load') {
-+      await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
-+      return;
-+    }
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
++    if (event.name !== 'load') return;
 +    var document = await this._client._sendMayFail('DOM.getDocument');
 +    if (!document) return;
 +    var query = await this._client._sendMayFail('DOM.querySelectorAll', {
@@ -8991,7 +9021,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    });
 +    if (!query) return;
 +    for (const nodeId of query.nodeIds) await this._client._sendMayFail('DOM.removeNode', { nodeId: nodeId });
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 +    // ensuring execution context
 +    try {
 +      await this._page.frameManager.frame(this._targetId)._context('utility');
@@ -9030,7 +9059,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return session && session !== this && !session._swappedIn;
    }
  
-@@ -652,8 +769,7 @@
+@@ -652,8 +766,7 @@
        frameSession._swappedIn = true;
        const frame = this._page.frameManager.frame(frameId);
        // Frame or even a whole subtree may be already gone, because some ancestor did navigate.
@@ -9040,7 +9069,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return;
      }
      if (parentFrameId && !this._page.frameManager.frame(parentFrameId)) {
-@@ -666,24 +782,56 @@
+@@ -666,24 +779,54 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -9057,7 +9086,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    );
 +    if (!initial) this._firstNonInitialNavigationCommittedFulfill();
 +
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 +    const functionBindings = this._page.allBindings().filter(binding => binding.noGlobal);
 +    if (functionBindings.length) {
 +      try {
@@ -9085,7 +9113,6 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    });
 +    if (!query) return;
 +    for (const nodeId of query.nodeIds) await this._client._sendMayFail('DOM.removeNode', { nodeId: nodeId });
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 +    // ensuring execution context
 +    try {
 +      await this._page.frameManager.frame(this._targetId)._context('utility');
@@ -9108,7 +9135,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._page.frameManager.frameCommittedSameDocumentNavigation(frameId, url);
    }
  
-@@ -699,8 +847,7 @@
+@@ -699,8 +842,7 @@
        // Page.frameDetached arrives before Target.attachedToTarget.
        // We should keep the frame in the tree, and it will be used for the new target.
        const frame = this._page.frameManager.frame(frameId);
@@ -9118,7 +9145,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return;
      }
      // Just a regular frame detach.
-@@ -708,35 +855,43 @@
+@@ -708,35 +850,43 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -9176,7 +9203,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -753,12 +908,10 @@
+@@ -753,12 +903,10 @@
          // but no local frame is reported in getFrameTree. We can create a remote frame here.
          frame = this._page.frameManager.frameAttached(targetId, event.targetInfo.parentFrameId);
        }
@@ -9191,7 +9218,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
        const frameSession = new FrameSession(this._crPage, session, targetId, this);
        this._crPage._sessions.set(targetId, frameSession);
-@@ -778,28 +931,52 @@
+@@ -778,28 +926,52 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -9252,7 +9279,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._workerSessions.delete(sessionId);
      this._crPage._networkManager.removeSession(workerSession);
      workerSession.dispose();
-@@ -809,13 +986,11 @@
+@@ -809,13 +981,11 @@
  
    _onDetachedFromTarget(event: Protocol.Target.detachedFromTargetPayload) {
      // This might be a worker...
@@ -9268,7 +9295,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
      // Usually, we get frameAttached in this session first and mark child as swappedIn.
      if (childFrameSession._swappedIn) {
-@@ -827,13 +1002,15 @@
+@@ -827,13 +997,15 @@
      // In this case we don't know whether this is a remote frame detach,
      // or just a remote -> local transition. In the latter case, frameAttached
      // is already inflight, so let's make a safe roundtrip to ensure it arrives.
@@ -9291,7 +9318,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onWindowOpen(event: Protocol.Page.windowOpenPayload) {
-@@ -858,35 +1035,66 @@
+@@ -858,35 +1030,66 @@
        return;
      }
      const context = this._contextIdToContext.get(event.executionContextId);
@@ -9367,7 +9394,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    _onDialogClosed() {
-@@ -904,8 +1112,7 @@
+@@ -904,8 +1107,7 @@
  
    _onLogEntryAdded(event: Protocol.Log.entryAddedPayload) {
      const { level, text, args, source, url, lineNumber } = event.entry;
@@ -9377,7 +9404,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (source !== 'worker') {
        const location: types.ConsoleMessageLocation = {
          url: url || '',
-@@ -917,11 +1124,9 @@
+@@ -917,11 +1119,9 @@
    }
  
    async _onFileChooserOpened(event: Protocol.Page.fileChooserOpenedPayload) {
@@ -9391,7 +9418,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      let handle;
      try {
        const utilityContext = await frame.utilityContext();
-@@ -943,30 +1148,29 @@
+@@ -943,30 +1143,29 @@
  
    _onScreencastFrame(payload: Protocol.Page.screencastFramePayload) {
      const buffer = Buffer.from(payload.data, 'base64');
@@ -9435,7 +9462,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const viewportSize = emulatedSize.viewport;
      const screenSize = emulatedSize.screen;
      const isLandscape = screenSize.width > screenSize.height;
-@@ -977,25 +1181,23 @@
+@@ -977,25 +1176,23 @@
        screenWidth: screenSize.width,
        screenHeight: screenSize.height,
        deviceScaleFactor: options.deviceScaleFactor || 1,
@@ -9471,7 +9498,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          if (this._crPage._browserContext.isPersistentContext()) {
            // FIXME: Chrome bug: OOPIF router is confused when hit target is
            // outside browser window.
-@@ -1003,10 +1205,12 @@
+@@ -1003,10 +1200,12 @@
            insets.height += 46;
          }
        }
@@ -9488,7 +9515,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      }
      // Make sure that the viewport emulationis set after the embedder window resize.
      promises.push(this._client.send('Emulation.setDeviceMetricsOverride', metricsOverride));
-@@ -1016,7 +1220,7 @@
+@@ -1016,7 +1215,7 @@
  
    async windowBounds(): Promise<WindowBounds> {
      const { bounds } = await this._client.send('Browser.getWindowBounds', {
@@ -9497,7 +9524,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      });
      return bounds;
    }
-@@ -1024,7 +1228,7 @@
+@@ -1024,7 +1223,7 @@
    async setWindowBounds(bounds: WindowBounds) {
      return await this._client.send('Browser.setWindowBounds', {
        windowId: this._windowId!,
@@ -9506,7 +9533,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      });
    }
  
-@@ -1061,26 +1265,34 @@
+@@ -1061,26 +1260,34 @@
  
    async _updateFileChooserInterception(initial: boolean) {
      const enabled = this._page.fileChooserIntercepted();
@@ -9547,7 +9574,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async exposePlaywrightBinding() {
-@@ -1089,10 +1301,9 @@
+@@ -1089,10 +1296,9 @@
  
    async _getContentFrame(handle: dom.ElementHandle): Promise<frames.Frame | null> {
      const nodeInfo = await this._client.send('DOM.describeNode', {
@@ -9560,7 +9587,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return this._page.frameManager.frame(nodeInfo.node.frameId);
    }
  
-@@ -1100,97 +1311,128 @@
+@@ -1100,97 +1306,128 @@
      // document.documentElement has frameId of the owner frame.
      const documentElement = await handle.evaluateHandle(node => {
        const doc = node as Document;
@@ -9729,7 +9756,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  async function emulateLocale(session: CRSession, locale: string) {
-@@ -1200,8 +1442,7 @@
+@@ -1200,8 +1437,7 @@
      // All pages in the same renderer share locale. All such pages belong to the same
      // context and if locale is overridden for one of them its value is the same as
      // we are trying to set so it's not a problem.
@@ -9739,7 +9766,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      throw exception;
    }
  }
-@@ -1210,10 +1451,8 @@
+@@ -1210,10 +1446,8 @@
    try {
      await session.send('Emulation.setTimezoneOverride', { timezoneId: timezoneId });
    } catch (exception) {
@@ -9752,7 +9779,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      throw exception;
    }
  }
-@@ -1221,8 +1460,7 @@
+@@ -1221,8 +1455,7 @@
  // Chromium reference: https://source.chromium.org/chromium/chromium/src/+/main:components/embedder_support/user_agent_utils.cc;l=434;drc=70a6711e08e9f9e0d8e4c48e9ba5cab62eb010c2
  export function calculateUserAgentMetadata(options: types.BrowserContextOptions) {
    const ua = options.userAgent;
@@ -9762,7 +9789,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    const metadata: Protocol.Emulation.UserAgentMetadata = {
      mobile: !!options.isMobile,
      model: '',
-@@ -1250,15 +1488,13 @@
+@@ -1250,15 +1483,13 @@
    } else if (macOSMatch) {
      metadata.platform = 'macOS';
      metadata.platformVersion = macOSMatch[1];
@@ -13713,7 +13740,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
      const request = navigationEvent.newDocument ? navigationEvent.newDocument.request : undefined;
      return request ? request._finalRequest().response(progress) : null;
-@@ -777,63 +776,203 @@
+@@ -777,63 +776,209 @@
    async waitForLoadState(progress: Progress, state: types.LifecycleEvent): Promise<void> {
      const waitUntil = verifyLifecycle('state', state);
      if (!this._firedLifecycleEvents.has(waitUntil))
@@ -13735,6 +13762,10 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    } catch (e) {
 +      client = this._page.delegate._mainFrameSession._client;
 +    }
++
++    const rethrowSessionClosedError = (error: Error) => {
++      if (isSessionClosedError(error)) throw error;
++    };
 +
 +    const isMainFrame = this === this._page.mainFrame();
 +    const session = this._page.delegate._sessionForFrame(this);
@@ -13767,10 +13798,11 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +      }
 +      if (!this._iframeWorld && this._mainWorld === undefined) {
 +        const contextPromise = (this._mainWorldContextPromise ??= client
-+          ._sendMayFail('Runtime.evaluate', {
++          .send('Runtime.evaluate', {
 +            expression: 'globalThis',
 +            serializationOptions: { serialization: 'idOnly' },
 +          })
++          .catch(rethrowSessionClosedError)
 +          .then(globalThis => {
 +            const objectId = globalThis?.result?.objectId;
 +            if (!objectId) return undefined;
@@ -13790,11 +13822,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +    if (world !== 'main' && this._isolatedWorld === undefined) {
 +      const contextPromise = (this._isolatedWorldContextPromise ??= client
-+        ._sendMayFail('Page.createIsolatedWorld', {
++        .send('Page.createIsolatedWorld', {
 +          frameId: this._id,
 +          grantUniveralAccess: true,
 +          worldName: world,
 +        })
++        .catch(rethrowSessionClosedError)
 +        .then(result => result?.executionContextId));
 +      const executionContextId = await contextPromise;
 +      if (this._isolatedWorldContextPromise !== contextPromise) return this._context(world);
@@ -13941,7 +13974,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if ((options as any).visibility)
        throw new Error('options.visibility is not supported, did you mean options.state?');
      if ((options as any).waitFor && (options as any).waitFor !== 'visible')
-@@ -844,81 +983,270 @@
+@@ -844,81 +989,270 @@
      if (performActionPreChecksAndLog)
        progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
      const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
@@ -14252,7 +14285,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope);
      const result = await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
      arrayHandle.dispose();
-@@ -926,15 +1254,50 @@
+@@ -926,15 +1260,50 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -14307,7 +14340,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return 0;
      }
    }
-@@ -948,44 +1311,31 @@
+@@ -948,44 +1317,31 @@
        const context = await this.utilityContext();
        return await context.evaluate(() => {
          let retVal = '';
@@ -14364,7 +14397,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      });
    }
  
-@@ -998,8 +1348,7 @@
+@@ -998,8 +1354,7 @@
    }
  
    origin(): string | undefined {
@@ -14374,7 +14407,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return network.parseURL(this._url)?.origin;
    }
  
-@@ -1011,82 +1360,68 @@
+@@ -1011,82 +1366,68 @@
      return Array.from(this._childFrames);
    }
  
@@ -14482,7 +14515,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return (await context.evaluateHandle(addStyleContent, content!)).asElement()!;
      });
  
-@@ -1122,37 +1457,51 @@
+@@ -1122,37 +1463,51 @@
      let result: dom.ElementHandle;
      let error: Error | undefined;
      let cspMessage: ConsoleMessage | undefined;
@@ -14551,7 +14584,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const continuePolling = Symbol('continuePolling');
      timeouts = [0, ...timeouts];
      let timeoutIndex = 0;
-@@ -1162,36 +1511,27 @@
+@@ -1162,36 +1517,27 @@
          // Make sure we react immediately upon page close or frame detach.
          // We need this to show expected/received values in time.
          const actionPromise = new Promise(f => setTimeout(f, timeout));
@@ -14595,7 +14628,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // Retry upon all other errors.
      return false;
    }
-@@ -1199,133 +1539,236 @@
+@@ -1199,133 +1545,236 @@
    private async _retryWithProgressIfNotConnected<R>(
      progress: Progress,
      selector: string,
@@ -14920,7 +14953,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          frameElement.dispose();
          if (generated === 'error:notconnected' || !generated)
            throw new Error(`Unable to generate locator for ${selector}`);
-@@ -1337,137 +1780,370 @@
+@@ -1337,137 +1786,370 @@
      return { resolvedSelector };
    }
  
@@ -15353,7 +15386,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      } finally {
        clearTimeout(timer!);
      }
-@@ -1482,11 +2158,12 @@
+@@ -1482,11 +2164,12 @@
        }
      }
      // `isSet` distinguishes "not collected yet" from "collected with received: undefined".
@@ -15369,7 +15402,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        await this._page.performActionPreChecks(progress);
  
        // Step 2: perform one-shot expect check without a timeout.
-@@ -1494,18 +2171,22 @@
+@@ -1494,18 +2177,22 @@
        // that should succeed when the locator is already visible.
        try {
          const resultOneShot = await this._expectInternal(progress, selector, options, lastIntermediateResult, true);
@@ -15397,7 +15430,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          if (matches === options.isNot) {
            // Keep waiting in these cases:
            // expect(locator).conditionThatDoesNotMatch
-@@ -1519,24 +2200,29 @@
+@@ -1519,24 +2206,29 @@
        if (isInvalidSelectorError(e) || dom.isNonRecoverableDOMError(e)) {
          details.customErrorMessage = e.message;
        } else if (js.isJavaScriptErrorInEvaluate(e)) {
@@ -15435,7 +15468,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const mainWorld = options.expression === 'to.have.property';
      const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
      const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
-@@ -1546,19 +2232,25 @@
+@@ -1546,19 +2238,25 @@
      let missingReceived = false;
  
      // Non-array expectations are strict (callOnSelector throws on multiple); array ones are not.
@@ -15470,7 +15503,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      } else {
        // When no elements matched the selector, some assertions can still pass.
        if (options.expression === 'to.have.count') {
-@@ -1584,14 +2276,15 @@
+@@ -1584,14 +2282,15 @@
          missingReceived = true;
        }
        if (matches === options.isNot && !isArray) {
@@ -15493,7 +15526,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
      }
  
-@@ -1606,66 +2299,82 @@
+@@ -1606,66 +2305,82 @@
      return { matches, received };
    }
  
@@ -15627,7 +15660,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1677,24 +2386,36 @@
+@@ -1677,24 +2392,36 @@
      });
    }
  
@@ -15680,7 +15713,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionValueInUtility<R>(progress: Progress, pageFunction: js.Func1<any, R>) {
-@@ -1720,25 +2441,28 @@
+@@ -1720,25 +2447,28 @@
        });
      } catch {
        const url = this.pendingDocument()?.request?.url();
@@ -15718,7 +15751,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        progress.wait(timeout),
      ]);
      progress.setAllowConcurrentOrNestedRaces(false);
-@@ -1748,47 +2472,310 @@
+@@ -1748,47 +2478,310 @@
      this._stopNetworkIdleTimer();
      this._detachedScope.close(new Error('Frame was detached'));
      for (const data of this._contextData.values()) {
@@ -16058,7 +16091,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    contextCreated(world: types.World, context: dom.FrameExecutionContext) {
-@@ -1806,12 +2793,10 @@
+@@ -1806,12 +2799,10 @@
    contextDestroyed(context: dom.FrameExecutionContext) {
      // Sometimes we get this after detach, in which case we should not reset
      // our already destroyed contexts to something that will never resolve.
@@ -16073,7 +16106,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      }
    }
  
-@@ -1820,8 +2805,7 @@
+@@ -1820,8 +2811,7 @@
      // We should not start a timer and report networkidle in detached frames.
      // This happens at least in Firefox for child frames, where we may get requestFinished
      // after the frame was detached - probably a race in the Firefox itself.
@@ -16083,7 +16116,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._networkIdleTimer = setTimeout(() => {
        this._firedNetworkIdleSelf = true;
        this._page.mainFrame()._recalculateNetworkIdle();
-@@ -1829,32 +2813,63 @@
+@@ -1829,32 +2819,63 @@
    }
  
    _stopNetworkIdleTimer() {
@@ -16158,7 +16191,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return { snapshot };
      }
      return { snapshot: await ariaSnapshotJSONForFrame(progress, this, options.selector, options) };
-@@ -1863,6 +2878,409 @@
+@@ -1863,6 +2884,409 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -16568,7 +16601,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class SignalBarrier {
-@@ -1882,23 +3300,19 @@
+@@ -1882,23 +3306,19 @@
  
    addFrameNavigation(frame: Frame) {
      // Auto-wait top-level navigations only.
@@ -16601,7 +16634,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    retain() {
-@@ -1907,21 +3321,18 @@
+@@ -1907,21 +3327,18 @@
  
    release() {
      --this._protectCount;
@@ -31243,11 +31276,13 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onRequestWillBeSentExtraInfo(event: Protocol.Network.requestWillBeSentExtraInfoPayload) {
-@@ -242,14 +316,14 @@
+@@ -242,14 +316,16 @@
    }
  
    _onRequestPaused(sessionInfo: SessionInfo, event: Protocol.Fetch.requestPausedPayload) {
-+    if (this._alreadyTrackedNetworkIds.has(event.networkId)) return;
++    if (this._alreadyTrackedNetworkIds.has(event.networkId))
++      return this._requestIdToRequest.get(event.networkId)?._originalRequestRoute?._networkRequestIntercepted(event);
++
      if (!event.networkId) {
        // Fetch without networkId means that request was not recognized by inspector, and
        // it will never receive Network.requestWillBeSent. Continue the request to not affect it.
@@ -31260,7 +31295,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
      const requestId = event.networkId;
      const requestWillBeSentEvent = this._requestIdToRequestWillBeSentEvent.get(requestId);
-@@ -279,19 +353,44 @@
+@@ -279,19 +355,44 @@
      }
    }
  
@@ -31310,7 +31345,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // Requests from workers lack frameId, because we receive Network.requestWillBeSent
      // on the worker target. However, we receive Fetch.requestPaused on the page target,
      // and lack workerFrame there. Luckily, Fetch.requestPaused provides a frameId.
-@@ -310,16 +409,21 @@
+@@ -310,16 +411,21 @@
      // we accept all CORS options, assuming that this was intended when setting route.
      //
      // Note: it would be better to match the URL against interception patterns.
@@ -31336,7 +31371,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        requestPausedSessionInfo!.session._sendMayFail('Fetch.fulfillRequest', {
          requestId: requestPausedEvent.requestId,
          responseCode: 204,
-@@ -333,7 +437,9 @@
+@@ -333,7 +439,9 @@
      // Non-service-worker requests MUST have a frame—if they don't, we pretend there was no request
      if (!frame && !this._serviceWorker) {
        if (requestPausedEvent)
@@ -31347,7 +31382,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return;
      }
  
-@@ -345,15 +451,29 @@
+@@ -345,15 +453,29 @@
          // Chromium does not preserve header overrides between redirects, so we have to do it ourselves.
          headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
          if (headersOverride) {
@@ -31381,7 +31416,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const documentId = isNavigationRequest ? requestWillBeSentEvent.loaderId : undefined;
      const request = new InterceptableRequest({
        session: requestWillBeSentSessionInfo.session,
-@@ -369,7 +489,7 @@
+@@ -369,7 +491,7 @@
      });
      this._requestIdToRequest.set(requestWillBeSentEvent.requestId, request);
  
@@ -31390,7 +31425,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        // We may not receive extra info when intercepting the request.
        // Use the headers from the Fetch.requestPausedPayload and release the allHeaders()
        // right away, so that client can call it from the route handler.
-@@ -378,7 +498,11 @@
+@@ -378,7 +500,11 @@
      (this._page?.frameManager || this._serviceWorker)!.requestStarted(request.request, route || undefined);
    }
  
@@ -31403,7 +31438,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const getResponseBody = InterceptableRequest.createResponseBodyCallback(request.request);
      const timingPayload = responsePayload.timing!;
      let timing: network.ResourceTiming;
-@@ -405,7 +529,24 @@
+@@ -405,7 +531,24 @@
          responseStart: -1,
        };
      }
@@ -31429,7 +31464,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      response._setHttpVersion(responsePayload?.protocol ?? null);
      if (responsePayload?.remoteIPAddress && typeof responsePayload?.remotePort === 'number') {
        response._serverAddrFinished({
-@@ -428,11 +569,15 @@
+@@ -428,11 +571,15 @@
  
    _deleteRequest(request: InterceptableRequest) {
      this._requestIdToRequest.delete(request._requestId);
@@ -31448,7 +31483,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const response = this._createResponse(request, responsePayload, hasExtraInfo);
      response.setTransferSize(null);
      response.setEncodedBodySize(null);
-@@ -460,8 +605,7 @@
+@@ -460,8 +607,7 @@
        }
      }
      // FileUpload sends a response without a matching request.
@@ -31458,7 +31493,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const response = this._createResponse(request, event.response, event.hasExtraInfo);
      (this._page?.frameManager || this._serviceWorker)!.requestReceivedResponse(response);
    }
-@@ -472,8 +616,7 @@
+@@ -472,13 +618,32 @@
      const request = this._requestIdToRequest.get(event.requestId);
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -31468,7 +31503,33 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._maybeUpdateRequestSession(sessionInfo, request);
  
      // Under certain conditions we never get the Network.responseReceived
-@@ -507,8 +650,7 @@
+     // event from protocol. @see https://crbug.com/883475
+-    const response = request.request._existingResponse();
++    let response = request.request._existingResponse();
++
++    const fulfilledResponse = this._serviceWorker && request._originalRequestRoute?._fulfilledResponse;
++    if (!response && fulfilledResponse) {
++      response = this._createResponse(
++        request,
++        {
++          ...fulfilledResponse,
++          url: request.request.url(),
++          mimeType: '',
++          charset: '',
++          connectionReused: false,
++          connectionId: 0,
++          encodedDataLength: event.encodedDataLength,
++          securityState: 'unknown',
++        },
++        false,
++      );
++      this._serviceWorker!.requestReceivedResponse(response);
++    }
++
+     if (response) {
+       response.setTransferSize(event.encodedDataLength);
+       response.responseHeadersSize().then(size => response.setEncodedBodySize(event.encodedDataLength - size));
+@@ -507,8 +672,7 @@
  
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -31478,7 +31539,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._maybeUpdateRequestSession(sessionInfo, request);
      const response = request.request._existingResponse();
      if (response) {
-@@ -552,15 +694,27 @@
+@@ -552,15 +716,27 @@
      //
      // In theory, we can always update the session. However, we try to be conservative here
      // to make sure we understand all the scenarios where the session should be updated.
@@ -31508,7 +31569,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  ]);
  
  const kInterceptableRequest = Symbol('InterceptableRequest');
-@@ -582,8 +736,7 @@
+@@ -582,8 +758,7 @@
    }
  
    static detachIfNeeded(request: network.Request, session: CRSession) {
@@ -31518,7 +31579,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    static createResponseBodyCallback(request: network.Request): () => Promise<Buffer> {
-@@ -591,8 +744,7 @@
+@@ -591,8 +766,7 @@
        // Lookup the request lazily, so that the response does not retain the
        // InterceptableRequest and its session after detachIfNeeded().
        const interceptable = InterceptableRequest.from(request);
@@ -31528,7 +31589,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const contentLength = request._existingResponse()?.headerValue('content-length');
        const expectedLength = contentLength ? +contentLength : undefined;
  
-@@ -602,21 +754,24 @@
+@@ -602,21 +776,24 @@
          return Buffer.from(response.body, response.base64Encoded ? 'base64' : 'utf8');
  
        // Make sure no network requests sent while reading the body for fulfilled requests.
@@ -31561,7 +31622,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const chunks: Buffer[] = [];
        while (resource.resource.stream) {
          const chunk = await session.send('IO.read', { handle: resource.resource.stream });
-@@ -631,7 +786,7 @@
+@@ -631,7 +808,7 @@
    }
  
    constructor(options: {
@@ -31570,7 +31631,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      context: contexts.BrowserContext;
      frame: frames.Frame | null;
      serviceWorker: CRServiceWorker | null;
-@@ -642,7 +797,18 @@
+@@ -642,7 +819,18 @@
      redirectedFrom: InterceptableRequest | null;
      headersOverride: types.HeadersArray | null;
    }) {
@@ -31590,7 +31651,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this.session = session;
      this._timestamp = requestWillBeSentEvent.timestamp;
      this._wallTime = requestWillBeSentEvent.wallTime;
-@@ -662,7 +828,19 @@
+@@ -662,7 +850,19 @@
      if (entries && entries.length)
        postDataBuffer = Buffer.concat(entries.map(entry => Buffer.from(entry.bytes!, 'base64')));
  
@@ -31611,7 +31672,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      (this.request as any)[kInterceptableRequest] = this;
    }
  }
-@@ -672,33 +850,154 @@
+@@ -672,33 +872,155 @@
    private _interceptionId: string;
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
@@ -31633,11 +31694,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    this._page = page;
 +    this._networkId = networkId;
 +    this._sessionManager = sessionManager;
-+    eventsHelper.addEventListener(
-+      this._session,
-+      'Fetch.requestPaused',
-+      async e => await this._networkRequestIntercepted(e),
-+    );
    }
  
    async continue(overrides: types.NormalizedContinueOverrides): Promise<void> {
@@ -31767,6 +31823,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -
      const responseHeaders = splitSetCookieHeader(response.headers);
 +    this._fulfilledSetCookieHeaders = responseHeaders.filter(header => header.name.toLowerCase() === 'set-cookie');
++    if (!this._page)
++      this._fulfilledResponse = {
++        status: response.status,
++        statusText: network.statusText(response.status),
++        headers: headersArrayToObject(responseHeaders),
++      };
      await catchDisallowedErrors(async () => {
        await this._session.send('Fetch.fulfillRequest', {
 -        requestId: this._interceptionId!,
@@ -31774,7 +31836,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          responseCode: response.status,
          responsePhrase: network.statusText(response.status),
          responseHeaders,
-@@ -713,10 +1012,215 @@
+@@ -713,10 +1035,217 @@
      await catchDisallowedErrors(async () => {
        await this._session.send('Fetch.failRequest', {
          requestId: this._interceptionId!,
@@ -31783,6 +31845,8 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        });
      });
    }
++
++  _fulfilledResponse: Pick<Protocol.Network.Response, 'status' | 'statusText' | 'headers'> | undefined;
 +
 +  _fixCSP(csp: string | null, scriptNonce: string | null) {
 +    if (!csp || typeof csp !== 'string') return csp;
@@ -31991,7 +32055,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  // In certain cases, protocol will return error if the request was already canceled
-@@ -725,14 +1229,11 @@
+@@ -725,14 +1254,11 @@
    try {
      return await callback();
    } catch (e) {
@@ -32008,7 +32072,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  // Never forward the `cookie` header to Fetch.continueRequest: since Chromium 145 it overrides
  // the cookie store, which leaks the value captured at interception time. Omitting it lets the
  // network stack source the cookie from the store. https://github.com/microsoft/playwright/issues/41428
-@@ -742,47 +1243,45 @@
+@@ -742,47 +1268,45 @@
  
  function splitSetCookieHeader(headers: types.HeadersArray): types.HeadersArray {
    const index = headers.findIndex(({ name }) => name.toLowerCase() === 'set-cookie');
@@ -32079,7 +32143,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  };
  
  // This class aligns responses with response headers from extra info:
-@@ -845,16 +1344,14 @@
+@@ -845,16 +1369,14 @@
  
    loadingFinished(event: Protocol.Network.loadingFinishedPayload) {
      const info = this._requests.get(event.requestId);
@@ -32098,7 +32162,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      info.loadingFailed = event;
      this._checkFinished(info);
    }
-@@ -889,8 +1386,7 @@
+@@ -889,8 +1411,7 @@
    }
  
    private _checkFinished(info: RequestInfo) {
@@ -32632,7 +32696,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        this._client.send('Page.addScriptToEvaluateOnNewDocument', {
          source: '',
          worldName: this._crPage.utilityWorldName,
-@@ -540,37 +643,35 @@
+@@ -540,38 +643,39 @@
        this._client.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }),
      ];
      if (!this._page.isStorageStatePage) {
@@ -32689,9 +32753,13 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +      for (const initScript of this._crPage._page.initScripts)
 +        promises.push(this._evaluateOnNewDocument(initScript, 'main'));
      }
++
++    if (this._isMainFrame() && !this._crPage._opener) await Promise.all(promises);
++
      promises.push(this._client.send('Runtime.runIfWaitingForDebugger'));
      promises.push(this._firstNonInitialNavigationCommittedPromise);
-@@ -581,8 +682,7 @@
+     await Promise.all(promises);
+@@ -581,8 +685,7 @@
        // without replaying the pre-existing execution contexts. Cycle
        // Runtime.disable/enable until the default context is reported.
        for (let attempt = 0; attempt < 10; ++attempt) {
@@ -32701,7 +32769,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          await this._client._sendMayFail('Runtime.disable');
          await this._client._sendMayFail('Runtime.enable');
          await new Promise(f => setTimeout(f, 250));
-@@ -592,12 +692,9 @@
+@@ -592,12 +695,9 @@
  
    dispose() {
      this._firstNonInitialNavigationCommittedReject(new TargetClosedError(this._page.closeReason()));
@@ -32717,7 +32785,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      eventsHelper.removeEventListeners(this._eventListeners);
      this._crPage._networkManager.removeSession(this._client);
      this._crPage._sessions.delete(this._targetId);
-@@ -605,43 +702,63 @@
+@@ -605,43 +705,57 @@
    }
  
    async _navigate(frame: frames.Frame, url: string, referrer: string | undefined): Promise<frames.GotoResult> {
@@ -32748,12 +32816,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        this._page.frameManager.frameLifecycleEvent(event.frameId, 'domcontentloaded');
 +
 +    // Only do full init script cleanup on load to reduce CDP round-trip pressure.
-+    // Other lifecycle events just get a minimal runIfWaitingForDebugger call.
-+    if (event.name !== 'load') {
-+      await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
-+      return;
-+    }
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
++    if (event.name !== 'load') return;
 +    var document = await this._client._sendMayFail('DOM.getDocument');
 +    if (!document) return;
 +    var query = await this._client._sendMayFail('DOM.querySelectorAll', {
@@ -32762,7 +32825,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    });
 +    if (!query) return;
 +    for (const nodeId of query.nodeIds) await this._client._sendMayFail('DOM.removeNode', { nodeId: nodeId });
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 +    // ensuring execution context
 +    try {
 +      await this._page.frameManager.frame(this._targetId)._context('utility');
@@ -32801,7 +32863,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      return session && session !== this && !session._swappedIn;
    }
  
-@@ -652,8 +769,7 @@
+@@ -652,8 +766,7 @@
        frameSession._swappedIn = true;
        const frame = this._page.frameManager.frame(frameId);
        // Frame or even a whole subtree may be already gone, because some ancestor did navigate.
@@ -32811,7 +32873,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return;
      }
      if (parentFrameId && !this._page.frameManager.frame(parentFrameId)) {
-@@ -666,24 +782,56 @@
+@@ -666,24 +779,54 @@
      this._page.frameManager.frameAttached(frameId, parentFrameId);
    }
  
@@ -32828,7 +32890,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    );
 +    if (!initial) this._firstNonInitialNavigationCommittedFulfill();
 +
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 +    const functionBindings = this._page.allBindings().filter(binding => binding.noGlobal);
 +    if (functionBindings.length) {
 +      try {
@@ -32856,7 +32917,6 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    });
 +    if (!query) return;
 +    for (const nodeId of query.nodeIds) await this._client._sendMayFail('DOM.removeNode', { nodeId: nodeId });
-+    await this._client._sendMayFail('Runtime.runIfWaitingForDebugger');
 +    // ensuring execution context
 +    try {
 +      await this._page.frameManager.frame(this._targetId)._context('utility');
@@ -32879,7 +32939,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._page.frameManager.frameCommittedSameDocumentNavigation(frameId, url);
    }
  
-@@ -699,8 +847,7 @@
+@@ -699,8 +842,7 @@
        // Page.frameDetached arrives before Target.attachedToTarget.
        // We should keep the frame in the tree, and it will be used for the new target.
        const frame = this._page.frameManager.frame(frameId);
@@ -32889,7 +32949,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return;
      }
      // Just a regular frame detach.
-@@ -708,35 +855,43 @@
+@@ -708,35 +850,43 @@
    }
  
    _onExecutionContextCreated(contextPayload: Protocol.Runtime.ExecutionContextDescription) {
@@ -32947,7 +33007,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (this._bufferedAttachedToTargetEvents) {
        this._bufferedAttachedToTargetEvents.push(event);
        return;
-@@ -753,12 +908,10 @@
+@@ -753,12 +903,10 @@
          // but no local frame is reported in getFrameTree. We can create a remote frame here.
          frame = this._page.frameManager.frameAttached(targetId, event.targetInfo.parentFrameId);
        }
@@ -32962,7 +33022,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        }
        const frameSession = new FrameSession(this._crPage, session, targetId, this);
        this._crPage._sessions.set(targetId, frameSession);
-@@ -778,28 +931,52 @@
+@@ -778,28 +926,52 @@
      session.once('Runtime.executionContextCreated', async event => {
        worker.createExecutionContext(new CRExecutionContext(session, event.context));
      });
@@ -33023,7 +33083,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._workerSessions.delete(sessionId);
      this._crPage._networkManager.removeSession(workerSession);
      workerSession.dispose();
-@@ -809,13 +986,11 @@
+@@ -809,13 +981,11 @@
  
    _onDetachedFromTarget(event: Protocol.Target.detachedFromTargetPayload) {
      // This might be a worker...
@@ -33039,7 +33099,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
      // Usually, we get frameAttached in this session first and mark child as swappedIn.
      if (childFrameSession._swappedIn) {
-@@ -827,13 +1002,15 @@
+@@ -827,13 +997,15 @@
      // In this case we don't know whether this is a remote frame detach,
      // or just a remote -> local transition. In the latter case, frameAttached
      // is already inflight, so let's make a safe roundtrip to ensure it arrives.
@@ -33062,7 +33122,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onWindowOpen(event: Protocol.Page.windowOpenPayload) {
-@@ -858,35 +1035,66 @@
+@@ -858,35 +1030,66 @@
        return;
      }
      const context = this._contextIdToContext.get(event.executionContextId);
@@ -33138,7 +33198,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    _onDialogClosed() {
-@@ -904,8 +1112,7 @@
+@@ -904,8 +1107,7 @@
  
    _onLogEntryAdded(event: Protocol.Log.entryAddedPayload) {
      const { level, text, args, source, url, lineNumber } = event.entry;
@@ -33148,7 +33208,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (source !== 'worker') {
        const location: types.ConsoleMessageLocation = {
          url: url || '',
-@@ -917,11 +1124,9 @@
+@@ -917,11 +1119,9 @@
    }
  
    async _onFileChooserOpened(event: Protocol.Page.fileChooserOpenedPayload) {
@@ -33162,7 +33222,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      let handle;
      try {
        const utilityContext = await frame.utilityContext();
-@@ -943,30 +1148,29 @@
+@@ -943,30 +1143,29 @@
  
    _onScreencastFrame(payload: Protocol.Page.screencastFramePayload) {
      const buffer = Buffer.from(payload.data, 'base64');
@@ -33206,7 +33266,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const viewportSize = emulatedSize.viewport;
      const screenSize = emulatedSize.screen;
      const isLandscape = screenSize.width > screenSize.height;
-@@ -977,25 +1181,23 @@
+@@ -977,25 +1176,23 @@
        screenWidth: screenSize.width,
        screenHeight: screenSize.height,
        deviceScaleFactor: options.deviceScaleFactor || 1,
@@ -33242,7 +33302,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          if (this._crPage._browserContext.isPersistentContext()) {
            // FIXME: Chrome bug: OOPIF router is confused when hit target is
            // outside browser window.
-@@ -1003,10 +1205,12 @@
+@@ -1003,10 +1200,12 @@
            insets.height += 46;
          }
        }
@@ -33259,7 +33319,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      }
      // Make sure that the viewport emulationis set after the embedder window resize.
      promises.push(this._client.send('Emulation.setDeviceMetricsOverride', metricsOverride));
-@@ -1016,7 +1220,7 @@
+@@ -1016,7 +1215,7 @@
  
    async windowBounds(): Promise<WindowBounds> {
      const { bounds } = await this._client.send('Browser.getWindowBounds', {
@@ -33268,7 +33328,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      });
      return bounds;
    }
-@@ -1024,7 +1228,7 @@
+@@ -1024,7 +1223,7 @@
    async setWindowBounds(bounds: WindowBounds) {
      return await this._client.send('Browser.setWindowBounds', {
        windowId: this._windowId!,
@@ -33277,7 +33337,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      });
    }
  
-@@ -1061,26 +1265,34 @@
+@@ -1061,26 +1260,34 @@
  
    async _updateFileChooserInterception(initial: boolean) {
      const enabled = this._page.fileChooserIntercepted();
@@ -33318,7 +33378,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async exposePlaywrightBinding() {
-@@ -1089,10 +1301,9 @@
+@@ -1089,10 +1296,9 @@
  
    async _getContentFrame(handle: dom.ElementHandle): Promise<frames.Frame | null> {
      const nodeInfo = await this._client.send('DOM.describeNode', {
@@ -33331,7 +33391,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      return this._page.frameManager.frame(nodeInfo.node.frameId);
    }
  
-@@ -1100,97 +1311,128 @@
+@@ -1100,97 +1306,128 @@
      // document.documentElement has frameId of the owner frame.
      const documentElement = await handle.evaluateHandle(node => {
        const doc = node as Document;
@@ -33500,7 +33560,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  async function emulateLocale(session: CRSession, locale: string) {
-@@ -1200,8 +1442,7 @@
+@@ -1200,8 +1437,7 @@
      // All pages in the same renderer share locale. All such pages belong to the same
      // context and if locale is overridden for one of them its value is the same as
      // we are trying to set so it's not a problem.
@@ -33510,7 +33570,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      throw exception;
    }
  }
-@@ -1210,10 +1451,8 @@
+@@ -1210,10 +1446,8 @@
    try {
      await session.send('Emulation.setTimezoneOverride', { timezoneId: timezoneId });
    } catch (exception) {
@@ -33523,7 +33583,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      throw exception;
    }
  }
-@@ -1221,8 +1460,7 @@
+@@ -1221,8 +1455,7 @@
  // Chromium reference: https://source.chromium.org/chromium/chromium/src/+/main:components/embedder_support/user_agent_utils.cc;l=434;drc=70a6711e08e9f9e0d8e4c48e9ba5cab62eb010c2
  export function calculateUserAgentMetadata(options: types.BrowserContextOptions) {
    const ua = options.userAgent;
@@ -33533,7 +33593,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    const metadata: Protocol.Emulation.UserAgentMetadata = {
      mobile: !!options.isMobile,
      model: '',
-@@ -1250,15 +1488,13 @@
+@@ -1250,15 +1483,13 @@
    } else if (macOSMatch) {
      metadata.platform = 'macOS';
      metadata.platformVersion = macOSMatch[1];
@@ -37484,7 +37544,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
      const request = navigationEvent.newDocument ? navigationEvent.newDocument.request : undefined;
      return request ? request._finalRequest().response(progress) : null;
-@@ -777,63 +776,203 @@
+@@ -777,63 +776,209 @@
    async waitForLoadState(progress: Progress, state: types.LifecycleEvent): Promise<void> {
      const waitUntil = verifyLifecycle('state', state);
      if (!this._firedLifecycleEvents.has(waitUntil))
@@ -37506,6 +37566,10 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    } catch (e) {
 +      client = this._page.delegate._mainFrameSession._client;
 +    }
++
++    const rethrowSessionClosedError = (error: Error) => {
++      if (isSessionClosedError(error)) throw error;
++    };
 +
 +    const isMainFrame = this === this._page.mainFrame();
 +    const session = this._page.delegate._sessionForFrame(this);
@@ -37538,10 +37602,11 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +      }
 +      if (!this._iframeWorld && this._mainWorld === undefined) {
 +        const contextPromise = (this._mainWorldContextPromise ??= client
-+          ._sendMayFail('Runtime.evaluate', {
++          .send('Runtime.evaluate', {
 +            expression: 'globalThis',
 +            serializationOptions: { serialization: 'idOnly' },
 +          })
++          .catch(rethrowSessionClosedError)
 +          .then(globalThis => {
 +            const objectId = globalThis?.result?.objectId;
 +            if (!objectId) return undefined;
@@ -37561,11 +37626,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +
 +    if (world !== 'main' && this._isolatedWorld === undefined) {
 +      const contextPromise = (this._isolatedWorldContextPromise ??= client
-+        ._sendMayFail('Page.createIsolatedWorld', {
++        .send('Page.createIsolatedWorld', {
 +          frameId: this._id,
 +          grantUniveralAccess: true,
 +          worldName: world,
 +        })
++        .catch(rethrowSessionClosedError)
 +        .then(result => result?.executionContextId));
 +      const executionContextId = await contextPromise;
 +      if (this._isolatedWorldContextPromise !== contextPromise) return this._context(world);
@@ -37712,7 +37778,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if ((options as any).visibility)
        throw new Error('options.visibility is not supported, did you mean options.state?');
      if ((options as any).waitFor && (options as any).waitFor !== 'visible')
-@@ -844,81 +983,270 @@
+@@ -844,81 +989,270 @@
      if (performActionPreChecksAndLog)
        progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
      const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
@@ -38023,7 +38089,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope);
      const result = await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
      arrayHandle.dispose();
-@@ -926,15 +1254,50 @@
+@@ -926,15 +1260,50 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -38078,7 +38144,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return 0;
      }
    }
-@@ -948,44 +1311,31 @@
+@@ -948,44 +1317,31 @@
        const context = await this.utilityContext();
        return await context.evaluate(() => {
          let retVal = '';
@@ -38135,7 +38201,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      });
    }
  
-@@ -998,8 +1348,7 @@
+@@ -998,8 +1354,7 @@
    }
  
    origin(): string | undefined {
@@ -38145,7 +38211,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      return network.parseURL(this._url)?.origin;
    }
  
-@@ -1011,82 +1360,68 @@
+@@ -1011,82 +1366,68 @@
      return Array.from(this._childFrames);
    }
  
@@ -38253,7 +38319,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return (await context.evaluateHandle(addStyleContent, content!)).asElement()!;
      });
  
-@@ -1122,37 +1457,51 @@
+@@ -1122,37 +1463,51 @@
      let result: dom.ElementHandle;
      let error: Error | undefined;
      let cspMessage: ConsoleMessage | undefined;
@@ -38322,7 +38388,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const continuePolling = Symbol('continuePolling');
      timeouts = [0, ...timeouts];
      let timeoutIndex = 0;
-@@ -1162,36 +1511,27 @@
+@@ -1162,36 +1517,27 @@
          // Make sure we react immediately upon page close or frame detach.
          // We need this to show expected/received values in time.
          const actionPromise = new Promise(f => setTimeout(f, timeout));
@@ -38366,7 +38432,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // Retry upon all other errors.
      return false;
    }
-@@ -1199,133 +1539,236 @@
+@@ -1199,133 +1545,236 @@
    private async _retryWithProgressIfNotConnected<R>(
      progress: Progress,
      selector: string,
@@ -38691,7 +38757,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          frameElement.dispose();
          if (generated === 'error:notconnected' || !generated)
            throw new Error(`Unable to generate locator for ${selector}`);
-@@ -1337,137 +1780,370 @@
+@@ -1337,137 +1786,370 @@
      return { resolvedSelector };
    }
  
@@ -39124,7 +39190,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      } finally {
        clearTimeout(timer!);
      }
-@@ -1482,11 +2158,12 @@
+@@ -1482,11 +2164,12 @@
        }
      }
      // `isSet` distinguishes "not collected yet" from "collected with received: undefined".
@@ -39140,7 +39206,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        await this._page.performActionPreChecks(progress);
  
        // Step 2: perform one-shot expect check without a timeout.
-@@ -1494,18 +2171,22 @@
+@@ -1494,18 +2177,22 @@
        // that should succeed when the locator is already visible.
        try {
          const resultOneShot = await this._expectInternal(progress, selector, options, lastIntermediateResult, true);
@@ -39168,7 +39234,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          if (matches === options.isNot) {
            // Keep waiting in these cases:
            // expect(locator).conditionThatDoesNotMatch
-@@ -1519,24 +2200,29 @@
+@@ -1519,24 +2206,29 @@
        if (isInvalidSelectorError(e) || dom.isNonRecoverableDOMError(e)) {
          details.customErrorMessage = e.message;
        } else if (js.isJavaScriptErrorInEvaluate(e)) {
@@ -39206,7 +39272,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const mainWorld = options.expression === 'to.have.property';
      const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
      const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
-@@ -1546,19 +2232,25 @@
+@@ -1546,19 +2238,25 @@
      let missingReceived = false;
  
      // Non-array expectations are strict (callOnSelector throws on multiple); array ones are not.
@@ -39241,7 +39307,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      } else {
        // When no elements matched the selector, some assertions can still pass.
        if (options.expression === 'to.have.count') {
-@@ -1584,14 +2276,15 @@
+@@ -1584,14 +2282,15 @@
          missingReceived = true;
        }
        if (matches === options.isNot && !isArray) {
@@ -39264,7 +39330,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        }
      }
  
-@@ -1606,66 +2299,82 @@
+@@ -1606,66 +2305,82 @@
      return { matches, received };
    }
  
@@ -39398,7 +39464,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1677,24 +2386,36 @@
+@@ -1677,24 +2392,36 @@
      });
    }
  
@@ -39451,7 +39517,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionValueInUtility<R>(progress: Progress, pageFunction: js.Func1<any, R>) {
-@@ -1720,25 +2441,28 @@
+@@ -1720,25 +2447,28 @@
        });
      } catch {
        const url = this.pendingDocument()?.request?.url();
@@ -39489,7 +39555,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        progress.wait(timeout),
      ]);
      progress.setAllowConcurrentOrNestedRaces(false);
-@@ -1748,47 +2472,310 @@
+@@ -1748,47 +2478,310 @@
      this._stopNetworkIdleTimer();
      this._detachedScope.close(new Error('Frame was detached'));
      for (const data of this._contextData.values()) {
@@ -39829,7 +39895,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    contextCreated(world: types.World, context: dom.FrameExecutionContext) {
-@@ -1806,12 +2793,10 @@
+@@ -1806,12 +2799,10 @@
    contextDestroyed(context: dom.FrameExecutionContext) {
      // Sometimes we get this after detach, in which case we should not reset
      // our already destroyed contexts to something that will never resolve.
@@ -39844,7 +39910,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      }
    }
  
-@@ -1820,8 +2805,7 @@
+@@ -1820,8 +2811,7 @@
      // We should not start a timer and report networkidle in detached frames.
      // This happens at least in Firefox for child frames, where we may get requestFinished
      // after the frame was detached - probably a race in the Firefox itself.
@@ -39854,7 +39920,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._networkIdleTimer = setTimeout(() => {
        this._firedNetworkIdleSelf = true;
        this._page.mainFrame()._recalculateNetworkIdle();
-@@ -1829,32 +2813,63 @@
+@@ -1829,32 +2819,63 @@
    }
  
    _stopNetworkIdleTimer() {
@@ -39929,7 +39995,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return { snapshot };
      }
      return { snapshot: await ariaSnapshotJSONForFrame(progress, this, options.selector, options) };
-@@ -1863,6 +2878,409 @@
+@@ -1863,6 +2884,409 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -40339,7 +40405,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class SignalBarrier {
-@@ -1882,23 +3300,19 @@
+@@ -1882,23 +3306,19 @@
  
    addFrameNavigation(frame: Frame) {
      // Auto-wait top-level navigations only.
@@ -40372,7 +40438,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    retain() {
-@@ -1907,21 +3321,18 @@
+@@ -1907,21 +3327,18 @@
  
    release() {
      --this._protectCount;
