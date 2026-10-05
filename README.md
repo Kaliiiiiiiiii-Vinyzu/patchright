@@ -117,7 +117,7 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 
 ---
 
-[<img width="60%" alt="ProxyLane Banner" src="assets/proxylane-banner.png" />](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme)
+[<img height="120" alt="ProxyLane Banner" src="assets/proxylane-banner.png" />](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme)
 </br>
 
 #### [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme): residential proxies that keep each Patchright profile consistent.
