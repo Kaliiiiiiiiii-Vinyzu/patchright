@@ -120,9 +120,9 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 [<img width="60%" alt="ProxyLane Banner" src="assets/proxylane-banner.png" />](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme)
 </br>
 
-#### [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme): residential proxies that keep each Patchright profile on its own IP.
+#### [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme): residential proxies that keep each Patchright profile consistent.
 
-Give every persistent profile a sticky residential IP in the city you need:
+Patchright has no GeoIP, so behind a proxy Chrome still reports your machine's timezone. Give each profile its own sticky IP pinned to a city and set the same timezone:
 
 ```py
 context = playwright.chromium.launch_persistent_context(
@@ -130,8 +130,10 @@ context = playwright.chromium.launch_persistent_context(
     proxy={"server": "http://us.gw.proxylane.dev:10000",
            "username": "USER_c_US_city_Chicago_s_profile1",  # one sticky IP per profile
            "password": "PASS"},
+    timezone_id="America/Chicago", locale="en-US",  # match the proxy city
 )
 ```
+<sup>Tip: set `"webrtc": {"ip_handling_policy": "disable_non_proxied_udp"}` in the profile's `Default/Preferences`, otherwise WebRTC exposes your real IP.</sup>
 
 🌍 28M residential IPs in 195 countries, city, ZIP and ASN targeting
 </br>
