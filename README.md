@@ -117,6 +117,34 @@ Built for developers who need **reliable**, anti-detection proxy infrastructure.
 
 ---
 
+[<img width="60%" alt="ProxyLane Banner" src="assets/proxylane-banner.png" />](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme)
+</br>
+
+#### [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme): residential proxies that keep each Patchright profile on its own IP.
+
+Give every persistent profile a sticky residential IP in the city you need:
+
+```py
+context = playwright.chromium.launch_persistent_context(
+    user_data_dir="...", channel="chrome", headless=False, no_viewport=True,
+    proxy={"server": "http://us.gw.proxylane.dev:10000",
+           "username": "USER_c_US_city_Chicago_s_profile1",  # one sticky IP per profile
+           "password": "PASS"},
+)
+```
+
+🌍 28M residential IPs in 195 countries, city, ZIP and ASN targeting
+</br>
+⏱️ Sticky sessions up to 72h, HTTP and SOCKS5
+</br>
+💸 From $2/GB, traffic never expires
+
+🔥 **PATCHLANE35** - **35% off** for Patchright users
+
+<sup>Paste the snippet, add your credentials and run your next Patchright session on a real residential IP with [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme_caption).</sup>
+
+---
+
 <div align="center">
 
 <img src="https://scrappey.com/logo.png" width="56" alt="Scrappey">
