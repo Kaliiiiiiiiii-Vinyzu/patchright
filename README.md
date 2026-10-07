@@ -145,6 +145,37 @@ Get 10% off with code `PATCHRIGHT`
 
 [Documentation](https://scrappey.com/docs?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme) · [Discord](https://scrappey.com/discord?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme) · [Get an API key](https://scrappey.com?utm_source=patchright&utm_medium=github&utm_campaign=repo_readme)
 
+---
+
+[<img height="120" alt="ProxyLane Banner" src="https://github.com/user-attachments/assets/bd71e54a-9a5d-4047-bacf-d2f154f61dc4" />](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme)
+</br>
+
+#### [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme): Residential Proxies that keep each Patchright profile consistent.
+
+To match the reported timezone to your proxy, give each profile its own sticky IP pinned to a city and set the same timezone:
+
+```py
+context = playwright.chromium.launch_persistent_context(
+    user_data_dir="...", channel="chrome", headless=False, no_viewport=True,
+    proxy={"server": "http://us.gw.proxylane.dev:10000",
+           "username": "USER_c_US_city_Chicago_s_profile1",  # one sticky IP per profile
+           "password": "PASS"},
+    timezone_id="America/Chicago", locale="en-US",  # match the proxy city
+)
+```
+
+<sup>Tip: set `--webrtc-ip-handling-policy=disable_non_proxied_udp`, otherwise [WebRTC exposes your real IP](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright-python/issues/47).</sup>
+
+:earth_africa: 28M residential IPs in 195 countries, city, ZIP and ASN targeting
+</br>
+:stopwatch: Sticky sessions up to 72h, HTTP and SOCKS5
+</br>
+:money_with_wings: From $2/GB, traffic never expires
+
+:fire: **PATCHLANE35** - **35% off** for Patchright users
+
+<sup>Paste the snippet, add your credentials and run your next Patchright session on a real residential IP with [ProxyLane](https://proxylane.dev/?utm_source=patchright&utm_medium=partnership&utm_campaign=patchright_sponsor_202610&utm_content=readme_caption).</sup>
+
 </details>
 
 ---
