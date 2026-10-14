@@ -56,11 +56,11 @@
 
 <sup>Want to Sponsor this Project? Contact [@vinyzu](https://discordapp.com/users/935224495126487150) on Discord!</sup>
 
-[<img width="60%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/96f89bc7-deb6-4693-aa98-78dd634f71d2" />](https://go.nodemaven.com/Patchrightseptember)
+[<img width="60%" alt="NodeMaven Banner" src="https://github.com/user-attachments/assets/feecc63e-f564-40f6-b157-aa6b7542d223" />](https://go.nodemaven.com/Vinyzuoctober)
 </br>
-#### [NodeMaven](https://go.nodemaven.com/Patchrightseptember): Your efficient proxy provider for Web Scraping and Automation with High Quality IPs. 
+#### [NodeMaven](https://go.nodemaven.com/Vinyzuoctober): Your efficient proxy provider for Web Scraping and Automation with High Quality IPs. 
 
-Why [NodeMaven](https://go.nodemaven.com/Patchrightseptember)?
+Why [NodeMaven](https://go.nodemaven.com/Vinyzuoctober)?
 
 🎯 ZIP targeting
 </br>
@@ -78,7 +78,7 @@ Why [NodeMaven](https://go.nodemaven.com/Patchrightseptember)?
 </br>
 🔥 **PATCHRIGHT40** - **40% off** to ISP (Static) Proxies
 
-<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Patchrightseptember).</sup>
+<sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Vinyzuoctober).</sup>
 
 ---
 
