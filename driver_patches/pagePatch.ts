@@ -267,13 +267,13 @@ export function patchPage(project: Project) {
 		.find(
 			statement =>
 				statement.getText() ===
-				"await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });",
+				"await this.mainFrame().waitForSelector(progress, { selector: handler.selector }, false, { state: 'hidden' });",
 		);
 	if (waitForHiddenStatement)
 		waitForHiddenStatement.replaceWithText(`
-			const frameChunks = splitSelectorByFrame(handler.selector);
-			if (frameChunks.length > 1 && !await this.mainFrame().isVisibleInternal(progress, stringifySelector(frameChunks[0]), { strict: true }))
+			const { chunks: frameChunks } = splitSelectorByFrame(handler.selector);
+			if (frameChunks.length > 1 && !await this.mainFrame().isVisibleInternal(progress, { selector: stringifySelector(frameChunks[0]), strict: true }))
 				return;
-			await this.mainFrame().waitForSelector(progress, handler.selector, false, { state: 'hidden' });
+			await this.mainFrame().waitForSelector(progress, { selector: handler.selector }, false, { state: 'hidden' });
 		`);
 }

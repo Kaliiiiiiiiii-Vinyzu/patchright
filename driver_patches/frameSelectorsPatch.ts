@@ -1,4 +1,4 @@
-import { type Project, SyntaxKind, VariableDeclarationKind } from "ts-morph";
+import { type Project, SyntaxKind } from "ts-morph";
 import { assertDefined } from "./utils.ts";
 
 // ------------------------
@@ -78,7 +78,7 @@ export function patchFrameSelectors(project: Project) {
 		.map(s => s.getText())
 		.join("\n");
 	getResultFunction.setBodyText(`
-		const elements = !scope && !options.mainWorld && await frame.selectors._hasClosedShadowRoots()
+		const elements = !scope && !target.mainWorld && await frame.selectors._hasClosedShadowRoots()
 			? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed)) : undefined;
 		try {
 			${getResultBody}
@@ -102,76 +102,64 @@ export function patchFrameSelectors(project: Project) {
 		.find(
 			callExpr =>
 				callExpr.getExpression().getText() === "this.callOnSelectorHandle" &&
-				callExpr.getArguments()[1]?.getKind() === SyntaxKind.ObjectLiteralExpression,
+				callExpr.getArguments()[0]?.getKind() === SyntaxKind.ObjectLiteralExpression,
 		);
 	const mainWorldProp = assertDefined(
 		assertDefined(resolveInjectedCall)
-			.getArguments()[1]
+			.getArguments()[0]
 			.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
 			.getProperty("mainWorld"),
 	);
 	if (mainWorldProp.getText() === "mainWorld: true") mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
 
-	// -- resolveFrameForSelector Method --
-	const resolveFrameForSelectorMethod = frameSelectorsClass.getMethodOrThrow("_resolveChainedSelector");
-	// Change 'element' variable declaration from const to let to allow reassignment.
-	resolveFrameForSelectorMethod
-		.getDescendantsOfKind(SyntaxKind.VariableStatement)
-		.find(s => s.getText().includes("const element = handle?.asElement()"))
-		?.setDeclarationKind(VariableDeclarationKind.Let);
-	// Handle the case when element is not found - fetch it from the document using the parsed selector
-	const resolveFrameForSelectorIfStatement = resolveFrameForSelectorMethod
-		.getDescendantsOfKind(SyntaxKind.IfStatement)
-		.find(statement => statement.getExpression().getText() === "!element");
-	if (resolveFrameForSelectorIfStatement)
-		resolveFrameForSelectorIfStatement.replaceWithText(`
-			if (!element) {
-				if ((options as any).state === "hidden" || (options as any).state === "detached")
-					return null;
-				try {
-					var client = frame._page.delegate._sessionForFrame(frame)._client;
-				} catch (e) {
-					var client = frame._page.delegate._mainFrameSession._client;
-				}
-				var mainContext = await frame._context("main");
-				const documentNode = await client.send("Runtime.evaluate", {
-					expression: "document",
-					serializationOptions: { serialization: "idOnly" },
-					contextId: mainContext.delegate._contextId
-				});
-				const documentScope = new ElementHandle(mainContext, documentNode.result.objectId);
-				var check = await this._customFindFramesByParsed(await context.injectedScript(), client, mainContext, documentScope, undefined, info.parsed);
-				if (check.length === 0) return null;
-				element = check[0];
-			}
-		`);
-	if (!resolveFrameForSelectorMethod.getText().includes("const isConnected = await element.evaluateInUtility")) {
-		const maybeFrameStatement = assertDefined(
-			resolveFrameForSelectorMethod
-				.getDescendantsOfKind(SyntaxKind.VariableStatement)
-				.find(statement =>
-					statement.getText().includes("const maybeFrame = await frame._page.delegate.getContentFrame(element)"),
-				),
-		);
-		const parentBlock = maybeFrameStatement.getParentIfKindOrThrow(SyntaxKind.Block);
-		parentBlock.insertStatements(
-			maybeFrameStatement.getChildIndex(),
-			`
-			const isConnected = await element.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false);
-			if (!isConnected) {
+	// Keep upstream's iframe visibility and validation when querying closed shadow roots.
+	const queryFramesMethod = frameSelectorsClass.getMethodOrThrow("_queryFrames");
+	const queryDeclaration = assertDefined(
+		queryFramesMethod.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "query"),
+	);
+	const queryFunction = queryDeclaration.getInitializerIfKindOrThrow(SyntaxKind.ArrowFunction);
+	const queryCall = assertDefined(
+		queryFunction
+			.getDescendantsOfKind(SyntaxKind.CallExpression)
+			.find(call => call.getExpression().getText() === "injected.evaluateHandle"),
+	);
+	const queryCallback = queryCall.getArguments()[0].asKindOrThrow(SyntaxKind.ArrowFunction);
+	queryCallback.getParameters()[1].replaceWithText("{ info, scope, selectorString, elements: matches }");
+	const queriedElements = assertDefined(
+		queryCallback.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "elements"),
+	);
+	queriedElements.setInitializer(`matches || ${queriedElements.getInitializerOrThrow().getText()}`);
+	queryCall.getArguments()[1].asKindOrThrow(SyntaxKind.ObjectLiteralExpression).addShorthandPropertyAssignment({
+		name: "elements",
+	});
+	const queryBody = queryFunction
+		.getBody()
+		.asKindOrThrow(SyntaxKind.Block)
+		.getStatements()
+		.map(s => s.getText())
+		.join("\n");
+	queryFunction.setBodyText(`
+		const elements = await frame.selectors._hasClosedShadowRoots()
+			? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed), scope) : undefined;
+		try {
+			${queryBody}
+		} finally {
+			for (const element of elements || [])
 				element.dispose();
-				return null;
-			}
-			`,
-		);
-	}
+		}
+	`);
+	const contentFrameDeclaration = assertDefined(
+		queryFunction.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "contentFrame"),
+	);
+	contentFrameDeclaration.setInitializer(`handle && await handle.evaluateInUtility(([injected, node]) => node.isConnected, {}).catch(() => false)
+		? await frame._page.delegate.getContentFrame(handle) : null`);
 
 	// Lazy contexts must be created even when searching multiple frames, without waiting on stalled frames.
-	for (const method of [resolveFrameForSelectorMethod, callOnSelectorInternalMethod]) {
+	for (const method of [queryFramesMethod, callOnSelectorInternalMethod]) {
 		const contextDeclaration = assertDefined(
 			method.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "context"),
 		);
-		const world = method === resolveFrameForSelectorMethod ? "info.world" : "world";
+		const world = method === queryFramesMethod ? "info.world" : "world";
 		contextDeclaration.setInitializer(`noStall ? await frame.raceAgainstEvaluationStallingEvents(() => frame.context(${world})).catch(e => {
 			if (e instanceof EvaluationStalledError)
 				return null;
@@ -183,17 +171,13 @@ export function patchFrameSelectors(project: Project) {
 	frameSelectorsClass.addMethod({
 		name: "resolveInjectedForSelector",
 		isAsync: true,
-		parameters: [
-			{ name: "selector", type: "string" },
-			{ name: "options", type: "types.StrictOptions & { mainWorld?: boolean }" },
-			{ name: "scope", type: "ElementHandle", hasQuestionToken: true },
-		],
+		parameters: [{ name: "target", type: "types.SelectorTarget & { mainWorld?: boolean }" }],
 		statements: `
-			const frames = await this.resolveFramesForSelector(selector, options, scope);
-			let result: { frame: Frame, info: SelectorInfo, injected: JSHandle<InjectedScript>, scope?: ElementHandle } | null = null;
+			const frames = await this.resolveFramesForSelector(target);
+			let result: { frame: Frame, info: SelectorInfo, injected: JSHandle<InjectedScript>, frameVisible: boolean, scope?: ElementHandle } | null = null;
 			for (const resolved of frames) {
 				const getMatch = async () => {
-					const context = await resolved.frame.context(options.mainWorld ? 'main' : resolved.info.world);
+					const context = await resolved.frame.context(target.mainWorld ? 'main' : resolved.info.world);
 					const injected = await context.injectedScript();
 					if (frames.length > 1) {
 						let count = await injected.evaluate((injected, { info, scope }) => injected.querySelectorAll(info.parsed, scope || document).length, { info: resolved.info, scope: resolved.scope });
