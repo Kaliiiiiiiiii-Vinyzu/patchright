@@ -50,9 +50,9 @@ export function patchFrames(project: Project) {
 	// -- evalOnSelector Method --
 	const evalOnSelectorMethod = frameClass.getMethodOrThrow("evalOnSelector");
 	evalOnSelectorMethod.setBodyText(`
-		const handle = await this.selectors.query(selector, { strict }, scope);
+		const handle = await this.selectors.query(target);
 		if (!handle)
-			throw new Error('Failed to find element matching selector "' + selector + '"');
+			throw new Error('Failed to find element matching selector "' + target.selector + '"');
 		const result = await handle.internalEvaluateExpression(expression, { isFunction }, arg);
 		handle.dispose();
 		return result;
@@ -66,7 +66,7 @@ export function patchFrames(project: Project) {
 		hasQuestionToken: true,
 	});
 	evalOnSelectorAllMethod.setBodyText(`
-		isolatedContext = this.selectors._parseSelector(selector, { strict: false }).world !== "main" && isolatedContext;
+		isolatedContext = this.selectors._parseSelector(selector, false).world !== "main" && isolatedContext;
 		const injectedArrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
 		const count = await injectedArrayHandle.evaluate(elements => elements.length);
 		if ((count && !await this.selectors._hasClosedShadowRoots()) || scope) {
@@ -94,6 +94,7 @@ export function patchFrames(project: Project) {
 	// -- dispatchEvent Method --
 	const dispatchEventMethod = frameClass.getMethodOrThrow("dispatchEvent");
 	dispatchEventMethod.setBodyText(`
+		const { selector } = target;
 		const eventInitHandles: js.JSHandle[] = [];
 		const visited = new WeakSet();
 		const collectHandles = (value: any) => {
@@ -124,7 +125,7 @@ export function patchFrames(project: Project) {
 			return { result: undefined };
 		};
 		if (eventInitHandles.length > 0 && selector !== ":scope") {
-			dom.assertDone(await this._retryWithProgressIfNotConnected(progress, selector, { strict: options.strict, performActionPreChecks: false }, async (progress, handle) => {
+			dom.assertDone(await this._retryWithProgressIfNotConnected(progress, target, { waitForFrameVisible: false, skipActionPreChecks: true }, async (progress, handle) => {
 				await handle.dispatchEvent(progress, type, eventInit);
 				return 'done' as const;
 			}));
@@ -133,14 +134,14 @@ export function patchFrames(project: Project) {
 		if (eventInitHandles.some(handle => handle._context?.frame !== this))
 			throw new js.JavaScriptErrorInEvaluate("JSHandles can be evaluated only in the context they were created!");
 		if (eventInitHandles.length === 0) {
-			await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+			await this._waitForFunctionOnSelector(progress, target, callback, { type, eventInit });
 			return;
 		}
 		try {
-			await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { mainWorld: true, ...options }, scope);
+			await this._waitForFunctionOnSelector(progress, target, callback, { type, eventInit }, { mainWorld: true });
 		} catch (e) {
 			if ("JSHandles can be evaluated only in the context they were created!" === e.message && canRetryInSecondaryContext) {
-				await this._waitForFunctionOnSelector(progress, selector, callback, { type, eventInit }, { ...options }, scope);
+				await this._waitForFunctionOnSelector(progress, target, callback, { type, eventInit });
 				return;
 			}
 			throw e;
@@ -149,11 +150,12 @@ export function patchFrames(project: Project) {
 
 	// -- querySelectorAll Method --
 	const querySelectorAllMethod = frameClass.getMethodOrThrow("querySelectorAll");
+	querySelectorAllMethod.addParameter({ name: "scope", type: "dom.ElementHandle", hasQuestionToken: true });
 	querySelectorAllMethod.setBodyText(`
 		const continuePolling = Symbol("continuePolling");
 		let result;
 		try {
-			result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false}, async (result) => {
+			result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false, __patchrightInitialScope: scope}, async (result) => {
 				if (!result || !result[0]) return [];
 				return Array.isArray(result[1]) ? result[1] : [];
 			}, 'returnAll', continuePolling);
@@ -163,17 +165,18 @@ export function patchFrames(project: Project) {
 			else
 				throw e;
 		}
-		return result === continuePolling ? await progress.race(this.selectors.queryAll(selector)) : result;
+		return result === continuePolling ? await progress.race(this.selectors.queryAll(selector, scope)) : result;
 	`);
 
 	// -- querySelector Method --
 	const querySelectorMethod = frameClass.getMethodOrThrow("querySelector");
 	querySelectorMethod.setBodyText(`
+		const { selector, scope } = target;
 		this.apiLog(\`    finding element using the selector "\${selector}"\`);
-		return this.querySelectorAll(progress, selector).then((handles) => {
+		return this.querySelectorAll(progress, selector, scope).then((handles) => {
 			if (handles.length === 0)
 				return null;
-			const strict = options?.strict ?? this._page.browserContext._options.strictSelectors;
+			const strict = target.strict ?? this._page.browserContext._options.strictSelectors;
 			if (handles.length > 1 && strict)
 				throw new Error(\`strict mode violation: expected one element matching selector "\${selector}", found \${handles.length}\`);
 			return handles[0];
@@ -326,8 +329,12 @@ export function patchFrames(project: Project) {
 		.getClassOrThrow("HighlightController")
 		.getMethodOrThrow("_resolve");
 	assertDefined(
-		resolveHighlightsMethod.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "context"),
-	).setInitializer("highlights.length ? await frame.context('utility') : frame.existingContext('utility')");
+		resolveHighlightsMethod
+			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+			.find(d => d.getInitializer()?.getText() === "frame.existingContext(info.world)"),
+	).setInitializer(
+		"await frame.raceAgainstEvaluationStallingEvents(() => frame.context(info.world)).catch(() => null)",
+	);
 
 	// -- _setContext Method --
 	const setContentMethod = frameClass.getMethodOrThrow("setContent");
@@ -351,141 +358,65 @@ export function patchFrames(project: Project) {
 
 	// -- _retryWithProgressIfNotConnected Method --
 	const retryWithProgressIfNotConnectedMethod = frameClass.getMethodOrThrow("_retryWithProgressIfNotConnected");
-	if (!retryWithProgressIfNotConnectedMethod.getParameter("returnAction")) {
-		retryWithProgressIfNotConnectedMethod.addParameter({
-			name: "returnAction",
-			type: "'returnOnNotResolved' | 'returnAll' | undefined",
+	retryWithProgressIfNotConnectedMethod.addParameter({
+		name: "returnAction",
+		type: "'returnOnNotResolved' | 'returnAll'",
+		hasQuestionToken: true,
+	});
+	retryWithProgressIfNotConnectedMethod.setBodyText(`
+		progress.log(\`waiting for \${this._asLocator(target.selector)}\`);
+		const performActionPreChecks = !options.skipActionPreChecks && !options.force;
+		const waitForFrameVisible = options.waitForFrameVisible && !options.force;
+		return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (progress, continuePolling) => {
+			if (performActionPreChecks)
+				await this._page.performActionPreChecks(progress);
+
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(target));
+			if (!resolved)
+				return continuePolling;
+			const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, callId }) => {
+				const elements = injected.querySelectorAll(info.parsed, root || document);
+				if (callId)
+					injected.markTargetElements(new Set(elements), callId);
+				const element = elements[0] as Element | undefined;
+				let log = '';
+				if (elements.length > 1) {
+					if (info.strict)
+						throw injected.strictModeViolationError(info.parsed, elements);
+					log = \`  locator resolved to \${elements.length} elements. Proceeding with the first one: \${injected.previewNode(elements[0])}\`;
+				} else if (element) {
+					log = \`  locator resolved to \${injected.previewNode(element)}\`;
+				}
+				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
+				return { log, success: !!element, element };
+			}, { info: resolved.info, root: resolved.scope, callId: progress.metadata.id }));
+			const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
+			if (log)
+				progress.log(log);
+			if (waitForFrameVisible && !resolved.frameVisible) {
+				progress.log('  element is inside a hidden frame, retrying');
+				result.dispose();
+				return continuePolling;
+			}
+			if (!success) {
+				result.dispose();
+				const actionWithProgress = async (handle) => action(progress, handle, undefined, resolved.frameVisible);
+				return await this._retryWithoutProgress(progress, target.selector, { strict: target.strict, performActionPreChecks: false, __patchrightInitialScope: target.scope }, actionWithProgress as any, returnAction, continuePolling);
+			}
+			const element = await progress.race(result.evaluateHandle(r => r.element)) as dom.ElementHandle<Element>;
+			result.dispose();
+			try {
+				const result = await action(progress, element, undefined, resolved.frameVisible);
+				if (result === 'error:notconnected') {
+					progress.log('element was detached from the DOM, retrying');
+					return continuePolling;
+				}
+				return result;
+			} finally {
+				element?.dispose();
+			}
 		});
-	}
-	const retryParamNames = retryWithProgressIfNotConnectedMethod.getParameters().map(p => p.getName());
-	if (retryParamNames.includes("options") && !retryParamNames.includes("strict")) {
-		retryWithProgressIfNotConnectedMethod.setBodyText(`
-			progress.log(\`waiting for \${this._asLocator(selector)}\`);
-			const noAutoWaiting = (options as any).__testHookNoAutoWaiting ?? options.noAutoWaiting;
-			const performActionPreChecks = (options.performActionPreChecks ?? !options.force) && !noAutoWaiting;
-			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (progress, continuePolling) => {
-				if (performActionPreChecks)
-					await this._page.performActionPreChecks(progress);
-
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict: options.strict }));
-				if (!resolved) {
-					if (noAutoWaiting)
-						throw new dom.NonRecoverableDOMError('Element(s) not found');
-					return continuePolling;
-				}
-				const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
-					const elements = injected.querySelectorAll(info.parsed, document);
-					if (callId)
-						injected.markTargetElements(new Set(elements), callId);
-					const element = elements[0] as Element | undefined;
-					let log = '';
-					if (elements.length > 1) {
-						if (info.strict)
-							throw injected.strictModeViolationError(info.parsed, elements);
-						log = \`  locator resolved to \${elements.length} elements. Proceeding with the first one: \${injected.previewNode(elements[0])}\`;
-					} else if (element) {
-						log = \`  locator resolved to \${injected.previewNode(element)}\`;
-					}
-					injected.checkDeprecatedSelectorUsage(info.parsed, elements);
-					return { log, success: !!element, element };
-				}, { info: resolved.info, callId: progress.metadata.id }));
-				const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
-				if (log)
-					progress.log(log);
-				if (!success) {
-					result.dispose();
-					// Fallback to custom _retryWithoutProgress
-					const actionWithProgress = async (res) => action.length >= 2 ? action(progress, res as any) : (action as any)(res);
-					const retryRes = await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false } as any, actionWithProgress as any, returnAction, continuePolling);
-					if (retryRes !== continuePolling)
-						return retryRes;
-
-					if (noAutoWaiting)
-						throw new dom.NonRecoverableDOMError('Element(s) not found');
-					return continuePolling;
-				}
-				const element = await progress.race(result.evaluateHandle(r => r.element)) as dom.ElementHandle<Element>;
-				result.dispose();
-				try {
-					const result = await action(progress, element);
-					if (result === 'error:notconnected') {
-						if (noAutoWaiting)
-							throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
-						progress.log('element was detached from the DOM, retrying');
-						return continuePolling;
-					}
-					return result;
-				} finally {
-					element?.dispose();
-				}
-			});
-		`);
-	} else if (retryParamNames.includes("strict") && retryParamNames.includes("performActionPreChecks")) {
-		retryWithProgressIfNotConnectedMethod.setBodyText(`
-			progress.log(\`waiting for \${this._asLocator(selector)}\`);
-			const normalizedOptions: any = { strict, performActionPreChecks };
-			const noAutoWaiting = (normalizedOptions as any).__testHookNoAutoWaiting ?? normalizedOptions.noAutoWaiting;
-			const performChecks = (normalizedOptions.performActionPreChecks ?? !normalizedOptions.force) && !noAutoWaiting;
-			return this.retryWithProgressAndTimeouts(progress, [0, 20, 50, 100, 100, 500], async (progress, continuePolling) => {
-				if (performChecks)
-					await this._page.performActionPreChecks(progress);
-
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, { strict }));
-				if (!resolved) {
-					if (noAutoWaiting)
-						throw new dom.NonRecoverableDOMError('Element(s) not found');
-					return continuePolling;
-				}
-				const result = await progress.race(resolved.injected.evaluateHandle((injected, { info, callId }) => {
-					const elements = injected.querySelectorAll(info.parsed, document);
-					if (callId)
-						injected.markTargetElements(new Set(elements), callId);
-					const element = elements[0] as Element | undefined;
-					let log = '';
-					if (elements.length > 1) {
-						if (info.strict)
-							throw injected.strictModeViolationError(info.parsed, elements);
-						log = \`  locator resolved to \${elements.length} elements. Proceeding with the first one: \${injected.previewNode(elements[0])}\`;
-					} else if (element) {
-						log = \`  locator resolved to \${injected.previewNode(element)}\`;
-					}
-					injected.checkDeprecatedSelectorUsage(info.parsed, elements);
-					return { log, success: !!element, element };
-				}, { info: resolved.info, callId: progress.metadata.id }));
-				const { log, success } = await progress.race(result.evaluate(r => ({ log: r.log, success: r.success })));
-				if (log)
-					progress.log(log);
-				if (!success) {
-					result.dispose();
-					// Fallback to custom _retryWithoutProgress
-					const actionWithProgress = async (res) => action.length >= 2 ? action(progress, res as any) : (action as any)(res);
-					const retryRes = await this._retryWithoutProgress(progress, selector, { ...normalizedOptions, performActionPreChecks: false }, actionWithProgress as any, returnAction, continuePolling);
-					if (retryRes !== continuePolling)
-						return retryRes;
-
-					if (noAutoWaiting)
-						throw new dom.NonRecoverableDOMError('Element(s) not found');
-					return continuePolling;
-				}
-				const element = await progress.race(result.evaluateHandle(r => r.element)) as dom.ElementHandle<Element>;
-				result.dispose();
-				try {
-					const result = await action(progress, element);
-					if (result === 'error:notconnected') {
-						if (noAutoWaiting)
-							throw new dom.NonRecoverableDOMError('Element is not attached to the DOM');
-						progress.log('element was detached from the DOM, retrying');
-						return continuePolling;
-					}
-					return result;
-				} finally {
-					element?.dispose();
-				}
-			});
-		`);
-	} else {
-		throw new Error("_retryWithProgressIfNotConnected has unsupported parameter signature");
-	}
+	`);
 
 	// -- _retryWithoutProgress Method --
 	frameClass.addMethod({
@@ -511,11 +442,11 @@ export function patchFrames(project: Project) {
 		if (options.performActionPreChecks)
 			await this._page.performActionPreChecks(progress);
 
-		const resolved = await this.selectors.resolveInjectedForSelector(
+		const resolved = await this.selectors.resolveInjectedForSelector({
 			selector,
-			{ strict: options.strict },
-			 (options as any).__patchrightInitialScope
-		);
+			strict: options.strict ?? undefined,
+			scope: options.__patchrightInitialScope,
+		});
 
 		if (!resolved) {
 			if (returnAction === 'returnOnNotResolved' || returnAction === 'returnAll') {
@@ -654,6 +585,7 @@ export function patchFrames(project: Project) {
 	// -- waitForSelector Method --
 	const waitForSelectorMethod = frameClass.getMethodOrThrow("waitForSelector");
 	waitForSelectorMethod.setBodyText(`
+		const { selector, scope } = target;
 		if ((options as any).visibility)
 			throw new Error('options.visibility is not supported, did you mean options.state?');
 		if ((options as any).waitFor && (options as any).waitFor !== 'visible')
@@ -666,7 +598,7 @@ export function patchFrames(project: Project) {
 		const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
 			if (performActionPreChecksAndLog)
 				await this._page.performActionPreChecks(progress);
-			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(target));
 			if (!resolved) {
 				if (state === 'hidden' || state === 'detached')
 					return null;
@@ -676,7 +608,7 @@ export function patchFrames(project: Project) {
 				return null;
 			let result;
 			try {
-				result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state }) => {
+				result = await progress.race(resolved.injected.evaluateHandle((injected, { info, root, state, frameVisible }) => {
 				if (root && !root.isConnected) {
 					if (state === 'hidden' || state === 'detached')
 						return { log: '', element: undefined, visible: false, attached: false };
@@ -684,7 +616,7 @@ export function patchFrames(project: Project) {
 				}
 				const elements = injected.querySelectorAll(info.parsed, root || document);
 				const element = elements[0];
-				const visible = element ? injected.utils.isElementVisible(element) : false;
+				const visible = element ? injected.elementState(element, 'visible', frameVisible).matches : false;
 				let log = '';
 				if (elements.length > 1) {
 					if (info.strict)
@@ -695,7 +627,7 @@ export function patchFrames(project: Project) {
 				}
 				injected.checkDeprecatedSelectorUsage(info.parsed, elements);
 				return { log, element, visible, attached: !!element };
-				}, { info: resolved.info, root: resolved.frame === this ? scope : undefined, state }));
+				}, { info: resolved.info, root: resolved.scope, state, frameVisible: resolved.frameVisible }));
 			} catch (e) {
 				if ((state === 'hidden' || state === 'detached') && resolved.frame._isDetached())
 					return null;
@@ -708,10 +640,10 @@ export function patchFrames(project: Project) {
 			if (!success) {
 				result.dispose();
 				if ((state === 'attached' || state === 'visible') && !attached) {
-					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, state, performActionPreChecks: false, __patchrightWaitForSelector: true, __patchrightInitialScope: scope } as any, async (handle) => {
+					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, strict: target.strict, state, performActionPreChecks: false, __patchrightWaitForSelector: true, __patchrightInitialScope: scope } as any, async (handle) => {
 						if (!handle)
 							return "internal:continuepolling";
-						const visible = state === 'visible' ? await handle.evaluateInUtility(([injected, node]) => injected.utils.isElementVisible(node), {}).catch(() => false) : true;
+						const visible = state === 'visible' ? resolved.frameVisible && await handle.evaluateInUtility(([injected, node]) => injected.utils.isElementVisible(node), {}).catch(() => false) : true;
 						if (!visible)
 							return "internal:continuepolling";
 						if (options.omitReturnValue)
@@ -790,15 +722,16 @@ export function patchFrames(project: Project) {
 	// -- isVisibleInternal Method --
 	const isVisibleInternalMethod = frameClass.getMethodOrThrow("isVisibleInternal");
 	isVisibleInternalMethod.setBodyText(`
+		const { selector, scope } = target;
 		try {
-			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+			const resolved = await progress.race(this.selectors.resolveInjectedForSelector(target));
 			if (!resolved)
 				return false;
-			const atomicResult = await progress.race(resolved.injected.evaluate((injected, { info, root }) => {
+			const atomicResult = await progress.race(resolved.injected.evaluate((injected, { info, root, frameVisible }) => {
 				const element = injected.querySelector(info.parsed, root || document, info.strict);
-				return element ? { found: true, visible: injected.elementState(element, 'visible').matches } : { found: false, visible: false };
-			}, { info: resolved.info, root: resolved.frame === this ? scope : undefined }));
-			if (atomicResult.found)
+				return element ? { found: true, visible: injected.elementState(element, 'visible', frameVisible).matches } : { found: false, visible: false };
+			}, { info: resolved.info, root: resolved.scope, frameVisible: resolved.frameVisible }));
+			if (atomicResult.found || !resolved.frameVisible)
 				return atomicResult.visible;
 
 			progress.log(\`waiting for \${this._asLocator(selector)}\`);
@@ -806,27 +739,27 @@ export function patchFrames(project: Project) {
 				const scopeParentNode = (scope as any).parentNode || scope;
 				if (scopeParentNode instanceof dom.ElementHandle) {
 					return await scopeParentNode.evaluateInUtility(([injected, node, { scope: handle }]) => {
-						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
+						const state = handle ? injected.elementState(handle, "visible", true) : { matches: false, received: "error:notconnected" };
 						return state.matches;
 					}, { scope });
 				} else {
 					return await scopeParentNode.evaluate((injected, node, { scope: handle }) => {
-						const state = handle ? injected.elementState(handle, "visible") : { matches: false, received: "error:notconnected" };
+						const state = handle ? injected.elementState(handle, "visible", true) : { matches: false, received: "error:notconnected" };
 						return state.matches;
 					}, { scope });
 				}
 			} else {
-				return await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false }, async (handle) => {
+				return await this._retryWithoutProgress(progress, selector, { strict: target.strict, performActionPreChecks: false, __patchrightInitialScope: scope }, async (handle) => {
 					if (!handle)
 						return false;
 					if (handle.parentNode instanceof dom.ElementHandle) {
 						return await handle.parentNode.evaluateInUtility(([injected, node, { handle: handle2 }]) => {
-							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
+							const state = handle2 ? injected.elementState(handle2, "visible", true) : { matches: false, received: "error:notconnected" };
 							return state.matches;
 						}, { handle });
 					} else {
 						return await handle.parentNode.evaluate((injected, { handle: handle2 }) => {
-							const state = handle2 ? injected.elementState(handle2, "visible") : { matches: false, received: "error:notconnected" };
+							const state = handle2 ? injected.elementState(handle2, "visible", true) : { matches: false, received: "error:notconnected" };
 							return state.matches;
 						}, { handle });
 					}
@@ -863,8 +796,8 @@ export function patchFrames(project: Project) {
 	const evaluateExpressionMethod = frameClass.getMethodOrThrow("evaluateExpression");
 	evaluateExpressionMethod.setBodyText(`
 		try {
-			const context = await this._detachedScope.race(this._context(options.world ?? "main"));
-			return await this._detachedScope.race(context.evaluateExpression(expression, options, arg));
+			const context = await progress.race(this._detachedScope.race(this._context(options.world ?? "main")));
+			return await progress.race(this._detachedScope.race(context.evaluateExpression(expression, options, arg)));
 		} catch (e) {
 			if (e instanceof Error && (this._page.isClosedOrClosingOrCrashed() || this._page.browserContext.isClosingOrClosed() || (this._page.browserContext as any)._browser._startedClosing))
 				throw new TargetClosedError(this._page.closeReason());
@@ -884,6 +817,13 @@ export function patchFrames(project: Project) {
 			throw e;
 		}
 	`);
+
+	// -- nonStallingRawEvaluateInExistingMainContext Method --
+	const nonStallingRawEvalMethod = frameClass.getMethodOrThrow("nonStallingRawEvaluateInExistingMainContext");
+	nonStallingRawEvalMethod.getFirstDescendantByKindOrThrow(SyntaxKind.ArrowFunction).setIsAsync(true);
+	assertDefined(
+		nonStallingRawEvalMethod.getDescendantsOfKind(SyntaxKind.VariableDeclaration).find(d => d.getName() === "context"),
+	).setInitializer("await this._context('main')");
 
 	// -- nonStallingEvaluateInExistingContext Method --
 	const nonStallingEvalMethod = frameClass.getMethodOrThrow("nonStallingEvaluateInExistingContext");
@@ -918,6 +858,7 @@ export function patchFrames(project: Project) {
 	// -- _waitForFunctionOnSelector Method --
 	const waitForFunctionOnSelectorMethod = frameClass.getMethodOrThrow("_waitForFunctionOnSelector");
 	waitForFunctionOnSelectorMethod.setBodyText(`
+		const { selector, scope } = target;
 		const callbackText = body.toString();
 		progress.log("waiting for " + this._asLocator(selector));
 		const eventInit = (taskData as any)?.eventInit;
@@ -952,7 +893,7 @@ export function patchFrames(project: Project) {
 		};
 		if (typeof (taskData as any)?.expression === "string") {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors.callOnSelector(selector, { ...options, scope, markTargets: "first" }, ({ injected, elements }, { callbackText, taskData }) => {
+				const resolved = await progress.race(this.selectors.callOnSelector({ ...target, mainWorld: options.mainWorld, markTargets: "first" }, ({ injected, elements }, { callbackText, taskData }) => {
 					const callback = injected.eval(callbackText) as ElementCallback<T, R>;
 					const element = elements[0];
 					const value = callback(injected, element, taskData);
@@ -997,7 +938,7 @@ export function patchFrames(project: Project) {
 		}
 		if (!options?.mainWorld && !eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector({ ...target, mainWorld: options.mainWorld }));
 				if (!resolved)
 					return continuePolling;
 				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
@@ -1013,7 +954,7 @@ export function patchFrames(project: Project) {
 				if (log)
 					progress.log(log);
 				if (!success) {
-					const fallbackResult = await this._retryWithoutProgress(progress, selector, { ...options, performActionPreChecks: false, __patchrightInitialScope: scope } as any, async (handle) => {
+					const fallbackResult = await this._retryWithoutProgress(progress, selector, { strict: target.strict, performActionPreChecks: false, __patchrightInitialScope: scope } as any, async (handle) => {
 						if (!handle)
 							return "internal:continuepolling";
 						if (handle.parentNode instanceof dom.ElementHandle) {
@@ -1043,7 +984,7 @@ export function patchFrames(project: Project) {
 		}
 		if (options?.mainWorld && eventInitContainsHandle(eventInit)) {
 			const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
-				const resolved = await progress.race(this.selectors.resolveInjectedForSelector(selector, options, scope));
+				const resolved = await progress.race(this.selectors.resolveInjectedForSelector({ ...target, mainWorld: options.mainWorld }));
 				if (!resolved)
 					return continuePolling;
 				const { log, success, value } = await progress.race(resolved.injected.evaluate((injected, { info, callbackText, taskData, callId, root }) => {
@@ -1107,7 +1048,7 @@ export function patchFrames(project: Project) {
 			}
 		} else {
 
-			promise = this._retryWithProgressIfNotConnected(progress, selector, { ...options, performActionPreChecks: false }, async (progress, handle) => {
+			promise = this._retryWithProgressIfNotConnected(progress, target, { waitForFrameVisible: false, skipActionPreChecks: true }, async (progress, handle) => {
 				if (handle.parentNode instanceof dom.ElementHandle) {
 					if (options?.mainWorld) {
 						const mainContext = await handle._frame.mainContext();

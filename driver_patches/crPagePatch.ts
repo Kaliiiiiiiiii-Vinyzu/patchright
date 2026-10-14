@@ -39,12 +39,12 @@ export function patchCRPage(project: Project) {
 		}),
 	);
 
-	// Swap legacy updateRequestInterception for direct network manager interception + unique script tag.
+	// Sync request interception and create a unique init script tag.
 	const updateRequestInterceptionStatement = assertDefined(
 		crPageConstructor.getStatements().find(statement => statement.getText() === "this.updateRequestInterception();"),
 	);
 	updateRequestInterceptionStatement.replaceWithText(`
-		this._networkManager.setRequestInterception(true);
+		this.updateRequestInterception().catch(() => {});
 		this.initScriptTag = crypto.randomBytes(20).toString('hex');
 	`);
 	const initializePageStatement = assertDefined(
@@ -71,7 +71,7 @@ export function patchCRPage(project: Project) {
 		if (binding.noGlobal)
 			return;
 		await this._forAllFrameSessions(frame => frame._initBinding(binding));
-		await Promise.all(this._page.frames().map(frame => frame.evaluateExpression(binding.source).catch(e => {})));
+		await Promise.all(this._page.frames().map(frame => frame.evaluateExpression(nullProgress, binding.source, { isFunction: false, world: 'main' }).catch(e => {})));
 	`);
 
 	// -- removeExposedBindings Method --
@@ -191,28 +191,19 @@ export function patchCRPage(project: Project) {
 		.getBody()
 		.asKindOrThrow(SyntaxKind.Block);
 	// Stop the early dialog listener after _addRendererListeners().
-	const addRendererListenersIfStatement = assertDefined(
+	const addRendererListenersStatement = assertDefined(
 		pageGetFrameTreeThenBlock
 			.getStatements()
-			.find(
-				statement =>
-					statement.isKind(SyntaxKind.IfStatement) && statement.getText().includes("this._addRendererListeners()"),
-			),
+			.find(statement => statement.getText() === "this._addRendererListeners();"),
 	);
-	addRendererListenersIfStatement
-		.asKindOrThrow(SyntaxKind.IfStatement)
-		.getThenStatement()
-		.asKindOrThrow(SyntaxKind.Block).addStatements(`
-			initializingDialogs = false;
-	`);
-	// Remove old loop and logic for localFrames and isolated world creation
+	pageGetFrameTreeThenBlock.insertStatements(
+		addRendererListenersStatement.getChildIndex() + 1,
+		"initializingDialogs = false;",
+	);
+	// Remove eager isolated world creation while preserving upstream's local frame collection.
 	pageGetFrameTreeThenBlock
 		.getStatements()
-		.filter(
-			statement =>
-				statement.getText().includes("const localFrames = this._isMainFrame() ? this._page.frames()") ||
-				statement.getText().includes("this._client._sendMayFail('Page.createIsolatedWorld', {"),
-		)
+		.filter(statement => statement.getText().includes("this._client._sendMayFail('Page.createIsolatedWorld', {"))
 		.forEach(statement => {
 			statement.remove();
 		});
@@ -224,11 +215,10 @@ export function patchCRPage(project: Project) {
 	);
 	const lifecycleEventElseBlock = assertDefined(lifecycleEventIfStatement.getElseStatement());
 	lifecycleEventElseBlock.asKindOrThrow(SyntaxKind.Block).insertStatements(0, `
-			const localFrames = this._isMainFrame() ? this._page.frames() : [this._page.frameManager.frame(this._targetId)!];
 			for (const frame of localFrames) {
 				this._page.frameManager.frame(frame._id)._context("utility").catch(() => {});
 				for (const binding of this._crPage._browserContext._pageBindings.values())
-					frame.evaluateExpression(binding.source).catch(e => {});
+					frame.evaluateExpression(nullProgress, binding.source, { isFunction: false, world: 'main' }).catch(e => {});
 			}
 		`);
 
@@ -246,23 +236,18 @@ export function patchCRPage(project: Project) {
 		if (this._isMainFrame() && !this._crPage._browserContext._options.focusControl)
 			promises.push(this._client.send("Emulation.setFocusEmulationEnabled", { enabled: true }));
 	`);
-	// Find and patch the initScript Evaluation Loop to inject pageBindings alongside initScripts for both main and utility contexts
-	initializeFrameSessionMethodBody
-		.getDescendantsOfKind(SyntaxKind.ForOfStatement)
-		.filter(statement => statement.getText().includes("this._crPage._page.allInitScripts()"))
-		.forEach(statement => {
-			if (statement.getText().includes("frame.evaluateExpression(initScript.source)"))
-				statement.replaceWithText(`
-					for (const binding of this._crPage._browserContext._pageBindings.values()) frame.evaluateExpression(binding.source).catch(e => {});
-					for (const initScript of this._crPage._browserContext.initScripts) frame.evaluateExpression(initScript.source).catch(e => {});
-				`);
-			else if (statement.getText().includes("promises.push(this._evaluateOnNewDocument("))
-				statement.replaceWithText(`
-					  for (const binding of this._crPage._page.allBindings()) promises.push(this._initBinding(binding));
-					  for (const initScript of this._crPage._browserContext.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
-					  for (const initScript of this._crPage._page.initScripts) promises.push(this._evaluateOnNewDocument(initScript, 'main'));
-				`);
-		});
+	// Install binding wrappers before dependent init scripts.
+	const initScriptLoop = assertDefined(
+		initializeFrameSessionMethodBody
+			.getDescendantsOfKind(SyntaxKind.ForOfStatement)
+			.find(statement => statement.getText().includes("this._crPage._page.allInitScripts()")),
+	);
+	initScriptLoop.replaceWithText(`
+		promises.push(Promise.all(this._crPage._page.allBindings().map(binding => this._initBinding(binding))).then(() =>
+			Promise.all([...this._crPage._browserContext.initScripts, ...this._crPage._page.initScripts]
+				.map(initScript => this._evaluateOnNewDocument(initScript, 'main', true)))
+		));
+	`);
 
 	// A dialog can block the first navigation from committing, so allow the initialized page to be reported and handled.
 	frameSessionClass.getMethodOrThrow("_onDialog").insertStatements(0, `
@@ -368,7 +353,7 @@ export function patchCRPage(project: Project) {
 	onFrameNavigatedMethod.setIsAsync(true);
 	onFrameNavigatedMethod.addStatements(`
 		const functionBindings = this._page.allBindings().filter(binding => binding.noGlobal);
-		if (functionBindings.length) {
+		if (this._page.allBindings().length) {
 			try {
 				const context = await this._page.frameManager.frame(framePayload.id)._context('main');
 				for (const binding of functionBindings)

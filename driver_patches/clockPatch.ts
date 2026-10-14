@@ -47,7 +47,7 @@ export function patchClock(project: Project) {
 			const frames = this._browserContext.pages().flatMap((page) => page.frames());
 			await Promise.all(frames.map(async (frame) => {
 				try {
-					await frame.evaluateExpression("");
+					await frame.mainContext();
 				} catch {}
 			}));
 		`);

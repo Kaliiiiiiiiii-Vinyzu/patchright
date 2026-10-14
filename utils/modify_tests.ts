@@ -125,7 +125,6 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 				"it('should work without navigation, after all bindings', async ({ context, server }) => {",
 			);
 			replaceOnce("it('should work without navigation in popup', async ({ context }) => {", "it('should work without navigation in popup', async ({ context, server }) => {");
-			replaceOnce("it('init script should run only once in popup', async ({ context }) => {", "it('init script should run only once in popup', async ({ context, server }) => {");
 
 			replaceOnce(
 				"  const page = await context.newPage();\n\n  expect(await page.evaluate(() => (window as any)['temp'], undefined, undefined, false)).toBe(123);",
@@ -151,23 +150,6 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 				"  ]);\n  await popup.waitForLoadState();\n  expect(await popup.evaluate(() => (window as any)['temp'], undefined, undefined, false)).toBe(123);",
 			);
 
-			replaceOnce("    page.evaluate(() => window.open('about:blank'), undefined, undefined, false),", "    page.evaluate(url => window.open(url), server.EMPTY_PAGE, undefined, false),");
-			replaceOnce(
-				"  ]);\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(1);",
-				"  ]);\n  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
-			);
-			replaceAll(
-				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(1);",
-				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
-			);
-			replaceAll(
-				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(3);",
-				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
-			);
-			replaceAll(
-				"  await popup.waitForLoadState();\n  expect(await popup.evaluate('callCount', undefined, undefined, false)).toEqual(2);",
-				"  await popup.waitForLoadState();\n  expect([2, 3]).toContain(await popup.evaluate('callCount', undefined, undefined, false));",
-			);
 			break;
 		}
 
@@ -181,7 +163,7 @@ function applyPatchrightWorkarounds(sourceFile: SourceFile, relativePath: string
 
 			// Ensure tests in this file that now use server have it in fixtures.
 			editor.replace(/async \(\{([^}]*)\}\) => \{/g, (match: string, inside: string) => {
-				if (!inside.includes("page") || inside.includes("server")) return match;
+				if ((!inside.includes("page") && !inside.includes("browser")) || inside.includes("server")) return match;
 				const next = inside.trim().length ? `${inside.trim()}, server` : "server";
 				return `async ({ ${next} }) => {`;
 			});
@@ -369,17 +351,6 @@ const FIXME_TARGETS: Partial<Record<string, FixmeReasonByTitle>> = {
 			"should respect PLAYWRIGHT_HAR_NO_WEBSOCKET_FRAMES",
 			"Patchright library tests run through an out-of-process driver, so runtime process.env mutations are not visible to the HAR recorder process.",
 		],
-	]),
-	"tests/library/browsercontext-webauthn.spec.ts": new Map([
-		[
-			"should seed a known credential and authenticate",
-			"Patchright driver-mode WebAuthn binding can hang in the upstream library fixture even though the direct credentials API path works.",
-		],
-		[
-			"should capture a page-created credential and reuse it in another context",
-			"Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture.",
-		],
-		["should reuse a page-created credential via the storageState option", "Patchright driver-mode WebAuthn binding can fall back to native WebAuthn in the upstream library fixture."],
 	]),
 	"tests/library/browsercontext-events.spec.ts": new Map([
 		["console event should work @smoke", "Known Patchright bug: Console CDP domain is disabled, so console events/messages are not reliably available."],
