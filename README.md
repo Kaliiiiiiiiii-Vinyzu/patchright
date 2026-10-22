@@ -254,9 +254,6 @@ Patchright InitScripts can be detected by Timing Attacks. However, no antibot cu
 
 ## Development
 
-This fork's `fix/context-lifecycle-1.63` branch includes a source-level context
-lifecycle fix and portable regression tests. See [the fix and build instructions](docs/context-lifecycle.md).
-
 Deployment of new Patchright versions are automatic, but bugs due to Playwright codebase changes may occur. Fixes for these bugs might take a few days to be released. 
 
 ---

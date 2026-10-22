@@ -1,5 +1,5 @@
 // Public-API reproduction against the source-built driver; no internal hooks.
-// Run in a disposable container with an EXTERNAL deadline; see docs/context-lifecycle.md.
+// Run via test_context_lifecycle.sh for an external deadline and container cleanup.
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
