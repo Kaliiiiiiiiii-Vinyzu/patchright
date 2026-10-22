@@ -13713,7 +13713,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
      const request = navigationEvent.newDocument ? navigationEvent.newDocument.request : undefined;
      return request ? request._finalRequest().response(progress) : null;
-@@ -777,63 +776,203 @@
+@@ -777,63 +776,216 @@
    async waitForLoadState(progress: Progress, state: types.LifecycleEvent): Promise<void> {
      const waitUntil = verifyLifecycle('state', state);
      if (!this._firedLifecycleEvents.has(waitUntil))
@@ -13727,7 +13727,17 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
 +  async _context(world: types.World): Promise<dom.FrameExecutionContext> {
-+    if (this._isDetached()) throw new Error('Frame was detached');
++    const throwIfUnavailable = () => {
++      if (this._isDetached()) throw new Error('Frame was detached');
++      if (
++        this._page.isClosedOrClosingOrCrashed() ||
++        this._page.openScope.isClosed() ||
++        this._page.browserContext.isClosingOrClosed() ||
++        (this._page.browserContext as any)._browser._startedClosing
++      )
++        throw new TargetClosedError(this._page.closeReason());
++    };
++    throwIfUnavailable();
 +
 +    let client;
 +    try {
@@ -13757,6 +13767,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +          id => id || undefined,
 +        ));
 +        const executionContextId = await contextPromise;
++        throwIfUnavailable();
 +        if (this._iframeWorldContextPromise !== contextPromise) return this._context(world);
 +        if (!executionContextId) {
 +          this._iframeWorldContextPromise = undefined;
@@ -13778,6 +13789,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +            return isNaN(executionContextId) ? undefined : executionContextId;
 +          }));
 +        const executionContextId = await contextPromise;
++        throwIfUnavailable();
 +        if (this._mainWorldContextPromise !== contextPromise) return this._context(world);
 +        if (!executionContextId) {
 +          this._mainWorldContextPromise = undefined;
@@ -13797,6 +13809,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +        })
 +        .then(result => result?.executionContextId));
 +      const executionContextId = await contextPromise;
++      throwIfUnavailable();
 +      if (this._isolatedWorldContextPromise !== contextPromise) return this._context(world);
 +      if (!executionContextId) {
 +        this._isolatedWorldContextPromise = undefined;
@@ -13941,7 +13954,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if ((options as any).visibility)
        throw new Error('options.visibility is not supported, did you mean options.state?');
      if ((options as any).waitFor && (options as any).waitFor !== 'visible')
-@@ -844,81 +983,270 @@
+@@ -844,81 +996,270 @@
      if (performActionPreChecksAndLog)
        progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
      const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
@@ -14252,7 +14265,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope);
      const result = await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
      arrayHandle.dispose();
-@@ -926,15 +1254,50 @@
+@@ -926,15 +1267,50 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -14307,7 +14320,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return 0;
      }
    }
-@@ -948,44 +1311,31 @@
+@@ -948,44 +1324,31 @@
        const context = await this.utilityContext();
        return await context.evaluate(() => {
          let retVal = '';
@@ -14364,7 +14377,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      });
    }
  
-@@ -998,8 +1348,7 @@
+@@ -998,8 +1361,7 @@
    }
  
    origin(): string | undefined {
@@ -14374,7 +14387,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return network.parseURL(this._url)?.origin;
    }
  
-@@ -1011,82 +1360,68 @@
+@@ -1011,82 +1373,68 @@
      return Array.from(this._childFrames);
    }
  
@@ -14482,7 +14495,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return (await context.evaluateHandle(addStyleContent, content!)).asElement()!;
      });
  
-@@ -1122,37 +1457,51 @@
+@@ -1122,37 +1470,51 @@
      let result: dom.ElementHandle;
      let error: Error | undefined;
      let cspMessage: ConsoleMessage | undefined;
@@ -14551,7 +14564,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const continuePolling = Symbol('continuePolling');
      timeouts = [0, ...timeouts];
      let timeoutIndex = 0;
-@@ -1162,36 +1511,27 @@
+@@ -1162,36 +1524,27 @@
          // Make sure we react immediately upon page close or frame detach.
          // We need this to show expected/received values in time.
          const actionPromise = new Promise(f => setTimeout(f, timeout));
@@ -14595,7 +14608,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // Retry upon all other errors.
      return false;
    }
-@@ -1199,133 +1539,236 @@
+@@ -1199,133 +1552,236 @@
    private async _retryWithProgressIfNotConnected<R>(
      progress: Progress,
      selector: string,
@@ -14920,7 +14933,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          frameElement.dispose();
          if (generated === 'error:notconnected' || !generated)
            throw new Error(`Unable to generate locator for ${selector}`);
-@@ -1337,137 +1780,370 @@
+@@ -1337,137 +1793,370 @@
      return { resolvedSelector };
    }
  
@@ -15353,7 +15366,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      } finally {
        clearTimeout(timer!);
      }
-@@ -1482,11 +2158,12 @@
+@@ -1482,11 +2171,12 @@
        }
      }
      // `isSet` distinguishes "not collected yet" from "collected with received: undefined".
@@ -15369,7 +15382,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        await this._page.performActionPreChecks(progress);
  
        // Step 2: perform one-shot expect check without a timeout.
-@@ -1494,18 +2171,22 @@
+@@ -1494,18 +2184,22 @@
        // that should succeed when the locator is already visible.
        try {
          const resultOneShot = await this._expectInternal(progress, selector, options, lastIntermediateResult, true);
@@ -15397,7 +15410,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          if (matches === options.isNot) {
            // Keep waiting in these cases:
            // expect(locator).conditionThatDoesNotMatch
-@@ -1519,24 +2200,29 @@
+@@ -1519,24 +2213,29 @@
        if (isInvalidSelectorError(e) || dom.isNonRecoverableDOMError(e)) {
          details.customErrorMessage = e.message;
        } else if (js.isJavaScriptErrorInEvaluate(e)) {
@@ -15435,7 +15448,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const mainWorld = options.expression === 'to.have.property';
      const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
      const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
-@@ -1546,19 +2232,25 @@
+@@ -1546,19 +2245,25 @@
      let missingReceived = false;
  
      // Non-array expectations are strict (callOnSelector throws on multiple); array ones are not.
@@ -15470,7 +15483,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      } else {
        // When no elements matched the selector, some assertions can still pass.
        if (options.expression === 'to.have.count') {
-@@ -1584,14 +2276,15 @@
+@@ -1584,14 +2289,15 @@
          missingReceived = true;
        }
        if (matches === options.isNot && !isArray) {
@@ -15493,7 +15506,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
      }
  
-@@ -1606,66 +2299,82 @@
+@@ -1606,66 +2312,82 @@
      return { matches, received };
    }
  
@@ -15627,7 +15640,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1677,24 +2386,36 @@
+@@ -1677,24 +2399,36 @@
      });
    }
  
@@ -15680,7 +15693,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionValueInUtility<R>(progress: Progress, pageFunction: js.Func1<any, R>) {
-@@ -1720,25 +2441,28 @@
+@@ -1720,25 +2454,28 @@
        });
      } catch {
        const url = this.pendingDocument()?.request?.url();
@@ -15718,7 +15731,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        progress.wait(timeout),
      ]);
      progress.setAllowConcurrentOrNestedRaces(false);
-@@ -1748,47 +2472,310 @@
+@@ -1748,47 +2485,310 @@
      this._stopNetworkIdleTimer();
      this._detachedScope.close(new Error('Frame was detached'));
      for (const data of this._contextData.values()) {
@@ -16058,7 +16071,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    contextCreated(world: types.World, context: dom.FrameExecutionContext) {
-@@ -1806,12 +2793,10 @@
+@@ -1806,12 +2806,10 @@
    contextDestroyed(context: dom.FrameExecutionContext) {
      // Sometimes we get this after detach, in which case we should not reset
      // our already destroyed contexts to something that will never resolve.
@@ -16073,7 +16086,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      }
    }
  
-@@ -1820,8 +2805,7 @@
+@@ -1820,8 +2818,7 @@
      // We should not start a timer and report networkidle in detached frames.
      // This happens at least in Firefox for child frames, where we may get requestFinished
      // after the frame was detached - probably a race in the Firefox itself.
@@ -16083,7 +16096,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._networkIdleTimer = setTimeout(() => {
        this._firedNetworkIdleSelf = true;
        this._page.mainFrame()._recalculateNetworkIdle();
-@@ -1829,32 +2813,63 @@
+@@ -1829,32 +2826,63 @@
    }
  
    _stopNetworkIdleTimer() {
@@ -16158,7 +16171,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return { snapshot };
      }
      return { snapshot: await ariaSnapshotJSONForFrame(progress, this, options.selector, options) };
-@@ -1863,6 +2878,409 @@
+@@ -1863,6 +2891,409 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -16568,7 +16581,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class SignalBarrier {
-@@ -1882,23 +3300,19 @@
+@@ -1882,23 +3313,19 @@
  
    addFrameNavigation(frame: Frame) {
      // Auto-wait top-level navigations only.
@@ -16601,7 +16614,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    retain() {
-@@ -1907,21 +3321,18 @@
+@@ -1907,21 +3334,18 @@
  
    release() {
      --this._protectCount;
@@ -37484,7 +37497,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
      const request = navigationEvent.newDocument ? navigationEvent.newDocument.request : undefined;
      return request ? request._finalRequest().response(progress) : null;
-@@ -777,63 +776,203 @@
+@@ -777,63 +776,216 @@
    async waitForLoadState(progress: Progress, state: types.LifecycleEvent): Promise<void> {
      const waitUntil = verifyLifecycle('state', state);
      if (!this._firedLifecycleEvents.has(waitUntil))
@@ -37498,7 +37511,17 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
 +  async _context(world: types.World): Promise<dom.FrameExecutionContext> {
-+    if (this._isDetached()) throw new Error('Frame was detached');
++    const throwIfUnavailable = () => {
++      if (this._isDetached()) throw new Error('Frame was detached');
++      if (
++        this._page.isClosedOrClosingOrCrashed() ||
++        this._page.openScope.isClosed() ||
++        this._page.browserContext.isClosingOrClosed() ||
++        (this._page.browserContext as any)._browser._startedClosing
++      )
++        throw new TargetClosedError(this._page.closeReason());
++    };
++    throwIfUnavailable();
 +
 +    let client;
 +    try {
@@ -37528,6 +37551,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +          id => id || undefined,
 +        ));
 +        const executionContextId = await contextPromise;
++        throwIfUnavailable();
 +        if (this._iframeWorldContextPromise !== contextPromise) return this._context(world);
 +        if (!executionContextId) {
 +          this._iframeWorldContextPromise = undefined;
@@ -37549,6 +37573,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +            return isNaN(executionContextId) ? undefined : executionContextId;
 +          }));
 +        const executionContextId = await contextPromise;
++        throwIfUnavailable();
 +        if (this._mainWorldContextPromise !== contextPromise) return this._context(world);
 +        if (!executionContextId) {
 +          this._mainWorldContextPromise = undefined;
@@ -37568,6 +37593,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +        })
 +        .then(result => result?.executionContextId));
 +      const executionContextId = await contextPromise;
++      throwIfUnavailable();
 +      if (this._isolatedWorldContextPromise !== contextPromise) return this._context(world);
 +      if (!executionContextId) {
 +        this._isolatedWorldContextPromise = undefined;
@@ -37712,7 +37738,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if ((options as any).visibility)
        throw new Error('options.visibility is not supported, did you mean options.state?');
      if ((options as any).waitFor && (options as any).waitFor !== 'visible')
-@@ -844,81 +983,270 @@
+@@ -844,81 +996,270 @@
      if (performActionPreChecksAndLog)
        progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
      const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
@@ -38023,7 +38049,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const arrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope);
      const result = await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
      arrayHandle.dispose();
-@@ -926,15 +1254,50 @@
+@@ -926,15 +1267,50 @@
    }
  
    async querySelectorAll(progress: Progress, selector: string): Promise<dom.ElementHandle<Element>[]> {
@@ -38078,7 +38104,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return 0;
      }
    }
-@@ -948,44 +1311,31 @@
+@@ -948,44 +1324,31 @@
        const context = await this.utilityContext();
        return await context.evaluate(() => {
          let retVal = '';
@@ -38135,7 +38161,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      });
    }
  
-@@ -998,8 +1348,7 @@
+@@ -998,8 +1361,7 @@
    }
  
    origin(): string | undefined {
@@ -38145,7 +38171,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      return network.parseURL(this._url)?.origin;
    }
  
-@@ -1011,82 +1360,68 @@
+@@ -1011,82 +1373,68 @@
      return Array.from(this._childFrames);
    }
  
@@ -38253,7 +38279,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return (await context.evaluateHandle(addStyleContent, content!)).asElement()!;
      });
  
-@@ -1122,37 +1457,51 @@
+@@ -1122,37 +1470,51 @@
      let result: dom.ElementHandle;
      let error: Error | undefined;
      let cspMessage: ConsoleMessage | undefined;
@@ -38322,7 +38348,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const continuePolling = Symbol('continuePolling');
      timeouts = [0, ...timeouts];
      let timeoutIndex = 0;
-@@ -1162,36 +1511,27 @@
+@@ -1162,36 +1524,27 @@
          // Make sure we react immediately upon page close or frame detach.
          // We need this to show expected/received values in time.
          const actionPromise = new Promise(f => setTimeout(f, timeout));
@@ -38366,7 +38392,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // Retry upon all other errors.
      return false;
    }
-@@ -1199,133 +1539,236 @@
+@@ -1199,133 +1552,236 @@
    private async _retryWithProgressIfNotConnected<R>(
      progress: Progress,
      selector: string,
@@ -38691,7 +38717,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          frameElement.dispose();
          if (generated === 'error:notconnected' || !generated)
            throw new Error(`Unable to generate locator for ${selector}`);
-@@ -1337,137 +1780,370 @@
+@@ -1337,137 +1793,370 @@
      return { resolvedSelector };
    }
  
@@ -39124,7 +39150,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      } finally {
        clearTimeout(timer!);
      }
-@@ -1482,11 +2158,12 @@
+@@ -1482,11 +2171,12 @@
        }
      }
      // `isSet` distinguishes "not collected yet" from "collected with received: undefined".
@@ -39140,7 +39166,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        await this._page.performActionPreChecks(progress);
  
        // Step 2: perform one-shot expect check without a timeout.
-@@ -1494,18 +2171,22 @@
+@@ -1494,18 +2184,22 @@
        // that should succeed when the locator is already visible.
        try {
          const resultOneShot = await this._expectInternal(progress, selector, options, lastIntermediateResult, true);
@@ -39168,7 +39194,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          if (matches === options.isNot) {
            // Keep waiting in these cases:
            // expect(locator).conditionThatDoesNotMatch
-@@ -1519,24 +2200,29 @@
+@@ -1519,24 +2213,29 @@
        if (isInvalidSelectorError(e) || dom.isNonRecoverableDOMError(e)) {
          details.customErrorMessage = e.message;
        } else if (js.isJavaScriptErrorInEvaluate(e)) {
@@ -39206,7 +39232,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const mainWorld = options.expression === 'to.have.property';
      const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
      const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
-@@ -1546,19 +2232,25 @@
+@@ -1546,19 +2245,25 @@
      let missingReceived = false;
  
      // Non-array expectations are strict (callOnSelector throws on multiple); array ones are not.
@@ -39241,7 +39267,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      } else {
        // When no elements matched the selector, some assertions can still pass.
        if (options.expression === 'to.have.count') {
-@@ -1584,14 +2276,15 @@
+@@ -1584,14 +2289,15 @@
          missingReceived = true;
        }
        if (matches === options.isNot && !isArray) {
@@ -39264,7 +39290,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        }
      }
  
-@@ -1606,66 +2299,82 @@
+@@ -1606,66 +2312,82 @@
      return { matches, received };
    }
  
@@ -39398,7 +39424,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1677,24 +2386,36 @@
+@@ -1677,24 +2399,36 @@
      });
    }
  
@@ -39451,7 +39477,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionValueInUtility<R>(progress: Progress, pageFunction: js.Func1<any, R>) {
-@@ -1720,25 +2441,28 @@
+@@ -1720,25 +2454,28 @@
        });
      } catch {
        const url = this.pendingDocument()?.request?.url();
@@ -39489,7 +39515,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        progress.wait(timeout),
      ]);
      progress.setAllowConcurrentOrNestedRaces(false);
-@@ -1748,47 +2472,310 @@
+@@ -1748,47 +2485,310 @@
      this._stopNetworkIdleTimer();
      this._detachedScope.close(new Error('Frame was detached'));
      for (const data of this._contextData.values()) {
@@ -39829,7 +39855,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    contextCreated(world: types.World, context: dom.FrameExecutionContext) {
-@@ -1806,12 +2793,10 @@
+@@ -1806,12 +2806,10 @@
    contextDestroyed(context: dom.FrameExecutionContext) {
      // Sometimes we get this after detach, in which case we should not reset
      // our already destroyed contexts to something that will never resolve.
@@ -39844,7 +39870,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      }
    }
  
-@@ -1820,8 +2805,7 @@
+@@ -1820,8 +2818,7 @@
      // We should not start a timer and report networkidle in detached frames.
      // This happens at least in Firefox for child frames, where we may get requestFinished
      // after the frame was detached - probably a race in the Firefox itself.
@@ -39854,7 +39880,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._networkIdleTimer = setTimeout(() => {
        this._firedNetworkIdleSelf = true;
        this._page.mainFrame()._recalculateNetworkIdle();
-@@ -1829,32 +2813,63 @@
+@@ -1829,32 +2826,63 @@
    }
  
    _stopNetworkIdleTimer() {
@@ -39929,7 +39955,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return { snapshot };
      }
      return { snapshot: await ariaSnapshotJSONForFrame(progress, this, options.selector, options) };
-@@ -1863,6 +2878,409 @@
+@@ -1863,6 +2891,409 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -40339,7 +40365,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class SignalBarrier {
-@@ -1882,23 +3300,19 @@
+@@ -1882,23 +3313,19 @@
  
    addFrameNavigation(frame: Frame) {
      // Auto-wait top-level navigations only.
@@ -40372,7 +40398,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    retain() {
-@@ -1907,21 +3321,18 @@
+@@ -1907,21 +3334,18 @@
  
    release() {
      --this._protectCount;

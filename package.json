@@ -9,7 +9,8 @@
         "format:fix": "tsx utils/format-indentation.ts",
         "format": "bash -c 'npm run format:fix -- ${@} && npm run format:check -- ${@}' --",
         "rebuild": "bash utils/rebuild_local_package.sh",
-        "test": "bash utils/test_local_package.sh"
+        "test": "bash utils/test_local_package.sh",
+        "test:context-lifecycle": "bash utils/test_context_lifecycle.sh"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.10",

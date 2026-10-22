@@ -213,8 +213,14 @@ export function patchFrames(project: Project) {
 	contextMethod.rename("_context");
 	contextMethod.setIsAsync(true);
 	contextMethod.setBodyText(`
-		if (this._isDetached())
-			throw new Error('Frame was detached');
+		const throwIfUnavailable = () => {
+			if (this._isDetached())
+				throw new Error('Frame was detached');
+			if (this._page.isClosedOrClosingOrCrashed() || this._page.openScope.isClosed() ||
+				this._page.browserContext.isClosingOrClosed() || (this._page.browserContext as any)._browser._startedClosing)
+				throw new TargetClosedError(this._page.closeReason());
+		};
+		throwIfUnavailable();
 
 		let client;
 		try {
@@ -242,6 +248,7 @@ export function patchFrames(project: Project) {
 			if (!isMainFrame && this._iframeWorld === undefined) {
 				const contextPromise = this._iframeWorldContextPromise ??= this._getFrameMainFrameContextId(client).then(id => id || undefined);
 				const executionContextId = await contextPromise;
+				throwIfUnavailable();
 				if (this._iframeWorldContextPromise !== contextPromise)
 					return this._context(world);
 				if (!executionContextId) {
@@ -264,6 +271,7 @@ export function patchFrames(project: Project) {
 					return isNaN(executionContextId) ? undefined : executionContextId;
 				});
 				const executionContextId = await contextPromise;
+				throwIfUnavailable();
 				if (this._mainWorldContextPromise !== contextPromise)
 					return this._context(world);
 				if (!executionContextId) {
@@ -282,6 +290,7 @@ export function patchFrames(project: Project) {
 				frameId: this._id, grantUniveralAccess: true, worldName: world,
 			}).then(result => result?.executionContextId);
 			const executionContextId = await contextPromise;
+			throwIfUnavailable();
 			if (this._isolatedWorldContextPromise !== contextPromise)
 				return this._context(world);
 			if (!executionContextId) {
