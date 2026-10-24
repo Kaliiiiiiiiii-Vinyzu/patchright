@@ -9,6 +9,13 @@ export function patchChromiumSwitches(project: Project) {
 		"packages/playwright-core/src/server/chromium/chromiumSwitches.ts",
 	);
 
+	// Keep native Presentation API errors consistent with regular Chrome.
+	chromiumSwitchesSourceFile
+		.getVariableDeclarationOrThrow("disabledFeatures")
+		.getInitializerIfKindOrThrow(SyntaxKind.CallExpression)
+		.getArguments()[0]
+		.replaceWithText("feature => feature && feature !== 'MediaRouter'");
+
 	// -- chromiumSwitches Array Variable --
 	const chromiumSwitchesArrow = chromiumSwitchesSourceFile
 		.getVariableDeclarationOrThrow("chromiumSwitches")
@@ -32,7 +39,6 @@ export function patchChromiumSwitches(project: Project) {
 		"'--metrics-recording-only'",
 		"'--unsafely-disable-devtools-self-xss-warnings'",
 		"'--disable-back-forward-cache'",
-		"'--disable-features=ImprovedCookieControls,LazyFrameLoading,GlobalMediaControls,DestroyProfileOnBrowserClose,MediaRouter,DialMediaRouteProvider,AcceptCHFrame,AutoExpandDetailsElement,CertificateTransparencyComponentUpdater,AvoidUnnecessaryBeforeUnloadCheckSync,Translate,HttpsUpgrades,PaintHolding,ThirdPartyStoragePartitioning,LensOverlay,PlzDedicatedWorker'",
 	];
 	chromiumSwitchesArray
 		.getElements()

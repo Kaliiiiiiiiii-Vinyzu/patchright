@@ -17,13 +17,11 @@ export function patchFrameDispatcher(project: Project) {
 	frameEvaluateExpressionMethod.setBodyText(`
 		return {
 			value: serializeResult(
-					await progress.race(
-						this._frame.evaluateExpression(
-							progress,
-							params.expression,
-							{ isFunction: params.isFunction, world: params.isolatedContext ? 'utility': 'main' },
-							parseArgument(params.arg)
-					)
+				await this._frame.evaluateExpression(
+					progress,
+					params.expression,
+					{ isFunction: params.isFunction, world: params.isolatedContext ? 'utility': 'main' },
+					parseArgument(params.arg)
 				)
 			)
 		};

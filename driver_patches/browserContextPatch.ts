@@ -20,7 +20,7 @@ export function patchBrowserContext(project: Project) {
 			.find(
 				call =>
 					call.getExpression().getText().includes("addInitScript") &&
-					call.getArguments().some(arg => arg.getText().includes("navigator.serviceWorker.register")),
+					call.getArguments().some(arg => arg.getText().includes("ServiceWorkerContainer.prototype.register")),
 			),
 	);
 	const initScriptArgument = assertDefined(
@@ -28,7 +28,7 @@ export function patchBrowserContext(project: Project) {
 	);
 	// Replace the service worker registration call with a custom one, which is less obvious
 	initScriptArgument.replaceWithText(
-		"`if (navigator.serviceWorker) navigator.serviceWorker.register = async () => { };`",
+		"`if (self.ServiceWorkerContainer) ServiceWorkerContainer.prototype.register = async () => { };`",
 	);
 
 	// -- exposeBinding Method --
