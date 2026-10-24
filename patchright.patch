@@ -5990,9 +5990,12 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/server/chromium/chromiumSwitches.ts patchright/node_modules/playwright-core/src/server/chromium/chromiumSwitches.ts
 ---
 +++
-@@ -56,49 +56,39 @@
+@@ -54,51 +54,41 @@
+   'msForceBrowserSignIn',
+   // Disables updating the preferred version in LaunchServices preferences on mac.
    'msEdgeUpdateLaunchServicesPreferredVersion',
- ].filter(Boolean);
+-].filter(Boolean);
++].filter(feature => feature && feature !== 'MediaRouter');
  
 -export const chromiumSwitches = (options?: { android?: boolean }) => [
 -  '--disable-field-trial-config', // https://source.chromium.org/chromium/chromium/src/+/main:testing/variations/README.md
@@ -29886,9 +29889,12 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/server/chromium/chromiumSwitches.ts patchright/packages/playwright-core/src/server/chromium/chromiumSwitches.ts
 ---
 +++
-@@ -56,49 +56,39 @@
+@@ -54,51 +54,41 @@
+   'msForceBrowserSignIn',
+   // Disables updating the preferred version in LaunchServices preferences on mac.
    'msEdgeUpdateLaunchServicesPreferredVersion',
- ].filter(Boolean);
+-].filter(Boolean);
++].filter(feature => feature && feature !== 'MediaRouter');
  
 -export const chromiumSwitches = (options?: { android?: boolean }) => [
 -  '--disable-field-trial-config', // https://source.chromium.org/chromium/chromium/src/+/main:testing/variations/README.md
