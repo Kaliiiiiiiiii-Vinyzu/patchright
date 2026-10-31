@@ -12119,7 +12119,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    );
      if (!resolved) {
 -      const context = await this.frame.context('main');
-+      const context = await this.frame._context('main');
++      const context = await this.frame.context(isolatedContext ? 'utility' : 'main');
        return await context.evaluateHandle(() => []);
      }
      return resolved.result;
@@ -12420,7 +12420,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 -          (evalResult as JSHandle).dispose();
 -          return;
 +        const elements =
-+          !scope && !target.mainWorld && (await frame.selectors._hasClosedShadowRoots())
++          !scope && (await frame.selectors._hasClosedShadowRoots())
 +            ? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed))
 +            : undefined;
 +        try {
@@ -12776,7 +12776,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +    for (const shadowRoot of queryingElement.shadowRoots || []) {
 +      // For CSRs, we dont have to append its index because patchright treats CSRs like they dont exist
-+      if (shadowRoot.shadowRootType === 'closed' && shadowRoot.backendNodeId) {
++      if (shadowRoot.shadowRootType === 'closed' && shadowRoot.backendNodeId && !shadowRoot.children) {
 +        // Resolve the CDP client for the current context so closed shadow roots can be traversed safely.
 +        const client = context.frame._page.delegate._sessionForFrame(context.frame)._client;
 +        const describedShadowRoot = await client.send('DOM.describeNode', {
@@ -13687,7 +13687,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const { selector, scope } = target;
      if ((options as any).visibility)
        throw new Error('options.visibility is not supported, did you mean options.state?');
-@@ -848,97 +995,315 @@
+@@ -848,97 +995,286 @@
      if (performActionPreChecksAndLog)
        progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
      const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
@@ -13952,28 +13952,11 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +    isolatedContext?: boolean,
 +  ): Promise<any> {
 +    isolatedContext = this.selectors._parseSelector(selector, false).world !== 'main' && isolatedContext;
-+    const injectedArrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
-+    const count = await injectedArrayHandle.evaluate(elements => elements.length);
-+    if ((count && !(await this.selectors._hasClosedShadowRoots())) || scope) {
-+      const result = await injectedArrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
-+      injectedArrayHandle.dispose();
-+      return result;
-+    }
-+    injectedArrayHandle.dispose();
-+
-+    const context = isolatedContext ? await this.utilityContext() : await this.mainContext();
-+    const handles = await this.querySelectorAll(progress, selector);
-+    const adoptedHandles = await Promise.all(
-+      handles.map(handle =>
-+        handle._context === context ? handle : this._page.delegate.adoptElementHandle(handle, context),
-+      ),
-+    );
-+    const arrayHandle = await context.evaluateHandle(elements => elements, adoptedHandles);
++    const arrayHandle = await progress.race(this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext));
 +    try {
-+      return await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
++      return await progress.race(arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg));
 +    } finally {
 +      arrayHandle.dispose();
-+      for (const handle of new Set([...handles, ...adoptedHandles])) handle.dispose();
 +    }
    }
  
@@ -14027,20 +14010,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
    async queryCount(progress: Progress, selector: string): Promise<number> {
      try {
--      return await progress.race(this.selectors.queryCount(selector));
-+      const continuePolling = Symbol('continuePolling');
-+      const result = await this._retryWithoutProgress(
-+        progress,
-+        selector,
-+        { strict: null, performActionPreChecks: false },
-+        async result => {
-+          if (!result || !result[0]) return 0;
-+          return Array.isArray(result[1]) ? result[1].length : 0;
-+        },
-+        'returnAll',
-+        continuePolling,
-+      );
-+      return result === continuePolling ? await this.selectors.queryCount(selector) : result;
+       return await progress.race(this.selectors.queryCount(selector));
      } catch (e) {
 -      if (this.isNonRetriableError(e))
 -        throw e;
@@ -14048,7 +14018,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return 0;
      }
    }
-@@ -951,39 +1316,31 @@
+@@ -951,39 +1287,31 @@
      try {
        const context = await this.utilityContext();
        const injected = await context.injectedScript();
@@ -14102,7 +14072,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      });
    }
  
-@@ -996,8 +1353,7 @@
+@@ -996,8 +1324,7 @@
    }
  
    origin(): string | undefined {
@@ -14112,7 +14082,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return network.parseURL(this._url)?.origin;
    }
  
-@@ -1009,82 +1365,68 @@
+@@ -1009,82 +1336,68 @@
      return Array.from(this._childFrames);
    }
  
@@ -14220,7 +14190,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return (await context.evaluateHandle(addStyleContent, content!)).asElement()!;
      });
  
-@@ -1120,37 +1462,51 @@
+@@ -1120,37 +1433,51 @@
      let result: dom.ElementHandle;
      let error: Error | undefined;
      let cspMessage: ConsoleMessage | undefined;
@@ -14289,7 +14259,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const continuePolling = Symbol('continuePolling');
      timeouts = [0, ...timeouts];
      let timeoutIndex = 0;
-@@ -1160,36 +1516,27 @@
+@@ -1160,36 +1487,27 @@
          // Make sure we react immediately upon page close or frame detach.
          // We need this to show expected/received values in time.
          const actionPromise = new Promise(f => setTimeout(f, timeout));
@@ -14333,7 +14303,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // Retry upon all other errors.
      return false;
    }
-@@ -1197,134 +1544,254 @@
+@@ -1197,134 +1515,254 @@
    private async _retryWithProgressIfNotConnected<R>(
      progress: Progress,
      target: types.SelectorTarget,
@@ -14675,7 +14645,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          frameElement.dispose();
          if (generated === 'error:notconnected' || !generated)
            throw new Error(`Unable to generate locator for ${selector}`);
-@@ -1337,45 +1804,81 @@
+@@ -1337,45 +1775,81 @@
    }
  
    async textContent(progress: Progress, target: types.SelectorTarget): Promise<string | null> {
@@ -14777,7 +14747,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      return result.matches;
    }
  
-@@ -1385,16 +1888,82 @@
+@@ -1385,16 +1859,82 @@
    }
  
    async isVisibleInternal(progress: Progress, target: types.SelectorTarget): Promise<boolean> {
@@ -14868,7 +14838,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return false;
      }
    }
-@@ -1419,54 +1988,130 @@
+@@ -1419,54 +1959,130 @@
      return this._elementState(progress, target, 'checked');
    }
  
@@ -15020,7 +14990,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      } finally {
        clearTimeout(timer!);
      }
-@@ -1481,11 +2126,12 @@
+@@ -1481,11 +2097,12 @@
        }
      }
      // `isSet` distinguishes "not collected yet" from "collected with received: undefined".
@@ -15036,7 +15006,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        await this._page.performActionPreChecks(progress);
  
        // Step 2: perform one-shot expect check without a timeout.
-@@ -1493,18 +2139,22 @@
+@@ -1493,18 +2110,22 @@
        // that should succeed when the locator is already visible.
        try {
          const resultOneShot = await this._expectInternal(progress, selector, options, lastIntermediateResult, true);
@@ -15064,7 +15034,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          if (matches === options.isNot) {
            // Keep waiting in these cases:
            // expect(locator).conditionThatDoesNotMatch
-@@ -1514,31 +2164,39 @@
+@@ -1514,31 +2135,39 @@
          return { matches, received };
        });
      } catch (e) {
@@ -15113,7 +15083,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const mainWorld = options.expression === 'to.have.property';
      const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
      const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
-@@ -1548,19 +2206,24 @@
+@@ -1548,19 +2177,24 @@
      let missingReceived = false;
  
      // Non-array expectations are strict (callOnSelector throws on multiple); array ones are not.
@@ -15147,7 +15117,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      } else {
        // When no elements matched the selector, some assertions can still pass.
        if (options.expression === 'to.have.count') {
-@@ -1586,14 +2249,15 @@
+@@ -1586,14 +2220,15 @@
          missingReceived = true;
        }
        if (matches === options.isNot && !isArray) {
@@ -15170,7 +15140,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        }
      }
  
-@@ -1608,66 +2272,82 @@
+@@ -1608,66 +2243,82 @@
      return { matches, received };
    }
  
@@ -15304,7 +15274,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1679,24 +2359,35 @@
+@@ -1679,24 +2330,35 @@
      });
    }
  
@@ -15356,7 +15326,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    async waitForFunctionValueInUtility<R>(progress: Progress, pageFunction: js.Func1<any, R>) {
-@@ -1722,25 +2413,28 @@
+@@ -1722,25 +2384,28 @@
        });
      } catch {
        const url = this.pendingDocument()?.request?.url();
@@ -15394,7 +15364,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        progress.wait(timeout),
      ]);
      progress.setAllowConcurrentOrNestedRaces(false);
-@@ -1750,47 +2444,313 @@
+@@ -1750,47 +2415,313 @@
      this._stopNetworkIdleTimer();
      this._detachedScope.close(new Error('Frame was detached'));
      for (const data of this._contextData.values()) {
@@ -15738,7 +15708,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    contextCreated(world: types.World, context: dom.FrameExecutionContext) {
-@@ -1808,12 +2768,10 @@
+@@ -1808,12 +2739,10 @@
    contextDestroyed(context: dom.FrameExecutionContext) {
      // Sometimes we get this after detach, in which case we should not reset
      // our already destroyed contexts to something that will never resolve.
@@ -15753,7 +15723,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      }
    }
  
-@@ -1822,8 +2780,7 @@
+@@ -1822,8 +2751,7 @@
      // We should not start a timer and report networkidle in detached frames.
      // This happens at least in Firefox for child frames, where we may get requestFinished
      // after the frame was detached - probably a race in the Firefox itself.
@@ -15763,7 +15733,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._networkIdleTimer = setTimeout(() => {
        this._firedNetworkIdleSelf = true;
        this._page.mainFrame()._recalculateNetworkIdle();
-@@ -1831,32 +2788,63 @@
+@@ -1831,32 +2759,63 @@
    }
  
    _stopNetworkIdleTimer() {
@@ -15838,7 +15808,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return { snapshot };
      }
      return { snapshot: await ariaSnapshotJSONForFrame(progress, this, options.selector, options) };
-@@ -1865,6 +2853,409 @@
+@@ -1865,6 +2824,409 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -16191,33 +16161,33 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
 +
 +          // Querying and Sorting the elements by their backendNodeId
 +          for (const { handles, parentNode } of queryGroups) {
-+            const handlesAmount = await (await handles.getProperty(progress, 'length')).jsonValue(progress);
-+            for (var i = 0; i < handlesAmount; i++) {
-+              let element;
-+              if (parentNode instanceof dom.ElementHandle) {
-+                element = await (parentNode as any)._evaluateHandleInUtility(
-+                  ([injected, node, { i, handles: elems }]) => elems[i],
-+                  { i, handles },
-+                );
-+              } else {
-+                element = await parentNode.evaluateHandle((injected, { i, handles: elems }) => elems[i], {
-+                  i,
-+                  handles,
++            const properties = await handles.internalGetProperties().finally(() => handles.dispose());
++            try {
++              for (const property of properties.values()) {
++                const element = property.asElement() as any;
++                if (!element) {
++                  property.dispose();
++                  continue;
++                }
++                // For other Functions/Utilities
++                element.parentNode = parentNode;
++                const resolvedElement = await client.send('DOM.describeNode', {
++                  objectId: element._objectId,
++                  depth: -1,
 +                });
++                element.backendNodeId = resolvedElement.node.backendNodeId;
++                element.nodePosition = await this.selectors._findElementPositionInDomTree(
++                  element,
++                  describedScope.node,
++                  context,
++                  '',
++                );
++                element.nodePositionScopeIsDocument = describedScope.node.nodeName === '#document';
++                elements.push(element);
 +              }
-+
-+              // For other Functions/Utilities
-+              element.parentNode = parentNode;
-+              const resolvedElement = await client.send('DOM.describeNode', { objectId: element._objectId, depth: -1 });
-+              element.backendNodeId = resolvedElement.node.backendNodeId;
-+              element.nodePosition = await this.selectors._findElementPositionInDomTree(
-+                element,
-+                describedScope.node,
-+                context,
-+                '',
-+              );
-+              element.nodePositionScopeIsDocument = describedScope.node.nodeName === '#document';
-+              elements.push(element);
++            } catch (error) {
++              for (const handle of [...properties.values(), ...elements]) handle.dispose();
++              throw error;
 +            }
 +          }
 +        }
@@ -16248,7 +16218,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  class SignalBarrier {
-@@ -1884,23 +3275,19 @@
+@@ -1884,23 +3246,19 @@
  
    addFrameNavigation(frame: Frame) {
      // Auto-wait top-level navigations only.
@@ -16281,7 +16251,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    retain() {
-@@ -1909,21 +3296,18 @@
+@@ -1909,21 +3267,18 @@
  
    release() {
      --this._protectCount;
@@ -36018,7 +35988,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    );
      if (!resolved) {
 -      const context = await this.frame.context('main');
-+      const context = await this.frame._context('main');
++      const context = await this.frame.context(isolatedContext ? 'utility' : 'main');
        return await context.evaluateHandle(() => []);
      }
      return resolved.result;
@@ -36319,7 +36289,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 -          (evalResult as JSHandle).dispose();
 -          return;
 +        const elements =
-+          !scope && !target.mainWorld && (await frame.selectors._hasClosedShadowRoots())
++          !scope && (await frame.selectors._hasClosedShadowRoots())
 +            ? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed))
 +            : undefined;
 +        try {
@@ -36675,7 +36645,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +
 +    for (const shadowRoot of queryingElement.shadowRoots || []) {
 +      // For CSRs, we dont have to append its index because patchright treats CSRs like they dont exist
-+      if (shadowRoot.shadowRootType === 'closed' && shadowRoot.backendNodeId) {
++      if (shadowRoot.shadowRootType === 'closed' && shadowRoot.backendNodeId && !shadowRoot.children) {
 +        // Resolve the CDP client for the current context so closed shadow roots can be traversed safely.
 +        const client = context.frame._page.delegate._sessionForFrame(context.frame)._client;
 +        const describedShadowRoot = await client.send('DOM.describeNode', {
@@ -37586,7 +37556,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const { selector, scope } = target;
      if ((options as any).visibility)
        throw new Error('options.visibility is not supported, did you mean options.state?');
-@@ -848,97 +995,315 @@
+@@ -848,97 +995,286 @@
      if (performActionPreChecksAndLog)
        progress.log(`waiting for ${this._asLocator(selector)}${state === 'attached' ? '' : ' to be ' + state}`);
      const promise = this.retryWithProgressAndBackoff(progress, async (progress, continuePolling) => {
@@ -37851,28 +37821,11 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +    isolatedContext?: boolean,
 +  ): Promise<any> {
 +    isolatedContext = this.selectors._parseSelector(selector, false).world !== 'main' && isolatedContext;
-+    const injectedArrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
-+    const count = await injectedArrayHandle.evaluate(elements => elements.length);
-+    if ((count && !(await this.selectors._hasClosedShadowRoots())) || scope) {
-+      const result = await injectedArrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
-+      injectedArrayHandle.dispose();
-+      return result;
-+    }
-+    injectedArrayHandle.dispose();
-+
-+    const context = isolatedContext ? await this.utilityContext() : await this.mainContext();
-+    const handles = await this.querySelectorAll(progress, selector);
-+    const adoptedHandles = await Promise.all(
-+      handles.map(handle =>
-+        handle._context === context ? handle : this._page.delegate.adoptElementHandle(handle, context),
-+      ),
-+    );
-+    const arrayHandle = await context.evaluateHandle(elements => elements, adoptedHandles);
++    const arrayHandle = await progress.race(this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext));
 +    try {
-+      return await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
++      return await progress.race(arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg));
 +    } finally {
 +      arrayHandle.dispose();
-+      for (const handle of new Set([...handles, ...adoptedHandles])) handle.dispose();
 +    }
    }
  
@@ -37926,20 +37879,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
    async queryCount(progress: Progress, selector: string): Promise<number> {
      try {
--      return await progress.race(this.selectors.queryCount(selector));
-+      const continuePolling = Symbol('continuePolling');
-+      const result = await this._retryWithoutProgress(
-+        progress,
-+        selector,
-+        { strict: null, performActionPreChecks: false },
-+        async result => {
-+          if (!result || !result[0]) return 0;
-+          return Array.isArray(result[1]) ? result[1].length : 0;
-+        },
-+        'returnAll',
-+        continuePolling,
-+      );
-+      return result === continuePolling ? await this.selectors.queryCount(selector) : result;
+       return await progress.race(this.selectors.queryCount(selector));
      } catch (e) {
 -      if (this.isNonRetriableError(e))
 -        throw e;
@@ -37947,7 +37887,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return 0;
      }
    }
-@@ -951,39 +1316,31 @@
+@@ -951,39 +1287,31 @@
      try {
        const context = await this.utilityContext();
        const injected = await context.injectedScript();
@@ -38001,7 +37941,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      });
    }
  
-@@ -996,8 +1353,7 @@
+@@ -996,8 +1324,7 @@
    }
  
    origin(): string | undefined {
@@ -38011,7 +37951,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      return network.parseURL(this._url)?.origin;
    }
  
-@@ -1009,82 +1365,68 @@
+@@ -1009,82 +1336,68 @@
      return Array.from(this._childFrames);
    }
  
@@ -38119,7 +38059,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return (await context.evaluateHandle(addStyleContent, content!)).asElement()!;
      });
  
-@@ -1120,37 +1462,51 @@
+@@ -1120,37 +1433,51 @@
      let result: dom.ElementHandle;
      let error: Error | undefined;
      let cspMessage: ConsoleMessage | undefined;
@@ -38188,7 +38128,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const continuePolling = Symbol('continuePolling');
      timeouts = [0, ...timeouts];
      let timeoutIndex = 0;
-@@ -1160,36 +1516,27 @@
+@@ -1160,36 +1487,27 @@
          // Make sure we react immediately upon page close or frame detach.
          // We need this to show expected/received values in time.
          const actionPromise = new Promise(f => setTimeout(f, timeout));
@@ -38232,7 +38172,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // Retry upon all other errors.
      return false;
    }
-@@ -1197,134 +1544,254 @@
+@@ -1197,134 +1515,254 @@
    private async _retryWithProgressIfNotConnected<R>(
      progress: Progress,
      target: types.SelectorTarget,
@@ -38574,7 +38514,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          frameElement.dispose();
          if (generated === 'error:notconnected' || !generated)
            throw new Error(`Unable to generate locator for ${selector}`);
-@@ -1337,45 +1804,81 @@
+@@ -1337,45 +1775,81 @@
    }
  
    async textContent(progress: Progress, target: types.SelectorTarget): Promise<string | null> {
@@ -38676,7 +38616,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      return result.matches;
    }
  
-@@ -1385,16 +1888,82 @@
+@@ -1385,16 +1859,82 @@
    }
  
    async isVisibleInternal(progress: Progress, target: types.SelectorTarget): Promise<boolean> {
@@ -38767,7 +38707,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return false;
      }
    }
-@@ -1419,54 +1988,130 @@
+@@ -1419,54 +1959,130 @@
      return this._elementState(progress, target, 'checked');
    }
  
@@ -38919,7 +38859,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      } finally {
        clearTimeout(timer!);
      }
-@@ -1481,11 +2126,12 @@
+@@ -1481,11 +2097,12 @@
        }
      }
      // `isSet` distinguishes "not collected yet" from "collected with received: undefined".
@@ -38935,7 +38875,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        await this._page.performActionPreChecks(progress);
  
        // Step 2: perform one-shot expect check without a timeout.
-@@ -1493,18 +2139,22 @@
+@@ -1493,18 +2110,22 @@
        // that should succeed when the locator is already visible.
        try {
          const resultOneShot = await this._expectInternal(progress, selector, options, lastIntermediateResult, true);
@@ -38963,7 +38903,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          if (matches === options.isNot) {
            // Keep waiting in these cases:
            // expect(locator).conditionThatDoesNotMatch
-@@ -1514,31 +2164,39 @@
+@@ -1514,31 +2135,39 @@
          return { matches, received };
        });
      } catch (e) {
@@ -39012,7 +38952,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const mainWorld = options.expression === 'to.have.property';
      const isArray = options.expression === 'to.have.count' || options.expression.endsWith('.array');
      const effectiveSelector = selector ?? (options.expression === 'to.match.aria' ? 'body' : ':root');
-@@ -1548,19 +2206,24 @@
+@@ -1548,19 +2177,24 @@
      let missingReceived = false;
  
      // Non-array expectations are strict (callOnSelector throws on multiple); array ones are not.
@@ -39046,7 +38986,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      } else {
        // When no elements matched the selector, some assertions can still pass.
        if (options.expression === 'to.have.count') {
-@@ -1586,14 +2249,15 @@
+@@ -1586,14 +2220,15 @@
          missingReceived = true;
        }
        if (matches === options.isNot && !isArray) {
@@ -39069,7 +39009,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        }
      }
  
-@@ -1608,66 +2272,82 @@
+@@ -1608,66 +2243,82 @@
      return { matches, received };
    }
  
@@ -39203,7 +39143,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        } catch (error) {
          // Note: it is important to await "abort()" to prevent any side effects
          // after this method returns.
-@@ -1679,24 +2359,35 @@
+@@ -1679,24 +2330,35 @@
      });
    }
  
@@ -39255,7 +39195,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    async waitForFunctionValueInUtility<R>(progress: Progress, pageFunction: js.Func1<any, R>) {
-@@ -1722,25 +2413,28 @@
+@@ -1722,25 +2384,28 @@
        });
      } catch {
        const url = this.pendingDocument()?.request?.url();
@@ -39293,7 +39233,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        progress.wait(timeout),
      ]);
      progress.setAllowConcurrentOrNestedRaces(false);
-@@ -1750,47 +2444,313 @@
+@@ -1750,47 +2415,313 @@
      this._stopNetworkIdleTimer();
      this._detachedScope.close(new Error('Frame was detached'));
      for (const data of this._contextData.values()) {
@@ -39637,7 +39577,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    contextCreated(world: types.World, context: dom.FrameExecutionContext) {
-@@ -1808,12 +2768,10 @@
+@@ -1808,12 +2739,10 @@
    contextDestroyed(context: dom.FrameExecutionContext) {
      // Sometimes we get this after detach, in which case we should not reset
      // our already destroyed contexts to something that will never resolve.
@@ -39652,7 +39592,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      }
    }
  
-@@ -1822,8 +2780,7 @@
+@@ -1822,8 +2751,7 @@
      // We should not start a timer and report networkidle in detached frames.
      // This happens at least in Firefox for child frames, where we may get requestFinished
      // after the frame was detached - probably a race in the Firefox itself.
@@ -39662,7 +39602,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._networkIdleTimer = setTimeout(() => {
        this._firedNetworkIdleSelf = true;
        this._page.mainFrame()._recalculateNetworkIdle();
-@@ -1831,32 +2788,63 @@
+@@ -1831,32 +2759,63 @@
    }
  
    _stopNetworkIdleTimer() {
@@ -39737,7 +39677,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return { snapshot };
      }
      return { snapshot: await ariaSnapshotJSONForFrame(progress, this, options.selector, options) };
-@@ -1865,6 +2853,409 @@
+@@ -1865,6 +2824,409 @@
    private _asLocator(selector: string) {
      return asLocator(this._page.browserContext._browser.sdkLanguage(), selector);
    }
@@ -40090,33 +40030,33 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
 +
 +          // Querying and Sorting the elements by their backendNodeId
 +          for (const { handles, parentNode } of queryGroups) {
-+            const handlesAmount = await (await handles.getProperty(progress, 'length')).jsonValue(progress);
-+            for (var i = 0; i < handlesAmount; i++) {
-+              let element;
-+              if (parentNode instanceof dom.ElementHandle) {
-+                element = await (parentNode as any)._evaluateHandleInUtility(
-+                  ([injected, node, { i, handles: elems }]) => elems[i],
-+                  { i, handles },
-+                );
-+              } else {
-+                element = await parentNode.evaluateHandle((injected, { i, handles: elems }) => elems[i], {
-+                  i,
-+                  handles,
++            const properties = await handles.internalGetProperties().finally(() => handles.dispose());
++            try {
++              for (const property of properties.values()) {
++                const element = property.asElement() as any;
++                if (!element) {
++                  property.dispose();
++                  continue;
++                }
++                // For other Functions/Utilities
++                element.parentNode = parentNode;
++                const resolvedElement = await client.send('DOM.describeNode', {
++                  objectId: element._objectId,
++                  depth: -1,
 +                });
++                element.backendNodeId = resolvedElement.node.backendNodeId;
++                element.nodePosition = await this.selectors._findElementPositionInDomTree(
++                  element,
++                  describedScope.node,
++                  context,
++                  '',
++                );
++                element.nodePositionScopeIsDocument = describedScope.node.nodeName === '#document';
++                elements.push(element);
 +              }
-+
-+              // For other Functions/Utilities
-+              element.parentNode = parentNode;
-+              const resolvedElement = await client.send('DOM.describeNode', { objectId: element._objectId, depth: -1 });
-+              element.backendNodeId = resolvedElement.node.backendNodeId;
-+              element.nodePosition = await this.selectors._findElementPositionInDomTree(
-+                element,
-+                describedScope.node,
-+                context,
-+                '',
-+              );
-+              element.nodePositionScopeIsDocument = describedScope.node.nodeName === '#document';
-+              elements.push(element);
++            } catch (error) {
++              for (const handle of [...properties.values(), ...elements]) handle.dispose();
++              throw error;
 +            }
 +          }
 +        }
@@ -40147,7 +40087,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  class SignalBarrier {
-@@ -1884,23 +3275,19 @@
+@@ -1884,23 +3246,19 @@
  
    addFrameNavigation(frame: Frame) {
      // Auto-wait top-level navigations only.
@@ -40180,7 +40120,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    retain() {
-@@ -1909,21 +3296,18 @@
+@@ -1909,21 +3267,18 @@
  
    release() {
      --this._protectCount;
