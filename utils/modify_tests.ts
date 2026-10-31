@@ -319,6 +319,12 @@ const FIXME_TARGETS: Partial<Record<string, FixmeReasonByTitle>> = {
 			"Patchright always-on routing receives Chromium main resources through the text path, matching upstream Chromium failure behavior.",
 		],
 	]),
+	"tests/page/page-network-sizes.spec.ts": new Map([
+		[
+			"should have the correct responseBodySize for chunked request",
+			"Upstream test depends on Node.js chunk framing: Node.js >= 24.22 merges consecutive res.write() calls into one chunk, changing the wire size.",
+		],
+	]),
 	"tests/page/network-post-data.spec.ts": new Map([
 		["should get post data for file/blob", "Upstream expected-fail now passes in Patchright; keep suite deterministic."],
 		["should get post data for navigator.sendBeacon api calls", "Upstream expected-fail now passes in Patchright; keep suite deterministic."],
