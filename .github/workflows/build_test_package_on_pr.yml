@@ -38,7 +38,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Check Release Version
         id: version_check
@@ -57,12 +57,22 @@ jobs:
           git clone https://github.com/microsoft/playwright --branch ${{ steps.version_check.outputs.playwright_version }}
           cd playwright
           npm ci
+          cd .. && cp -r playwright playwright_not_patched
 
       - name: Patch Playwright Driver
         run: |
           cd playwright
           git -C .. submodule update --init --recursive --remote patchright-nodejs
           cd .. && npm run patch
+
+      - name: Create Patch File
+        run: utils/create_patch_file.sh
+
+      - name: Upload Patch File
+        uses: actions/upload-artifact@v6
+        with:
+          name: patchright-patch
+          path: patchright.patch
 
       - name: Generate Playwright Channels
         # Ignore the error exit code, as the script exits 1 when a file is modified.
@@ -93,3 +103,39 @@ jobs:
         with:
           name: patchright-packages
           path: artifacts/*.tgz
+
+  # Commits patchright.patch to the PR branch, so squash merges dont need a separate Patch-Comparison commit.
+  # SECURITY: This job has write access, so it must never execute PR code. The patch artifact is only handled as data.
+  commit-patch-file:
+    name: "​" # NOTE: Were using a zero-width space to save some visual clutter in the GitHub Pull Request UI
+    needs: build-package
+    if: github.event.pull_request.head.repo.full_name == github.repository # Fork PRs only ever get a read-only token
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Pull Request Head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Download outside of the checkout, so the artifact cannot overwrite files like .git/config
+      - name: Download Patch File
+        uses: actions/download-artifact@v6
+        with:
+          name: patchright-patch
+          path: ${{ runner.temp }}
+
+      - name: Commit and Push Patch File
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          mv "$RUNNER_TEMP/patchright.patch" patchright.patch
+          git diff --quiet patchright.patch && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "[Patch-Comparison] Automatic Commit" patchright.patch
+          git push origin "HEAD:refs/heads/$HEAD_REF"

@@ -383,7 +383,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install Playwright Driver
         run: |
