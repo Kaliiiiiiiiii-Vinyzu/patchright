@@ -26,7 +26,7 @@ else
   git -C playwright checkout "$PLAYWRIGHT_VERSION"
 fi
 
-npm install
+npm ci
 (
   cd playwright
   npm ci

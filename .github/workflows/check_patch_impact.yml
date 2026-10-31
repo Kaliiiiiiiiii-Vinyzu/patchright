@@ -51,7 +51,7 @@ jobs:
           node-version: 24
 
       - name: Install NPM Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Analyze Patch Impact
         id: analyze

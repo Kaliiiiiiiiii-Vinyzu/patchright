@@ -25,7 +25,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install NPM Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Get Commit Author and Message
         id: get_commit_info
