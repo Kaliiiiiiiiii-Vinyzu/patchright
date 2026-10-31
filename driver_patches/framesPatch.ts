@@ -67,27 +67,11 @@ export function patchFrames(project: Project) {
 	});
 	evalOnSelectorAllMethod.setBodyText(`
 		isolatedContext = this.selectors._parseSelector(selector, false).world !== "main" && isolatedContext;
-		const injectedArrayHandle = await this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext);
-		const count = await injectedArrayHandle.evaluate(elements => elements.length);
-		if ((count && !await this.selectors._hasClosedShadowRoots()) || scope) {
-			const result = await injectedArrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
-			injectedArrayHandle.dispose();
-			return result;
-		}
-		injectedArrayHandle.dispose();
-
-		const context = isolatedContext ? await this.utilityContext() : await this.mainContext();
-		const handles = await this.querySelectorAll(progress, selector);
-		const adoptedHandles = await Promise.all(handles.map(handle =>
-			handle._context === context ? handle : this._page.delegate.adoptElementHandle(handle, context)
-		));
-		const arrayHandle = await context.evaluateHandle(elements => elements, adoptedHandles);
+		const arrayHandle = await progress.race(this.selectors.queryArrayInMainWorld(selector, scope, isolatedContext));
 		try {
-			return await arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg);
+			return await progress.race(arrayHandle.internalEvaluateExpression(expression, { isFunction }, arg));
 		} finally {
 			arrayHandle.dispose();
-			for (const handle of new Set([...handles, ...adoptedHandles]))
-				handle.dispose();
 		}
 	`);
 
@@ -837,24 +821,6 @@ export function patchFrames(project: Project) {
 		});
 	`);
 
-	// -- queryCount Method --
-	const queryCountMethod = frameClass.getMethodOrThrow("queryCount");
-	queryCountMethod.setBodyText(`
-		try {
-			const continuePolling = Symbol("continuePolling");
-			const result = await this._retryWithoutProgress(progress, selector, {strict: null, performActionPreChecks: false }, async (result) => {
-				if (!result || !result[0])
-					return 0;
-				return Array.isArray(result[1]) ? result[1].length : 0;
-			}, 'returnAll', continuePolling);
-			return result === continuePolling ? await this.selectors.queryCount(selector) : result;
-		} catch (e) {
-			if (this.isNonRetriableError(e))
-				throw e;
-			return 0;
-		}
-	`);
-
 	// -- _waitForFunctionOnSelector Method --
 	const waitForFunctionOnSelectorMethod = frameClass.getMethodOrThrow("_waitForFunctionOnSelector");
 	waitForFunctionOnSelectorMethod.setBodyText(`
@@ -1222,28 +1188,26 @@ export function patchFrames(project: Project) {
 
 					// Querying and Sorting the elements by their backendNodeId
 					for (const { handles, parentNode } of queryGroups) {
-						const handlesAmount = await (await handles.getProperty(progress, "length")).jsonValue(progress);
-						for (var i = 0; i < handlesAmount; i++) {
-							let element;
-						  if (parentNode instanceof dom.ElementHandle) {
-								element = await (parentNode as any)._evaluateHandleInUtility(
-									([injected, node, { i, handles: elems }]) => elems[i],
-									{ i, handles }
-								);
-							} else {
-								element = await parentNode.evaluateHandle(
-									(injected, { i, handles: elems }) => elems[i],
-									{ i, handles }
-								);
+						const properties = await handles.internalGetProperties().finally(() => handles.dispose());
+						try {
+							for (const property of properties.values()) {
+								const element = property.asElement() as any;
+								if (!element) {
+									property.dispose();
+									continue;
+								}
+								// For other Functions/Utilities
+								element.parentNode = parentNode;
+								const resolvedElement = await client.send("DOM.describeNode", { objectId: element._objectId, depth: -1 });
+								element.backendNodeId = resolvedElement.node.backendNodeId;
+								element.nodePosition = await this.selectors._findElementPositionInDomTree(element, describedScope.node, context, "");
+								element.nodePositionScopeIsDocument = describedScope.node.nodeName === "#document";
+								elements.push(element);
 							}
-
-							// For other Functions/Utilities
-							element.parentNode = parentNode;
-							const resolvedElement = await client.send("DOM.describeNode", { objectId: element._objectId, depth: -1 });
-							element.backendNodeId = resolvedElement.node.backendNodeId;
-							element.nodePosition = await this.selectors._findElementPositionInDomTree(element, describedScope.node, context, "");
-							element.nodePositionScopeIsDocument = describedScope.node.nodeName === "#document";
-							elements.push(element);
+						} catch (error) {
+							for (const handle of [...properties.values(), ...elements])
+								handle.dispose();
+							throw error;
 						}
 					}
 				}

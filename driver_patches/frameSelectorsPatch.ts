@@ -78,7 +78,7 @@ export function patchFrameSelectors(project: Project) {
 		.map(s => s.getText())
 		.join("\n");
 	getResultFunction.setBodyText(`
-		const elements = !scope && !target.mainWorld && await frame.selectors._hasClosedShadowRoots()
+		const elements = !scope && await frame.selectors._hasClosedShadowRoots()
 			? await frame.querySelectorAll(nullProgress, stringifySelector(info.parsed)) : undefined;
 		try {
 			${getResultBody}
@@ -111,6 +111,11 @@ export function patchFrameSelectors(project: Project) {
 			.getProperty("mainWorld"),
 	);
 	if (mainWorldProp.getText() === "mainWorld: true") mainWorldProp.replaceWithText("mainWorld: !isolatedContext");
+	assertDefined(
+		queryArrayInMainWorldMethod
+			.getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+			.find(d => d.getName() === "context"),
+	).setInitializer("await this.frame.context(isolatedContext ? 'utility' : 'main')");
 
 	// Keep upstream's iframe visibility and validation when querying closed shadow roots.
 	const queryFramesMethod = frameSelectorsClass.getMethodOrThrow("_queryFrames");
@@ -403,7 +408,7 @@ export function patchFrameSelectors(project: Project) {
 
 		for (const shadowRoot of queryingElement.shadowRoots || []) {
 			// For CSRs, we dont have to append its index because patchright treats CSRs like they dont exist
-			if (shadowRoot.shadowRootType === "closed" && shadowRoot.backendNodeId) {
+			if (shadowRoot.shadowRootType === "closed" && shadowRoot.backendNodeId && !shadowRoot.children) {
 				// Resolve the CDP client for the current context so closed shadow roots can be traversed safely.
 				const client = context.frame._page.delegate._sessionForFrame(context.frame)._client;
 				const describedShadowRoot = await client.send("DOM.describeNode", { backendNodeId: shadowRoot.backendNodeId, depth: -1, pierce: true });
