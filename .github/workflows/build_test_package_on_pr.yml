@@ -137,5 +137,5 @@ jobs:
           git diff --quiet patchright.patch && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "[Patch-Comparison] Automatic Commit" patchright.patch
+          git commit -m "[Patch-Comparison] Automatic Commit [skip ci]" patchright.patch
           git push origin "HEAD:refs/heads/$HEAD_REF"
