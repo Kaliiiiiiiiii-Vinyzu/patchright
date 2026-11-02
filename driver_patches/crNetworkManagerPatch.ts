@@ -151,6 +151,20 @@ export function patchCRNetworkManager(project: Project) {
 				return this._requestIdToRequest.get(event.networkId)?._originalRequestRoute?._networkRequestIntercepted(event);
 		`);
 
+	// With the cache enabled, Chromium can restart requests that were continued without a route (e.g. auth-only interception).
+	const restartedRequestIfStatement = assertDefined(
+		onRequestPausedMethod
+			.getDescendantsOfKind(SyntaxKind.IfStatement)
+			.find(
+				statement => statement.getExpression().getText() === "alreadyContinuedParams && !event.redirectedRequestId",
+			),
+	);
+	restartedRequestIfStatement
+		.getExpression()
+		.replaceWithText(
+			"(alreadyContinuedParams || (existingRequest && !existingRequest._originalRequestRoute)) && !event.redirectedRequestId",
+		);
+
 	// Cached requests do not produce Fetch.requestPaused, so finish pairing them from the Network event.
 	const onRequestServedFromCacheMethod = crNetworkManagerClass.getMethodOrThrow("_onRequestServedFromCache");
 	onRequestServedFromCacheMethod.getBodyOrThrow().asKindOrThrow(SyntaxKind.Block).addStatements(`
