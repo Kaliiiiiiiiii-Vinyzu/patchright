@@ -7420,7 +7420,19 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  
      const requestId = event.networkId;
      const requestWillBeSentEvent = this._requestIdToRequestWillBeSentEvent.get(requestId);
-@@ -279,19 +355,44 @@
+@@ -259,7 +335,10 @@
+     } else {
+       const existingRequest = this._requestIdToRequest.get(requestId);
+       const alreadyContinuedParams = existingRequest?._originalRequestRoute?._alreadyContinuedParams;
+-      if (alreadyContinuedParams && !event.redirectedRequestId) {
++      if (
++        (alreadyContinuedParams || (existingRequest && !existingRequest._originalRequestRoute)) &&
++        !event.redirectedRequestId
++      ) {
+         // Sometimes Chromium network stack restarts the request internally.
+         // For example, when no-cors request hits a "less public address space", it should be resent with cors.
+         // There are some more examples here: https://source.chromium.org/chromium/chromium/src/+/main:services/network/url_loader.cc;l=1205-1234;drc=d5dd931e0ad3d9ffe74888ec62a3cc106efd7ea6
+@@ -279,19 +358,44 @@
      }
    }
  
@@ -7470,7 +7482,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      // Requests from workers lack frameId, because we receive Network.requestWillBeSent
      // on the worker target. However, we receive Fetch.requestPaused on the page target,
      // and lack workerFrame there. Luckily, Fetch.requestPaused provides a frameId.
-@@ -310,16 +411,21 @@
+@@ -310,16 +414,21 @@
      // we accept all CORS options, assuming that this was intended when setting route.
      //
      // Note: it would be better to match the URL against interception patterns.
@@ -7496,7 +7508,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        requestPausedSessionInfo!.session._sendMayFail('Fetch.fulfillRequest', {
          requestId: requestPausedEvent.requestId,
          responseCode: 204,
-@@ -333,7 +439,9 @@
+@@ -333,7 +442,9 @@
      // Non-service-worker requests MUST have a frame—if they don't, we pretend there was no request
      if (!frame && !this._serviceWorker) {
        if (requestPausedEvent)
@@ -7507,7 +7519,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        return;
      }
  
-@@ -345,15 +453,29 @@
+@@ -345,15 +456,29 @@
          // Chromium does not preserve header overrides between redirects, so we have to do it ourselves.
          headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
          if (headersOverride) {
@@ -7541,7 +7553,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const documentId = isNavigationRequest ? requestWillBeSentEvent.loaderId : undefined;
      const request = new InterceptableRequest({
        session: requestWillBeSentSessionInfo.session,
-@@ -369,7 +491,7 @@
+@@ -369,7 +494,7 @@
      });
      this._requestIdToRequest.set(requestWillBeSentEvent.requestId, request);
  
@@ -7550,7 +7562,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        // We may not receive extra info when intercepting the request.
        // Use the headers from the Fetch.requestPausedPayload and release the allHeaders()
        // right away, so that client can call it from the route handler.
-@@ -378,7 +500,11 @@
+@@ -378,7 +503,11 @@
      (this._page?.frameManager || this._serviceWorker)!.requestStarted(request.request, route || undefined);
    }
  
@@ -7563,7 +7575,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const getResponseBody = InterceptableRequest.createResponseBodyCallback(request.request);
      const timingPayload = responsePayload.timing!;
      let timing: network.ResourceTiming;
-@@ -405,7 +531,24 @@
+@@ -405,7 +534,24 @@
          responseStart: -1,
        };
      }
@@ -7589,7 +7601,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      response._setHttpVersion(responsePayload?.protocol ?? null);
      if (responsePayload?.remoteIPAddress && typeof responsePayload?.remotePort === 'number') {
        response._serverAddrFinished({
-@@ -428,11 +571,15 @@
+@@ -428,11 +574,15 @@
  
    _deleteRequest(request: InterceptableRequest) {
      this._requestIdToRequest.delete(request._requestId);
@@ -7608,7 +7620,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const response = this._createResponse(request, responsePayload, hasExtraInfo);
      response.setTransferSize(null);
      response.setEncodedBodySize(null);
-@@ -460,8 +607,7 @@
+@@ -460,8 +610,7 @@
        }
      }
      // FileUpload sends a response without a matching request.
@@ -7618,7 +7630,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      const response = this._createResponse(request, event.response, event.hasExtraInfo);
      (this._page?.frameManager || this._serviceWorker)!.requestReceivedResponse(response);
    }
-@@ -472,13 +618,32 @@
+@@ -472,13 +621,32 @@
      const request = this._requestIdToRequest.get(event.requestId);
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -7654,7 +7666,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      if (response) {
        response.setTransferSize(event.encodedDataLength);
        response.responseHeadersSize().then(size => response.setEncodedBodySize(event.encodedDataLength - size));
-@@ -507,8 +672,7 @@
+@@ -507,8 +675,7 @@
  
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -7664,7 +7676,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this._maybeUpdateRequestSession(sessionInfo, request);
      const response = request.request._existingResponse();
      if (response) {
-@@ -557,15 +721,27 @@
+@@ -557,15 +724,27 @@
      //
      // In theory, we can always update the session. However, we try to be conservative here
      // to make sure we understand all the scenarios where the session should be updated.
@@ -7694,7 +7706,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  ]);
  
  const kInterceptableRequest = Symbol('InterceptableRequest');
-@@ -587,8 +763,7 @@
+@@ -587,8 +766,7 @@
    }
  
    static detachIfNeeded(request: network.Request, session: CRSession) {
@@ -7704,7 +7716,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
    }
  
    static createResponseBodyCallback(request: network.Request): () => Promise<Buffer> {
-@@ -596,8 +771,7 @@
+@@ -596,8 +774,7 @@
        // Lookup the request lazily, so that the response does not retain the
        // InterceptableRequest and its session after detachIfNeeded().
        const interceptable = InterceptableRequest.from(request);
@@ -7714,7 +7726,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const contentLength = request._existingResponse()?.headerValue('content-length');
        const expectedLength = contentLength ? +contentLength : undefined;
  
-@@ -607,21 +781,24 @@
+@@ -607,21 +784,24 @@
          return Buffer.from(response.body, response.base64Encoded ? 'base64' : 'utf8');
  
        // Make sure no network requests sent while reading the body for fulfilled requests.
@@ -7747,7 +7759,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
        const chunks: Buffer[] = [];
        while (resource.resource.stream) {
          const chunk = await session.send('IO.read', { handle: resource.resource.stream });
-@@ -636,7 +813,7 @@
+@@ -636,7 +816,7 @@
    }
  
    constructor(options: {
@@ -7756,7 +7768,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      context: contexts.BrowserContext;
      frame: frames.Frame | null;
      serviceWorker: CRServiceWorker | null;
-@@ -647,7 +824,18 @@
+@@ -647,7 +827,18 @@
      redirectedFrom: InterceptableRequest | null;
      headersOverride: types.HeadersArray | null;
    }) {
@@ -7776,7 +7788,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      this.session = session;
      this._timestamp = requestWillBeSentEvent.timestamp;
      this._wallTime = requestWillBeSentEvent.wallTime;
-@@ -667,7 +855,19 @@
+@@ -667,7 +858,19 @@
      if (entries && entries.length)
        postDataBuffer = Buffer.concat(entries.map(entry => Buffer.from(entry.bytes!, 'base64')));
  
@@ -7797,7 +7809,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      (this.request as any)[kInterceptableRequest] = this;
    }
  }
-@@ -677,33 +877,155 @@
+@@ -677,33 +880,155 @@
    private _interceptionId: string;
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
@@ -7961,7 +7973,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
          responseCode: response.status,
          responsePhrase: network.statusText(response.status),
          responseHeaders,
-@@ -718,10 +1040,217 @@
+@@ -718,10 +1043,217 @@
      await catchDisallowedErrors(async () => {
        await this._session.send('Fetch.failRequest', {
          requestId: this._interceptionId!,
@@ -8180,7 +8192,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  }
  
  // In certain cases, protocol will return error if the request was already canceled
-@@ -730,14 +1259,11 @@
+@@ -730,14 +1262,11 @@
    try {
      return await callback();
    } catch (e) {
@@ -8197,7 +8209,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  // Never forward the `cookie` header to Fetch.continueRequest: since Chromium 145 it overrides
  // the cookie store, which leaks the value captured at interception time. Omitting it lets the
  // network stack source the cookie from the store. https://github.com/microsoft/playwright/issues/41428
-@@ -746,34 +1272,34 @@
+@@ -746,34 +1275,34 @@
  }
  
  const errorReasons: { [reason: string]: Protocol.Network.ErrorReason } = {
@@ -8253,7 +8265,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
  };
  
  // This class aligns responses with response headers from extra info:
-@@ -836,16 +1362,14 @@
+@@ -836,16 +1365,14 @@
  
    loadingFinished(event: Protocol.Network.loadingFinishedPayload) {
      const info = this._requests.get(event.requestId);
@@ -8272,7 +8284,7 @@ diff -ruN -x protocol.yml --minimal playwright/node_modules/playwright-core/src/
      info.loadingFailed = event;
      this._checkFinished(info);
    }
-@@ -880,8 +1404,7 @@
+@@ -880,8 +1407,7 @@
    }
  
    private _checkFinished(info: RequestInfo) {
@@ -31289,7 +31301,19 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  
      const requestId = event.networkId;
      const requestWillBeSentEvent = this._requestIdToRequestWillBeSentEvent.get(requestId);
-@@ -279,19 +355,44 @@
+@@ -259,7 +335,10 @@
+     } else {
+       const existingRequest = this._requestIdToRequest.get(requestId);
+       const alreadyContinuedParams = existingRequest?._originalRequestRoute?._alreadyContinuedParams;
+-      if (alreadyContinuedParams && !event.redirectedRequestId) {
++      if (
++        (alreadyContinuedParams || (existingRequest && !existingRequest._originalRequestRoute)) &&
++        !event.redirectedRequestId
++      ) {
+         // Sometimes Chromium network stack restarts the request internally.
+         // For example, when no-cors request hits a "less public address space", it should be resent with cors.
+         // There are some more examples here: https://source.chromium.org/chromium/chromium/src/+/main:services/network/url_loader.cc;l=1205-1234;drc=d5dd931e0ad3d9ffe74888ec62a3cc106efd7ea6
+@@ -279,19 +358,44 @@
      }
    }
  
@@ -31339,7 +31363,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      // Requests from workers lack frameId, because we receive Network.requestWillBeSent
      // on the worker target. However, we receive Fetch.requestPaused on the page target,
      // and lack workerFrame there. Luckily, Fetch.requestPaused provides a frameId.
-@@ -310,16 +411,21 @@
+@@ -310,16 +414,21 @@
      // we accept all CORS options, assuming that this was intended when setting route.
      //
      // Note: it would be better to match the URL against interception patterns.
@@ -31365,7 +31389,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        requestPausedSessionInfo!.session._sendMayFail('Fetch.fulfillRequest', {
          requestId: requestPausedEvent.requestId,
          responseCode: 204,
-@@ -333,7 +439,9 @@
+@@ -333,7 +442,9 @@
      // Non-service-worker requests MUST have a frame—if they don't, we pretend there was no request
      if (!frame && !this._serviceWorker) {
        if (requestPausedEvent)
@@ -31376,7 +31400,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        return;
      }
  
-@@ -345,15 +453,29 @@
+@@ -345,15 +456,29 @@
          // Chromium does not preserve header overrides between redirects, so we have to do it ourselves.
          headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
          if (headersOverride) {
@@ -31410,7 +31434,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const documentId = isNavigationRequest ? requestWillBeSentEvent.loaderId : undefined;
      const request = new InterceptableRequest({
        session: requestWillBeSentSessionInfo.session,
-@@ -369,7 +491,7 @@
+@@ -369,7 +494,7 @@
      });
      this._requestIdToRequest.set(requestWillBeSentEvent.requestId, request);
  
@@ -31419,7 +31443,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        // We may not receive extra info when intercepting the request.
        // Use the headers from the Fetch.requestPausedPayload and release the allHeaders()
        // right away, so that client can call it from the route handler.
-@@ -378,7 +500,11 @@
+@@ -378,7 +503,11 @@
      (this._page?.frameManager || this._serviceWorker)!.requestStarted(request.request, route || undefined);
    }
  
@@ -31432,7 +31456,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const getResponseBody = InterceptableRequest.createResponseBodyCallback(request.request);
      const timingPayload = responsePayload.timing!;
      let timing: network.ResourceTiming;
-@@ -405,7 +531,24 @@
+@@ -405,7 +534,24 @@
          responseStart: -1,
        };
      }
@@ -31458,7 +31482,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      response._setHttpVersion(responsePayload?.protocol ?? null);
      if (responsePayload?.remoteIPAddress && typeof responsePayload?.remotePort === 'number') {
        response._serverAddrFinished({
-@@ -428,11 +571,15 @@
+@@ -428,11 +574,15 @@
  
    _deleteRequest(request: InterceptableRequest) {
      this._requestIdToRequest.delete(request._requestId);
@@ -31477,7 +31501,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const response = this._createResponse(request, responsePayload, hasExtraInfo);
      response.setTransferSize(null);
      response.setEncodedBodySize(null);
-@@ -460,8 +607,7 @@
+@@ -460,8 +610,7 @@
        }
      }
      // FileUpload sends a response without a matching request.
@@ -31487,7 +31511,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      const response = this._createResponse(request, event.response, event.hasExtraInfo);
      (this._page?.frameManager || this._serviceWorker)!.requestReceivedResponse(response);
    }
-@@ -472,13 +618,32 @@
+@@ -472,13 +621,32 @@
      const request = this._requestIdToRequest.get(event.requestId);
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -31523,7 +31547,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      if (response) {
        response.setTransferSize(event.encodedDataLength);
        response.responseHeadersSize().then(size => response.setEncodedBodySize(event.encodedDataLength - size));
-@@ -507,8 +672,7 @@
+@@ -507,8 +675,7 @@
  
      // For certain requestIds we never receive requestWillBeSent event.
      // @see https://crbug.com/750469
@@ -31533,7 +31557,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this._maybeUpdateRequestSession(sessionInfo, request);
      const response = request.request._existingResponse();
      if (response) {
-@@ -557,15 +721,27 @@
+@@ -557,15 +724,27 @@
      //
      // In theory, we can always update the session. However, we try to be conservative here
      // to make sure we understand all the scenarios where the session should be updated.
@@ -31563,7 +31587,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  ]);
  
  const kInterceptableRequest = Symbol('InterceptableRequest');
-@@ -587,8 +763,7 @@
+@@ -587,8 +766,7 @@
    }
  
    static detachIfNeeded(request: network.Request, session: CRSession) {
@@ -31573,7 +31597,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
    }
  
    static createResponseBodyCallback(request: network.Request): () => Promise<Buffer> {
-@@ -596,8 +771,7 @@
+@@ -596,8 +774,7 @@
        // Lookup the request lazily, so that the response does not retain the
        // InterceptableRequest and its session after detachIfNeeded().
        const interceptable = InterceptableRequest.from(request);
@@ -31583,7 +31607,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const contentLength = request._existingResponse()?.headerValue('content-length');
        const expectedLength = contentLength ? +contentLength : undefined;
  
-@@ -607,21 +781,24 @@
+@@ -607,21 +784,24 @@
          return Buffer.from(response.body, response.base64Encoded ? 'base64' : 'utf8');
  
        // Make sure no network requests sent while reading the body for fulfilled requests.
@@ -31616,7 +31640,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
        const chunks: Buffer[] = [];
        while (resource.resource.stream) {
          const chunk = await session.send('IO.read', { handle: resource.resource.stream });
-@@ -636,7 +813,7 @@
+@@ -636,7 +816,7 @@
    }
  
    constructor(options: {
@@ -31625,7 +31649,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      context: contexts.BrowserContext;
      frame: frames.Frame | null;
      serviceWorker: CRServiceWorker | null;
-@@ -647,7 +824,18 @@
+@@ -647,7 +827,18 @@
      redirectedFrom: InterceptableRequest | null;
      headersOverride: types.HeadersArray | null;
    }) {
@@ -31645,7 +31669,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      this.session = session;
      this._timestamp = requestWillBeSentEvent.timestamp;
      this._wallTime = requestWillBeSentEvent.wallTime;
-@@ -667,7 +855,19 @@
+@@ -667,7 +858,19 @@
      if (entries && entries.length)
        postDataBuffer = Buffer.concat(entries.map(entry => Buffer.from(entry.bytes!, 'base64')));
  
@@ -31666,7 +31690,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      (this.request as any)[kInterceptableRequest] = this;
    }
  }
-@@ -677,33 +877,155 @@
+@@ -677,33 +880,155 @@
    private _interceptionId: string;
    _alreadyContinuedParams: Protocol.Fetch.continueRequestParameters | undefined;
    _fulfilled: boolean = false;
@@ -31830,7 +31854,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
          responseCode: response.status,
          responsePhrase: network.statusText(response.status),
          responseHeaders,
-@@ -718,10 +1040,217 @@
+@@ -718,10 +1043,217 @@
      await catchDisallowedErrors(async () => {
        await this._session.send('Fetch.failRequest', {
          requestId: this._interceptionId!,
@@ -32049,7 +32073,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  }
  
  // In certain cases, protocol will return error if the request was already canceled
-@@ -730,14 +1259,11 @@
+@@ -730,14 +1262,11 @@
    try {
      return await callback();
    } catch (e) {
@@ -32066,7 +32090,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  // Never forward the `cookie` header to Fetch.continueRequest: since Chromium 145 it overrides
  // the cookie store, which leaks the value captured at interception time. Omitting it lets the
  // network stack source the cookie from the store. https://github.com/microsoft/playwright/issues/41428
-@@ -746,34 +1272,34 @@
+@@ -746,34 +1275,34 @@
  }
  
  const errorReasons: { [reason: string]: Protocol.Network.ErrorReason } = {
@@ -32122,7 +32146,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
  };
  
  // This class aligns responses with response headers from extra info:
-@@ -836,16 +1362,14 @@
+@@ -836,16 +1365,14 @@
  
    loadingFinished(event: Protocol.Network.loadingFinishedPayload) {
      const info = this._requests.get(event.requestId);
@@ -32141,7 +32165,7 @@ diff -ruN -x protocol.yml --minimal playwright/packages/playwright-core/src/serv
      info.loadingFailed = event;
      this._checkFinished(info);
    }
-@@ -880,8 +1404,7 @@
+@@ -880,8 +1407,7 @@
    }
  
    private _checkFinished(info: RequestInfo) {
