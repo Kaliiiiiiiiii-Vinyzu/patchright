@@ -77,6 +77,8 @@ Why [NodeMaven](https://go.nodemaven.com/Vinyzuoctober)?
 🔥 **PATCHRIGHT35** - **35% off** to Mobile and Residential Proxies
 </br>
 🔥 **PATCHRIGHT40** - **40% off** to ISP (Static) Proxies
+</br>
+🔥🔥 **PATCHRIGHT** - 2X traffic for Black Friday
 
 <sup>Choose quality and stability with [NodeMaven](https://go.nodemaven.com/Vinyzuoctober).</sup>
 </br>
