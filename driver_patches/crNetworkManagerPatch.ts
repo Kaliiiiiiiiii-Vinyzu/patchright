@@ -581,7 +581,6 @@ export function patchCRNetworkManager(project: Project) {
 	// -- continue Method --
 	const continueMethod = routeImplClass.getMethodOrThrow("continue");
 	continueMethod.setBodyText(`		;
-		const patchrightInitScript = !!(overrides as any).patchrightInitScript;
 		this._alreadyContinuedParams = {
 			requestId: this._interceptionId,
 			url: overrides.url,
@@ -589,21 +588,9 @@ export function patchCRNetworkManager(project: Project) {
 			method: overrides.method,
 			postData: overrides.postData?.toString('base64'),
 		};
-		if (patchrightInitScript) {
-			await catchDisallowedErrors(async () => {
-				this._sessionManager._alreadyTrackedNetworkIds.add(this._networkId);
-				try {
-					await this._session.send('Fetch.continueRequest', { requestId: this._interceptionId, interceptResponse: true });
-				} catch (e) {
-					this._sessionManager._alreadyTrackedNetworkIds.delete(this._networkId);
-					throw e;
-				}
-			});
-		} else {
-			await catchDisallowedErrors(async () => {
-				await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
-			});
-		}
+		await catchDisallowedErrors(async () => {
+			await this._session.send('Fetch.continueRequest', this._alreadyContinuedParams);
+		});
 	`);
 
 	// -- _networkRequestIntercepted Method --
