@@ -322,7 +322,7 @@ export function patchCRPage(project: Project) {
 		if (event.name !== "load")
 		  return;
 		var document = await this._client._sendMayFail("DOM.getDocument");
-		if (!document) return
+		if (!document || !document.root || !document.root.nodeId) return
 		var query = await this._client._sendMayFail("DOM.querySelectorAll", {
 		  nodeId: document.root.nodeId,
 		  selector: "[class=" + this._crPage.initScriptTag + "]"
@@ -368,7 +368,7 @@ export function patchCRPage(project: Project) {
 			return;
 		}
 		var document = await this._client._sendMayFail("DOM.getDocument");
-		if (!document) return
+		if (!document || !document.root || !document.root.nodeId) return
 		var query = await this._client._sendMayFail("DOM.querySelectorAll", {
 			nodeId: document.root.nodeId,
 			selector: "[class=" + this._crPage.initScriptTag + "]"
