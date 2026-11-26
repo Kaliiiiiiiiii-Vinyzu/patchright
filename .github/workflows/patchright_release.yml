@@ -1,5 +1,12 @@
 name: Patchright Release Build and Publish
 
+# Job flow: check-release-version -> run-patchright-tests -> check-patch-impact
+#   -> patchright-workflow: build and pack the npm packages (read-only token)
+#   -> publish-npm: verify the checksums and publish (the only job with id-token: write)
+#   -> create-github-release: create the GitHub release (contents: write).
+# Build and publish are separate jobs so the publish credential is never present while
+# install scripts and the Playwright build run; only the tarballs and their checksums are passed on.
+
 on:
   # enabling manual trigger
   workflow_dispatch:
@@ -14,29 +21,42 @@ on:
   schedule:
     - cron: '0 * * * *'
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
 
 env:
   REPO: ${{ github.repository }}
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   patchright_release: ${{ github.event.inputs.patchright_release || '' }}
 
 jobs:
   check-release-version:
     name: Check Release Version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read # look up an existing failure issue for scheduled runs
     outputs:
       proceed: ${{ steps.version_check.outputs.proceed == 'true' && (github.event_name != 'schedule' || steps.existing_failure_issue.outputs.skip_due_to_existing_issue != 'true') }}
       playwright_version: ${{ steps.version_check.outputs.playwright_version }}
       previous_playwright_version: ${{ steps.version_check.outputs.previous_playwright_version }}
     steps:
+      # Actions are pinned to a full commit SHA, which can't be moved like a tag; the comment
+      # names the release it points to, and Dependabot (.github/dependabot.yml) keeps both up to date.
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false # don't leave the token in .git/config for later steps
 
       - name: Check Release Version
         id: version_check
+        # Passed through env so the values reach the script as data, never as script text.
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_PATCHRIGHT_RELEASE: ${{ github.event.inputs.patchright_release }}
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            raw_version="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            raw_version="$INPUT_VERSION"
             normalized_version="v${raw_version#v}"
             response=$(curl --silent "https://api.github.com/repos/${REPO}/releases/latest")
             previous_playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -44,8 +64,8 @@ jobs:
             echo "playwright_version=${normalized_version}" >>$GITHUB_OUTPUT
             echo "previous_playwright_version=${previous_playwright_version:-v0.0.0}" >>$GITHUB_OUTPUT
             echo "playwright_version=${normalized_version}" >> $GITHUB_ENV
-          elif [ -n "${{ github.event.inputs.patchright_release }}" ]; then
-            raw_patchright_release="${{ github.event.inputs.patchright_release }}"
+          elif [ -n "$INPUT_PATCHRIGHT_RELEASE" ]; then
+            raw_patchright_release="$INPUT_PATCHRIGHT_RELEASE"
             normalized_patchright_release="${raw_patchright_release#v}"
             response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
             playwright_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
@@ -66,7 +86,7 @@ jobs:
       - name: Check Existing Failure Issue For Scheduled Run
         id: existing_failure_issue
         if: github.event_name == 'schedule' && steps.version_check.outputs.proceed == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           TARGET_VERSION: ${{ steps.version_check.outputs.playwright_version }}
         with:
@@ -123,13 +143,13 @@ jobs:
     steps:
       - name: Download Patch Impact Report Artifact
         continue-on-error: true
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: report.json
           path: artifacts
 
       - name: Open Test Failure Issue
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           OLD_VERSION: ${{ needs.check-release-version.outputs.previous_playwright_version }}
           NEW_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
@@ -362,32 +382,40 @@ jobs:
             }
 
   patchright-workflow:
-    name: "Patchright Release: Install, Patch, Build and Publish Patchright Packages"
+    name: "Patchright Release: Install, Patch and Build Patchright Packages"
     needs: [check-release-version, check-patch-impact, run-patchright-tests]
     if: needs.check-release-version.outputs.proceed == 'true' && needs.run-patchright-tests.result == 'success' && needs.run-patchright-tests.outputs.test_outcome == 'success'
     runs-on: ubuntu-latest
+    # Read-only: this job runs third-party code (npm ci, the Playwright build), so it gets no publish rights.
     permissions:
-      contents: write
-      id-token: write
+      contents: read
+    outputs:
+      sha256: ${{ steps.pack.outputs.sha256 }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
 
       - name: Configure Fast APT Mirror
-        uses: vegardit/fast-apt-mirror.sh@v1
+        uses: vegardit/fast-apt-mirror.sh@806c59276adfff2df420124ad5e4587f018c358a # 1.4.5
 
       - name: Setup Node v24
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false # build release packages from a clean install, not a shared cache
 
       - name: Install NPM Dependencies
         run: npm ci
 
       - name: Install Playwright Driver
+        env:
+          PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
-          git clone https://github.com/microsoft/playwright --branch ${{ needs.check-release-version.outputs.playwright_version }}
+          git clone https://github.com/microsoft/playwright --branch "$PLAYWRIGHT_VERSION"
+          # Log the exact upstream commit the tag pointed to, so the build can be traced later.
+          echo "microsoft/playwright $PLAYWRIGHT_VERSION is commit $(git -C playwright rev-parse HEAD)"
           cd playwright
           npm ci
 
@@ -414,35 +442,100 @@ jobs:
           cd playwright
           npx tsx ../patchright-nodejs/patchright_rebranding.ts
 
+      # Pack the packages and record their SHA-256 checksums as a job output for publish-npm.
+      - name: Pack Patchright Packages
+        id: pack
+        run: |
+          mkdir -p dist
+          npm pack ./playwright/packages/patchright-core --pack-destination dist
+          npm pack ./playwright/packages/patchright --pack-destination dist
+          manifest=$(sha256sum dist/*.tgz)
+          echo "$manifest"
+          {
+            echo "sha256<<SHA256_EOF"
+            echo "$manifest"
+            echo "SHA256_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload Patchright Packages
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: patchright-npm-packages
+          path: dist/*.tgz
+          if-no-files-found: error
+          retention-days: 7 # only needed until publish-npm has run
+
+  publish-npm:
+    name: "Patchright Release: Publish Patchright Packages"
+    needs: [patchright-workflow]
+    runs-on: ubuntu-latest
+    # The only job that can get a publish token. It checks out no code and builds nothing:
+    # it only verifies and publishes the tarballs.
+    permissions:
+      id-token: write # npm trusted publishing + provenance
+    steps:
+      - name: Download Patchright Packages
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: patchright-npm-packages
+          path: dist
+
+      # Publish exactly what the build job packed: no changed, missing or extra files.
+      - name: Verify Package Checksums
+        env:
+          SHA256_MANIFEST: ${{ needs.patchright-workflow.outputs.sha256 }}
+        run: |
+          printf '%s\n' "$SHA256_MANIFEST" | sha256sum --check --strict
+          # Refuse to publish files that were not in the build job's manifest.
+          test "$(find dist -type f | wc -l)" -eq "$(printf '%s\n' "$SHA256_MANIFEST" | wc -l)"
+
+      - name: Setup Node v24
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
       - name: Publish Patchright-Core Package
         run: |
-          cd playwright/packages/patchright-core/
-          package_name=$(node -p "require('./package.json').name")
-          package_version=$(node -p "require('./package.json').version")
+          tarball=$(ls dist/patchright-core-[0-9]*.tgz)
+          package_name=$(tar -xzOf "$tarball" package/package.json | jq -r .name)
+          package_version=$(tar -xzOf "$tarball" package/package.json | jq -r .version)
 
           if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
             echo "Skipping ${package_name}@${package_version}: already published."
           else
-            npm publish --access=public --provenance
+            npm publish "$tarball" --access=public --provenance
           fi
 
       - name: Publish Patchright Package
         run: |
-          cd playwright/packages/patchright/
-          package_name=$(node -p "require('./package.json').name")
-          package_version=$(node -p "require('./package.json').version")
+          tarball=$(ls dist/patchright-[0-9]*.tgz)
+          package_name=$(tar -xzOf "$tarball" package/package.json | jq -r .name)
+          package_version=$(tar -xzOf "$tarball" package/package.json | jq -r .version)
 
           if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
             echo "Skipping ${package_name}@${package_version}: already published."
           else
-            npm publish --access=public --provenance
+            npm publish "$tarball" --access=public --provenance
           fi
 
+  create-github-release:
+    name: "Patchright Release: Create GitHub Release"
+    needs: [check-release-version, publish-npm]
+    # Skip when a patchright-only re-release targets an unchanged Playwright version (its release already exists).
+    # Uses inputs directly: the env context is not available in a job-level if.
+    if: (github.event.inputs.patchright_release || '') == '' || needs.check-release-version.outputs.previous_playwright_version != needs.check-release-version.outputs.playwright_version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release create
+    steps:
       - name: Create Patchright Release
-        if: env.patchright_release == '' || needs.check-release-version.outputs.previous_playwright_version != needs.check-release-version.outputs.playwright_version
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # only this step gets the token
           PLAYWRIGHT_VERSION: ${{ needs.check-release-version.outputs.playwright_version }}
         run: |
           gh release create "$PLAYWRIGHT_VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
             --title "$PLAYWRIGHT_VERSION" \
             --notes "This is an automatic deployment in response to a new release of [microsoft/playwright](https://github.com/microsoft/playwright). The original release can be seen [here](https://github.com/microsoft/playwright/releases/tag/$PLAYWRIGHT_VERSION)."
