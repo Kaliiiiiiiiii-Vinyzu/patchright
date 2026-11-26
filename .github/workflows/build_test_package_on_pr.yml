@@ -30,15 +30,15 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false # don't leave the token in .git/config for later steps
 
       - name: Configure Fast APT Mirror
-        uses: vegardit/fast-apt-mirror.sh@v1
+        uses: vegardit/fast-apt-mirror.sh@806c59276adfff2df420124ad5e4587f018c358a # 1.4.5
 
       - name: Setup Node v24
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
@@ -78,7 +78,7 @@ jobs:
         run: utils/create_patch_file.sh
 
       - name: Upload Patch File
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: patchright-patch
           path: patchright.patch
@@ -107,7 +107,7 @@ jobs:
           npm pack ./playwright/packages/patchright --pack-destination artifacts
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload_build_artifacts
         with:
           name: patchright-packages
@@ -127,13 +127,13 @@ jobs:
 
     steps:
       - name: Checkout Pull Request Head
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
       # Download outside of the checkout, so the artifact cannot overwrite files like .git/config
       - name: Download Patch File
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: patchright-patch
           path: ${{ runner.temp }}
