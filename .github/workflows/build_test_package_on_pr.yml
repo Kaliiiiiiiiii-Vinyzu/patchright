@@ -10,6 +10,10 @@ concurrency: # Make sure only one approval check runs at a time for the same PR,
   group: approval-check-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 jobs:
   build-package:
     name: "​" # NOTE: Were using a zero-width space to save some visual clutter in the GitHub Pull Request UI
@@ -27,6 +31,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false # don't leave the token in .git/config for later steps
 
       - name: Configure Fast APT Mirror
         uses: vegardit/fast-apt-mirror.sh@v1
@@ -53,8 +59,11 @@ jobs:
           exit 1
 
       - name: Install Playwright Driver
+        # Passed through env so the value reaches the script as data, never as script text.
+        env:
+          PLAYWRIGHT_VERSION: ${{ steps.version_check.outputs.playwright_version }}
         run: |
-          git clone https://github.com/microsoft/playwright --branch ${{ steps.version_check.outputs.playwright_version }}
+          git clone https://github.com/microsoft/playwright --branch "$PLAYWRIGHT_VERSION"
           cd playwright
           npm ci
           cd .. && cp -r playwright playwright_not_patched

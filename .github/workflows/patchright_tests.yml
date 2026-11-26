@@ -22,6 +22,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 jobs:
   run-patchright-tests:
     runs-on: ubuntu-latest
@@ -31,6 +35,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false # don't leave the token in .git/config for later steps
 
       - name: Configure Fast APT Mirror
         uses: vegardit/fast-apt-mirror.sh@v1
@@ -45,8 +51,11 @@ jobs:
         run: npm ci
 
       - name: Install Playwright Driver
+        # Passed through env so the value reaches the script as data, never as script text.
+        env:
+          INPUT_PLAYWRIGHT_VERSION: ${{ inputs.playwright_version || github.event.inputs.playwright_version }}
         run: |
-          branch_version="${{ inputs.playwright_version || github.event.inputs.playwright_version }}"
+          branch_version="$INPUT_PLAYWRIGHT_VERSION"
           if [ -z "$branch_version" ]; then
             response=$(curl --silent "https://api.github.com/repos/microsoft/playwright/releases/latest")
             branch_version=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')

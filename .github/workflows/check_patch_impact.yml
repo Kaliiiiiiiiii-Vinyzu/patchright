@@ -44,6 +44,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false # don't leave the token in .git/config for later steps
 
       - name: Setup Node v24
         uses: actions/setup-node@v6

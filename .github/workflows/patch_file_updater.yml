@@ -5,6 +5,10 @@ on:
     branches:
       - "main"
 
+# Read-only by default; jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
 jobs:
   patch-file-updater:
     name: "Patchright Driver .Patch File Updater: Create and Commit Patch File Comparing"
